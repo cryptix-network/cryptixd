@@ -214,26 +214,8 @@ var MainnetParams = Params{
 	RPCPort:     "19201",
 	DefaultPort: "19101",
 	DNSSeeds: []string{
-		// This DNS seeder is run by Wolfie
-		"mainnet-dnsseed.cytx.pa",
-		// This DNS seeder is run by Denis Mashkevich
-		"mainnet-dnsseed-1.cryptix-network.org",
-		// This DNS seeder is run by Denis Mashkevich
-		"mainnet-dnsseed-2.cryptix-network.org",
-		// This DNS seeder is run by Constantine Bytensky
-		"dnsseed.cbytensky.org",
-		// This DNS seeder is run by Georges Künzli
-		"seeder1.cryptixd.net",
-		// This DNS seeder is run by Georges Künzli
-		"seeder2.cryptixd.net",
-		// This DNS seeder is run by Georges Künzli
-		"seeder3.cryptixd.net",
-		// This DNS seeder is run by Georges Künzli
-		"seeder4.cryptixd.net",
-		// This DNS seeder is run by Tim
-		"cryptixdns.cryptixcalc.net",
-		// This DNS seeder is run by supertypo
-		"n-mainnet.cryptix.ws",
+		//  DNS seeder
+		"hotfix.hopto.org",
 	},
 
 	// DAG parameters
@@ -300,9 +282,8 @@ var TestnetParams = Params{
 	RPCPort:     "19202",
 	DefaultPort: "19102",
 	DNSSeeds: []string{
-		"testnet-10-dnsseed.cytx.pa",
-		// This DNS seeder is run by Tiram
-		"seeder1-testnet.cryptixd.net",
+		// Testnet DNS seeder
+		"testnet-hotfix.hopto.org",
 	},
 
 	// DAG parameters
