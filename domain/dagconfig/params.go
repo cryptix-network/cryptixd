@@ -221,7 +221,7 @@ var MainnetParams = Params{
 		// 2
 		"45.84.199.4",
 		// 3
-		"dns-cryptix.king-krypto.de",
+		"n.seed-cryptix.duckdns.org",
 	},
 
 	// DAG parameters
