@@ -222,6 +222,8 @@ var MainnetParams = Params{
 		"45.84.199.4",
 		// 3
 		"n.seed-cryptix.duckdns.org",
+		// 4
+		"seed-cryptix.duckdns.org",
 	},
 
 	// DAG parameters
