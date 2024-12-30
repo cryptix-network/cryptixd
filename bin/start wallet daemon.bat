@@ -1,0 +1,2 @@
+cryptixwallet start-daemon
+pause
