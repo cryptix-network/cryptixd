@@ -44,6 +44,23 @@ $ go install . ./cmd/...
   not already add the bin directory to your system path during Go installation,
   you are encouraged to do so now.
 
+  
+Build Exe:
+
+cd\
+
+go mod tidy
+
+go build -o cryptixd.exe
+
+
+cd \cmd\cryptixwallet
+
+go mod tidy
+
+go build -o cryptixwallet.exe
+
+
 
 ## Getting Started
 
