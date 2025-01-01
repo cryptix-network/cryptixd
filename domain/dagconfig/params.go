@@ -216,14 +216,9 @@ var MainnetParams = Params{
 	RPCPort:     "19201",
 	DefaultPort: "19101",
 	DNSSeeds: []string{
-		// 1
-		"hotfix.hopto.org",
-		// 2
-		"45.84.199.4",
-		// 3
-		"n.seed-cryptix.duckdns.org",
-		// 4
+		//  DNS seeder
 		"seed-cryptix.duckdns.org",
+		"hotfix-dev.duckdns.org",
 	},
 
 	// DAG parameters
