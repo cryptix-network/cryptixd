@@ -46,13 +46,21 @@ $ go install . ./cmd/...
 
   
 Build Exe:
+
 cd\
+
 go mod tidy
+
 go build -o cryptixd.exe
 
+
 cd \cmd\cryptixwallet
+
 go mod tidy
+
 go build -o cryptixwallet.exe
+
+
 
 ## Getting Started
 
