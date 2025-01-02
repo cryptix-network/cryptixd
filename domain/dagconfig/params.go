@@ -276,7 +276,7 @@ var MainnetParams = Params{
 	MaxBlockLevel: 225,
 	MergeDepth:    defaultMergeDepth,
 
-	HFDAAScore: 27905000,
+	HFDAAScore: 0,
 }
 
 // TestnetParams defines the network parameters for the test Cryptix network.
@@ -339,7 +339,7 @@ var TestnetParams = Params{
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
-	HFDAAScore:    14106400,
+	HFDAAScore:    0,
 }
 
 // SimnetParams defines the network parameters for the simulation test Cryptix
