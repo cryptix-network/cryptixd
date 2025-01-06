@@ -72,7 +72,7 @@ $ cryptixd
 ```
 
 ## Discord
-Soon
+Join Discord: [Cryptix Discord](https://discord.gg/SxXCXHFFeA)
 
 ## Issue Tracker
 
