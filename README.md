@@ -38,6 +38,10 @@ $ go version
 $ git clone https://github.com/cryptix-network/cryptixd
 $ cd cryptixd
 $ go install . ./cmd/...
+
+ go build -o cryptixd.exe
+cd/cmd/cryptixwallet
+ go build -o cryptixwallet.exe
 ```
 
 - Cryptixd (and utilities) should now be installed in `$(go env GOPATH)/bin`. If you did
