@@ -1,19 +1,19 @@
 package coinbasemanager
 
 import (
-	"strconv"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
+	"strconv"
+	"testing"
 )
 
 func TestCalcDeflationaryPeriodBlockSubsidy(t *testing.T) {
 	const secondsPerMonth = 2629800
+	const secondsPerDay = 86400
 	const secondsPerHalving = secondsPerMonth * 12
-	const deflationaryPhaseDaaScore = secondsPerMonth * 6
-	const deflationaryPhaseBaseSubsidy = 440 * constants.SompiPerCryptix
+	const deflationaryPhaseDaaScore = secondsPerDay * 3
+	const deflationaryPhaseBaseSubsidy = 2 * constants.SompiPerCryptix
 	coinbaseManagerInterface := New(
 		nil,
 		0,
@@ -84,7 +84,7 @@ func TestCalcDeflationaryPeriodBlockSubsidy(t *testing.T) {
 
 func TestBuildSubsidyTable(t *testing.T) {
 	deflationaryPhaseBaseSubsidy := dagconfig.MainnetParams.DeflationaryPhaseBaseSubsidy
-	if deflationaryPhaseBaseSubsidy != 440*constants.SompiPerCryptix {
+	if deflationaryPhaseBaseSubsidy != 2*constants.SompiPerCryptix {
 		t.Errorf("TestBuildSubsidyTable: table generation function was not updated to reflect "+
 			"the new base subsidy %d. Please fix the constant above and replace subsidyByDeflationaryMonthTable "+
 			"in coinbasemanager.go with the printed table", deflationaryPhaseBaseSubsidy)
@@ -107,7 +107,7 @@ func TestBuildSubsidyTable(t *testing.T) {
 	coinbaseManagerInstance := coinbaseManagerInterface.(*coinbaseManager)
 
 	var subsidyTable []uint64
-	for M := uint64(0); ; M++ {
+	for M := uint64(0); M < 426; M++ {  // Schleife auf genau 426 Iterationen begrenzen
 		subsidy := coinbaseManagerInstance.calcDeflationaryPeriodBlockSubsidyFloatCalc(M)
 		subsidyTable = append(subsidyTable, subsidy)
 		if subsidy == 0 {

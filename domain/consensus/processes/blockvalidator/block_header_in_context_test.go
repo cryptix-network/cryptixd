@@ -2,10 +2,9 @@ package blockvalidator_test
 
 import (
 	"errors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"math/big"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 

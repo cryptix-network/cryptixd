@@ -1,11 +1,10 @@
 package blockvalidator_test
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
 	"reflect"
 	"runtime"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"

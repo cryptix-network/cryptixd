@@ -1,11 +1,10 @@
 package serialization
 
 import (
-	"math"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 	"github.com/pkg/errors"
+	"math"
 )
 
 // ScriptPublicKeyToDBScriptPublicKey converts ScriptPublicKey to DBScriptPublicKey

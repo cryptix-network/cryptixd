@@ -1,10 +1,9 @@
 package staging
 
 import (
-	"sync/atomic"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
+	"sync/atomic"
 )
 
 // CommitAllChanges creates a transaction in `databaseContext`, and commits all changes in `stagingArea` through it.

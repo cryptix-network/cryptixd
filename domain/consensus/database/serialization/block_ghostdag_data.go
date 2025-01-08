@@ -1,9 +1,8 @@
 package serialization
 
 import (
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"math/big"
 )
 
 // BlockGHOSTDAGDataToDBBlockGHOSTDAGData converts BlockGHOSTDAGData to DbBlockGhostdagData

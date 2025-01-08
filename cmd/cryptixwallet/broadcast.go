@@ -8,6 +8,7 @@ import (
 
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/client"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/pb"
+	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/server"
 	"github.com/pkg/errors"
 )
 
@@ -37,7 +38,7 @@ func broadcast(conf *broadcastConfig) error {
 		transactionsHex = strings.TrimSpace(string(transactionHexBytes))
 	}
 
-	transactions, err := decodeTransactionsFromHex(transactionsHex)
+	transactions, err := server.DecodeTransactionsFromHex(transactionsHex)
 	if err != nil {
 		return err
 	}

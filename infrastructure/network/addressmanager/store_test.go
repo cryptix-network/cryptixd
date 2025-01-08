@@ -1,12 +1,11 @@
 package addressmanager
 
 import (
+	"github.com/cryptix-network/cryptixd/app/appmessage"
+	"github.com/cryptix-network/cryptixd/util/mstime"
 	"net"
 	"reflect"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/app/appmessage"
-	"github.com/cryptix-network/cryptixd/util/mstime"
 )
 
 func TestAddressKeySerialization(t *testing.T) {

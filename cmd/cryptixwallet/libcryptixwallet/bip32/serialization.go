@@ -2,9 +2,8 @@ package bip32
 
 import (
 	"encoding/binary"
-
-	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet/bip32/base58"
 	"github.com/cryptix-network/go-secp256k1"
+	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet/bip32/base58"
 	"github.com/pkg/errors"
 )
 

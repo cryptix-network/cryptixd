@@ -1,12 +1,11 @@
 package difficultymanager
 
 import (
-	"math"
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/util/difficulty"
+	"math"
+	"math/big"
 )
 
 type difficultyBlock struct {

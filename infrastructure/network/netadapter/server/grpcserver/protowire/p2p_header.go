@@ -1,13 +1,12 @@
 package protowire
 
 import (
-	"math"
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/util/mstime"
 	"github.com/pkg/errors"
+	"math"
+	"math/big"
 )
 
 func (x *BlockHeader) toAppMessage() (*appmessage.MsgBlockHeader, error) {

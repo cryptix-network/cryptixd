@@ -1,11 +1,10 @@
 package integration
 
 import (
+	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"runtime"
 	"testing"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/infrastructure/config"
 
 	"github.com/cryptix-network/cryptixd/infrastructure/network/rpcclient"
 )

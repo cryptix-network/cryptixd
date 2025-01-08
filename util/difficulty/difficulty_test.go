@@ -2,11 +2,10 @@ package difficulty_test
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"math"
 	"math/big"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"

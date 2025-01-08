@@ -1,8 +1,6 @@
 package pruningproofmanager
 
 import (
-	"math/big"
-
 	consensusDB "github.com/cryptix-network/cryptixd/domain/consensus/database"
 	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/blockheaderstore"
 	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/blockrelationstore"
@@ -21,6 +19,7 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/util/staging"
 	"github.com/pkg/errors"
+	"math/big"
 )
 
 type pruningProofManager struct {

@@ -1,9 +1,8 @@
 package serialization
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"testing"
 )
 
 // TestBlueAnticoneSizesSize tests that no data can be loss when converting externalapi.KType to the corresponding type in

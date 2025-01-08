@@ -2,7 +2,6 @@ package blockrelay
 
 import (
 	"errors"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"

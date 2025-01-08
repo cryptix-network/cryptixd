@@ -1,13 +1,12 @@
 package consensusstatemanager
 
 import (
-	"sort"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/util/staging"
 	"github.com/pkg/errors"
+	"sort"
 )
 
 // tipsInDecreasingGHOSTDAGParentSelectionOrder returns the current DAG tips in decreasing parent selection order.

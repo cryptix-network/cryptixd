@@ -3,15 +3,14 @@ package grpcserver
 import (
 	"context"
 	"fmt"
-	"net"
-	"sync"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/server"
 	"github.com/cryptix-network/cryptixd/util/panics"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/peer"
+	"net"
+	"sync"
+	"time"
 )
 
 type gRPCServer struct {

@@ -2,12 +2,11 @@ package addressmanager
 
 import (
 	"encoding/binary"
-	"net"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/util/mstime"
 	"github.com/pkg/errors"
+	"net"
 )
 
 var notBannedAddressBucket = database.MakeBucket([]byte("not-banned-addresses"))

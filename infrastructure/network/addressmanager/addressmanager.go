@@ -5,12 +5,11 @@
 package addressmanager
 
 import (
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
+	"github.com/cryptix-network/cryptixd/util/mstime"
 	"net"
 	"sync"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
-	"github.com/cryptix-network/cryptixd/util/mstime"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/pkg/errors"

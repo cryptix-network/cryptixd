@@ -5,10 +5,10 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet/bip32"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/util"
-	"github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 )
 

@@ -1,16 +1,15 @@
 package fast_pruning_ibd_test
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
+	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"io/ioutil"
 	"os"
 	"path"
 	"testing"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus"
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
-	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 )
 
 // TestGenerateFastPruningIBDTest generates the json needed for dag-for-fast-pruning-ibd-test.json.gz

@@ -1,12 +1,11 @@
 package coinbasemanager_test
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
+	"testing"
 )
 
 func TestExtractCoinbaseDataBlueScoreAndSubsidy(t *testing.T) {

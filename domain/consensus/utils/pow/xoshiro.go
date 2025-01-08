@@ -2,9 +2,8 @@ package pow
 
 import (
 	"encoding/binary"
-	"math/bits"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"math/bits"
 )
 
 type xoShiRo256PlusPlus struct {

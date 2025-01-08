@@ -1,10 +1,9 @@
 package ready
 
 import (
-	"sync/atomic"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
+	"sync/atomic"
 
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"

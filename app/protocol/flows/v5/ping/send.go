@@ -1,11 +1,10 @@
 package ping
 
 import (
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/flowcontext"
 	"github.com/pkg/errors"
+	"time"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"

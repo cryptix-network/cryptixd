@@ -3,9 +3,8 @@ package consensushashing_test
 import (
 	"encoding/hex"
 	"fmt"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
+	"testing"
 
 	"github.com/cryptix-network/go-secp256k1"
 

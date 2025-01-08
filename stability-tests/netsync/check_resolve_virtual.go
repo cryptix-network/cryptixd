@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/stability-tests/common/rpc"
 	"github.com/pkg/errors"
+	"time"
 )
 
 func checkResolveVirtual(syncerClient, syncedClient *rpc.Client) error {

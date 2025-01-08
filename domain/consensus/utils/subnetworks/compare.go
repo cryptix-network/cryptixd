@@ -2,7 +2,6 @@ package subnetworks
 
 import (
 	"bytes"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 )
 

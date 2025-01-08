@@ -2,11 +2,10 @@ package main
 
 import (
 	nativeerrors "errors"
+	"github.com/cryptix-network/cryptixd/version"
 	"math/rand"
 	"sync/atomic"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/version"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixminer/templatemanager"

@@ -7,10 +7,9 @@ package txscript
 import (
 	"bytes"
 	"encoding/hex"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"reflect"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 )
 
 // TestParseOpcode tests for opcode parsing with bad data templates.

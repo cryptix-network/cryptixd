@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/pb"
 )
 

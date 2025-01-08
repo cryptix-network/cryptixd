@@ -2,7 +2,6 @@ package bip32
 
 import (
 	"encoding/binary"
-
 	"github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 )

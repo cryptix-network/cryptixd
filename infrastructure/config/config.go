@@ -17,13 +17,13 @@ import (
 	"time"
 
 	"github.com/btcsuite/go-socks/socks"
+	"github.com/jessevdk/go-flags"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/cryptix-network/cryptixd/util/network"
 	"github.com/cryptix-network/cryptixd/version"
-	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 

@@ -1,9 +1,9 @@
 package consensusstatestore
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/golang/protobuf/proto"
 )
 
 func serializeOutpoint(outpoint *externalapi.DomainOutpoint) ([]byte, error) {

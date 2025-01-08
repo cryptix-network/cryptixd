@@ -3,11 +3,11 @@ package main
 import (
 	"path/filepath"
 
+	"github.com/jessevdk/go-flags"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
 	"github.com/cryptix-network/cryptixd/stability-tests/common/rpc"
-	"github.com/jessevdk/go-flags"
 )
 
 const (

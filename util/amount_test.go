@@ -5,10 +5,9 @@
 package util_test
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"math"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 
 	. "github.com/cryptix-network/cryptixd/util"
 )

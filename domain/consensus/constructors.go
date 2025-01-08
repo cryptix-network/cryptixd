@@ -1,11 +1,10 @@
 package consensus
 
 import (
-	"math/big"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"math/big"
+	"time"
 )
 
 // GHOSTDAGManagerConstructor is the function signature for a constructor of a type implementing model.GHOSTDAGManager

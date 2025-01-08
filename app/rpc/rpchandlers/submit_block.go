@@ -2,7 +2,6 @@ package rpchandlers
 
 import (
 	"encoding/json"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/app/rpc/rpccontext"

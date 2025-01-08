@@ -4,11 +4,6 @@ import (
 	"fmt"
 	"math/big"
 
-	"io/ioutil"
-	"os"
-	"strings"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain"
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
@@ -17,6 +12,10 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 	"github.com/cryptix-network/cryptixd/infrastructure/db/database/ldb"
+	"io/ioutil"
+	"os"
+	"strings"
+	"testing"
 )
 
 func TestCreateStagingConsensus(t *testing.T) {

@@ -5,9 +5,9 @@
 package txscript
 
 import (
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
-	"github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"

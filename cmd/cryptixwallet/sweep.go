@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/client"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/pb"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
@@ -20,7 +21,6 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/cryptix-network/cryptixd/util/txmass"
-	"github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 )
 

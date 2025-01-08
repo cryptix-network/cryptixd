@@ -2,13 +2,12 @@ package main
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"os/exec"
 	"strings"
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"

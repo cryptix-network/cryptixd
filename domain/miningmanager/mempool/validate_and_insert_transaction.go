@@ -2,7 +2,6 @@ package mempool
 
 import (
 	"fmt"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"

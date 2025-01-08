@@ -1,14 +1,13 @@
 package blocktemplatebuilder
 
 import (
-	"math"
-	"sort"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/coinbasemanager"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
 	"github.com/cryptix-network/cryptixd/util/mstime"
+	"math"
+	"sort"
 
 	"github.com/cryptix-network/cryptixd/util/difficulty"
 

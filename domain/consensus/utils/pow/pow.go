@@ -7,9 +7,8 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/serialization"
 	"github.com/cryptix-network/cryptixd/util/difficulty"
 
-	"math/big"
-
 	"github.com/pkg/errors"
+	"math/big"
 )
 
 // State is an intermediate data structure with pre-computed values to speed up mining.

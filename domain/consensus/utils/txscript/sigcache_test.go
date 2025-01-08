@@ -6,9 +6,8 @@ package txscript
 
 import (
 	"crypto/rand"
-	"testing"
-
 	"github.com/cryptix-network/go-secp256k1"
+	"testing"
 )
 
 // genRandomSig returns a random message, a signature of the message under the

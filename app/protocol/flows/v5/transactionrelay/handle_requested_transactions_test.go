@@ -1,10 +1,9 @@
 package transactionrelay_test
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/app/protocol/flowcontext"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/transactionrelay"
+	"testing"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain"

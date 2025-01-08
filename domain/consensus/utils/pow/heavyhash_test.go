@@ -3,11 +3,10 @@ package pow
 import (
 	"bytes"
 	"encoding/hex"
-	"math/rand"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashes"
+	"math/rand"
+	"testing"
 )
 
 func BenchmarkMatrix_HeavyHash(b *testing.B) {

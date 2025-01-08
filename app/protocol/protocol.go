@@ -1,12 +1,11 @@
 package protocol
 
 import (
-	"sync"
-	"sync/atomic"
-
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/ready"
-	v5 "github.com/cryptix-network/cryptixd/app/protocol/flows/v5"
+	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5"
+	"sync"
+	"sync/atomic"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/handshake"

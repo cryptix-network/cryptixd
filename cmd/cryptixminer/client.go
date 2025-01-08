@@ -1,12 +1,11 @@
 package main
 
 import (
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/rpcclient"
 	"github.com/pkg/errors"
+	"time"
 )
 
 const minerTimeout = 10 * time.Second

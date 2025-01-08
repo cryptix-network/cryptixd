@@ -2,7 +2,7 @@ package pruningstore
 
 import (
 	"encoding/binary"
-
+	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/binaryserialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
@@ -10,7 +10,6 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/lrucacheuint64tohash"
 	"github.com/cryptix-network/cryptixd/util/staging"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 

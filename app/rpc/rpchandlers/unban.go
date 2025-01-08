@@ -1,11 +1,10 @@
 package rpchandlers
 
 import (
-	"net"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/rpc/rpccontext"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
+	"net"
 )
 
 // HandleUnban handles the respectively named RPC command

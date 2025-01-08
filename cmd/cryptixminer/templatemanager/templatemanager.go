@@ -1,11 +1,10 @@
 package templatemanager
 
 import (
-	"sync"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/pow"
+	"sync"
 )
 
 var currentTemplate *externalapi.DomainBlock

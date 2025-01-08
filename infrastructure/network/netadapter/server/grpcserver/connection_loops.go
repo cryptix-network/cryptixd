@@ -1,15 +1,14 @@
 package grpcserver
 
 import (
+	"github.com/davecgh/go-spew/spew"
+	"github.com/cryptix-network/cryptixd/app/appmessage"
+	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"io"
 	"os"
 	"strconv"
 	"sync"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/app/appmessage"
-	"github.com/cryptix-network/cryptixd/infrastructure/logger"
-	"github.com/davecgh/go-spew/spew"
 
 	routerpkg "github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"

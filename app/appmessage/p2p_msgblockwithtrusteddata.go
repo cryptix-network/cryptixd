@@ -1,9 +1,8 @@
 package appmessage
 
 import (
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"math/big"
 )
 
 // MsgBlockWithTrustedData represents a cryptix BlockWithTrustedData message

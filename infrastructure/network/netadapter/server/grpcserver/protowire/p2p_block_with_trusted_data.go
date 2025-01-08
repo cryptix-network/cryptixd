@@ -1,11 +1,10 @@
 package protowire
 
 import (
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/pkg/errors"
+	"math/big"
 )
 
 func (x *CryptixdMessage_BlockWithTrustedData) toAppMessage() (appmessage.Message, error) {

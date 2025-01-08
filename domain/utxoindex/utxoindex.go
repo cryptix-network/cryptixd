@@ -1,12 +1,11 @@
 package utxoindex
 
 import (
-	"sync"
-
 	"github.com/cryptix-network/cryptixd/domain"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
+	"sync"
 )
 
 // UTXOIndex maintains an index between transaction scriptPublicKeys

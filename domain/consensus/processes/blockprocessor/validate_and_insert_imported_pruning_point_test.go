@@ -1,14 +1,13 @@
 package blockprocessor_test
 
 import (
-	"math"
-	"testing"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
+	"math"
+	"testing"
+	"time"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"

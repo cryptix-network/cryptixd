@@ -1,9 +1,8 @@
 package blockrelay
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
+	"testing"
 )
 
 func TestIBDBatchSizeLessThanRouteCapacity(t *testing.T) {

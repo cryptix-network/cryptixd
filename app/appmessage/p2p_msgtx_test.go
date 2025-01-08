@@ -16,8 +16,8 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionid"
 
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 )
 
 // TestTx tests the MsgTx API.

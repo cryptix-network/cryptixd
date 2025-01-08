@@ -1,10 +1,9 @@
 package blockheader
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"math/big"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 )
 
 func TestDomainBlockHeader_Equal(t *testing.T) {

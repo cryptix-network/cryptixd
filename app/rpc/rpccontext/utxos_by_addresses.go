@@ -2,7 +2,6 @@ package rpccontext
 
 import (
 	"encoding/hex"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/pkg/errors"

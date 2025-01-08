@@ -1,8 +1,6 @@
 package pruningmanager
 
 import (
-	"sort"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
@@ -13,6 +11,7 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/util/staging"
 	"github.com/pkg/errors"
+	"sort"
 )
 
 // pruningManager resolves and manages the current pruning point

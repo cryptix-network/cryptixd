@@ -5,9 +5,8 @@
 package bech32_test
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/util/bech32"
+	"testing"
 )
 
 var checkEncodingStringTests = []struct {

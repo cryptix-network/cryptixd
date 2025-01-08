@@ -2,8 +2,6 @@ package blockrelay
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
@@ -16,6 +14,7 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
+	"time"
 )
 
 // IBDContext is the interface for the context needed for the HandleIBD flow.

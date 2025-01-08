@@ -5,13 +5,12 @@
 package dagconfig
 
 import (
-	"math/big"
-
+	"github.com/cryptix-network/go-muhash"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
-	"github.com/cryptix-network/go-muhash"
+	"math/big"
 )
 
 var genesisTxOuts = []*externalapi.DomainTransactionOutput{}
@@ -104,7 +103,6 @@ var genesisMerkleRoot = externalapi.NewDomainHashFromByteArray(&[externalapi.Dom
 	0x41,
 	0xbc,
 })
-
 // genesisBlock defines the genesis block of the block DAG which serves as the
 // public transaction ledger for the main network.
 var genesisBlock = externalapi.DomainBlock{

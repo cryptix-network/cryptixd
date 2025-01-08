@@ -25,7 +25,7 @@ types.
 
 To decode/encode an address:
 
-	addrString := "cryptix:qrjefk2r8wp607rmyvxmgjansqcwugjazpu2kk2r7057gltxetdvk8gl9fs0w"
+	addrString := "cryptix:qqj9fg59mptxkr9j0y53j5mwurcmda5mtza9n6v9pm9uj8h0wgk6uma5pvumr"
 	defaultPrefix := util.Bech32PrefixCryptix
 	addr, err := util.DecodeAddress(addrString, defaultPrefix)
 	if err != nil {

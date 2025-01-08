@@ -1,18 +1,17 @@
 package daa
 
 import (
-	"math"
-	"math/rand"
-	"os"
-	"testing"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/pow"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/rpcclient"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
+	"math"
+	"math/rand"
+	"os"
+	"testing"
+	"time"
 )
 
 const rpcAddress = "localhost:9000"

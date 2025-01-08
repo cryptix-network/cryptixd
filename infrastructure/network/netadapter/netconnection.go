@@ -2,11 +2,10 @@ package netadapter
 
 import (
 	"fmt"
-	"sync/atomic"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	routerpkg "github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
+	"sync/atomic"
 
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/server"

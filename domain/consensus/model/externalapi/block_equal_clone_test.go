@@ -1,12 +1,11 @@
 package externalapi_test
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 	"math/big"
 	"reflect"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 )
 
 type blockToCompare struct {

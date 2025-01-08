@@ -42,6 +42,23 @@ func send(conf *sendConfig) error {
 		}
 	}
 
+	var feePolicy *pb.FeePolicy
+	if conf.FeeRate > 0 {
+		feePolicy = &pb.FeePolicy{
+			FeePolicy: &pb.FeePolicy_ExactFeeRate{
+				ExactFeeRate: conf.FeeRate,
+			},
+		}
+	} else if conf.MaxFeeRate > 0 {
+		feePolicy = &pb.FeePolicy{
+			FeePolicy: &pb.FeePolicy_MaxFeeRate{MaxFeeRate: conf.MaxFeeRate},
+		}
+	} else if conf.MaxFee > 0 {
+		feePolicy = &pb.FeePolicy{
+			FeePolicy: &pb.FeePolicy_MaxFee{MaxFee: conf.MaxFee},
+		}
+	}
+
 	createUnsignedTransactionsResponse, err :=
 		daemonClient.CreateUnsignedTransactions(ctx, &pb.CreateUnsignedTransactionsRequest{
 			From:                     conf.FromAddresses,
@@ -49,6 +66,7 @@ func send(conf *sendConfig) error {
 			Amount:                   sendAmountSompi,
 			IsSendAll:                conf.IsSendAll,
 			UseExistingChangeAddress: conf.UseExistingChangeAddress,
+			FeePolicy:                feePolicy,
 		})
 	if err != nil {
 		return err

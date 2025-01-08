@@ -1,10 +1,9 @@
 package math_test
 
 import (
+	utilMath "github.com/cryptix-network/cryptixd/util/math"
 	"math"
 	"testing"
-
-	utilMath "github.com/cryptix-network/cryptixd/util/math"
 )
 
 const (

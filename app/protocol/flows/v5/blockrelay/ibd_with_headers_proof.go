@@ -2,8 +2,6 @@ package blockrelay
 
 import (
 	"fmt"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
@@ -11,6 +9,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/pkg/errors"
+	"time"
 )
 
 func (flow *handleIBDFlow) ibdWithHeadersProof(

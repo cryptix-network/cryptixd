@@ -1,9 +1,9 @@
 package multiset
 
 import (
+	"github.com/cryptix-network/go-muhash"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/cryptix-network/go-muhash"
 	"github.com/pkg/errors"
 )
 

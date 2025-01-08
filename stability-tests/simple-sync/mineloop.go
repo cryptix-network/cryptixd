@@ -3,11 +3,11 @@ package main
 import (
 	"time"
 
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
 	"github.com/cryptix-network/cryptixd/stability-tests/common/rpc"
 	"github.com/cryptix-network/cryptixd/util"
-	"github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 )
 

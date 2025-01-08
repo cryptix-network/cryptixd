@@ -2,9 +2,6 @@ package grpcserver
 
 import (
 	"context"
-	"net"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/server"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/server/grpcserver/protowire"
 	"github.com/cryptix-network/cryptixd/util/panics"
@@ -12,6 +9,8 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/peer"
+	"net"
+	"time"
 )
 
 type p2pServer struct {

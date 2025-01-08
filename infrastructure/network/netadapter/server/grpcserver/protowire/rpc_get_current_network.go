@@ -17,7 +17,7 @@ func (x *CryptixdMessage_GetCurrentNetworkResponse) toAppMessage() (appmessage.M
 	if x == nil {
 		return nil, errors.Wrapf(errorNil, "CryptixdMessage_GetCurrentNetworkResponse is nil")
 	}
-	return x.toAppMessage()
+	return x.GetCurrentNetworkResponse.toAppMessage()
 }
 
 func (x *CryptixdMessage_GetCurrentNetworkResponse) fromAppMessage(message *appmessage.GetCurrentNetworkResponseMessage) error {

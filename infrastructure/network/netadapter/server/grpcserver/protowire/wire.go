@@ -968,6 +968,27 @@ func toRPCPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 			return nil, err
 		}
 		return payload, nil
+	case *appmessage.GetFeeEstimateRequestMessage:
+		payload := new(CryptixdMessage_GetFeeEstimateRequest)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.SubmitTransactionReplacementRequestMessage:
+		payload := new(CryptixdMessage_SubmitTransactionReplacementRequest)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.SubmitTransactionReplacementResponseMessage:
+		payload := new(CryptixdMessage_SubmitTransactionReplacementResponse)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
 	default:
 		return nil, nil
 	}

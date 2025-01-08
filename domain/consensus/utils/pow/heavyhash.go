@@ -1,10 +1,9 @@
 package pow
 
 import (
-	"math"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashes"
+	"math"
 )
 
 const eps float64 = 1e-9

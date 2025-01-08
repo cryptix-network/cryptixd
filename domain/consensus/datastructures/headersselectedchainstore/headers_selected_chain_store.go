@@ -2,7 +2,6 @@ package headersselectedchainstore
 
 import (
 	"encoding/binary"
-
 	"github.com/cryptix-network/cryptixd/util/staging"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/database"

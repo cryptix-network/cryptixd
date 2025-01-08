@@ -1,10 +1,9 @@
 package domain
 
 import (
-	"math"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/pkg/errors"
+	"math"
 )
 
 func (d *domain) migrate() error {

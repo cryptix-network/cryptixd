@@ -1,6 +1,7 @@
 package transactionvalidator_test
 
 import (
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
@@ -8,7 +9,6 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 	"github.com/cryptix-network/cryptixd/util"
-	"github.com/cryptix-network/go-secp256k1"
 
 	"testing"
 

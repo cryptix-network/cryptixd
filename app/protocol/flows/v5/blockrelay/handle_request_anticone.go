@@ -1,8 +1,6 @@
 package blockrelay
 
 import (
-	"sort"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/peer"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
@@ -10,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
+	"sort"
 )
 
 // RequestAnticoneContext is the interface for the context needed for the HandleRequestHeaders flow.

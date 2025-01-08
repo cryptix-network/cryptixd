@@ -3,11 +3,10 @@ package consensus
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashset"
 	"github.com/cryptix-network/cryptixd/util/staging"
+	"io"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"

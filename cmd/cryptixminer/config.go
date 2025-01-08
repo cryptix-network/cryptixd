@@ -12,8 +12,8 @@ import (
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/pkg/errors"
 
-	"github.com/cryptix-network/cryptixd/version"
 	"github.com/jessevdk/go-flags"
+	"github.com/cryptix-network/cryptixd/version"
 )
 
 const (

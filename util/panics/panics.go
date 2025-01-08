@@ -2,12 +2,11 @@ package panics
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"os"
 	"runtime/debug"
 	"sync/atomic"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 )
 
 const exitHandlerTimeout = 5 * time.Second

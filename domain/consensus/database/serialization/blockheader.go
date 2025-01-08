@@ -1,12 +1,11 @@
 package serialization
 
 import (
-	"math"
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 	"github.com/pkg/errors"
+	"math"
+	"math/big"
 )
 
 // DomainBlockHeaderToDbBlockHeader converts BlockHeader to DbBlockHeader

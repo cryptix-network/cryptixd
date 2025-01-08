@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
-	"os"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
 	"github.com/cryptix-network/cryptixd/util/panics"
+	"os"
 )
 
 var (

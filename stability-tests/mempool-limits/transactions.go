@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
@@ -17,7 +18,6 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/network/rpcclient"
 	"github.com/cryptix-network/cryptixd/stability-tests/common/mine"
 	"github.com/cryptix-network/cryptixd/util"
-	"github.com/cryptix-network/go-secp256k1"
 )
 
 const (

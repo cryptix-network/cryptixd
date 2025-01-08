@@ -7,7 +7,6 @@ package bech32_test
 import (
 	"encoding/hex"
 	"fmt"
-
 	"github.com/cryptix-network/cryptixd/util/bech32"
 )
 

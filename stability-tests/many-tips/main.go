@@ -2,6 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/cryptix-network/go-secp256k1"
+	"github.com/cryptix-network/cryptixd/app/appmessage"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/mining"
+	"github.com/cryptix-network/cryptixd/util"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -10,11 +14,6 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/app/appmessage"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/mining"
-	"github.com/cryptix-network/cryptixd/util"
-	"github.com/cryptix-network/go-secp256k1"
 
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
 	"github.com/cryptix-network/cryptixd/stability-tests/common/rpc"

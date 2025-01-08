@@ -7,8 +7,8 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
 
-	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/jessevdk/go-flags"
+	"github.com/cryptix-network/cryptixd/infrastructure/config"
 )
 
 const (

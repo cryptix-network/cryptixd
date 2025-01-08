@@ -1,9 +1,8 @@
 package utxo
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"testing"
 )
 
 func TestUTXOEntry_Equal(t *testing.T) {

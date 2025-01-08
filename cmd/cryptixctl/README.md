@@ -4,7 +4,7 @@ cryptixctl is an RPC client for cryptixd
 
 ## Requirements
 
-Go 1.19 or later.
+Go 1.23 or later.
 
 ## Installation
 

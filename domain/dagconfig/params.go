@@ -188,8 +188,6 @@ type Params struct {
 	MaxBlockLevel int
 
 	MergeDepth uint64
-
-	HFDAAScore uint64
 }
 
 // NormalizeRPCServerAddress returns addr with the current network default
@@ -275,8 +273,6 @@ var MainnetParams = Params{
 	// This means that any block that has a level lower or equal to genesis will be level 0.
 	MaxBlockLevel: 225,
 	MergeDepth:    defaultMergeDepth,
-
-	HFDAAScore: 0,
 }
 
 // TestnetParams defines the network parameters for the test Cryptix network.
@@ -286,7 +282,11 @@ var TestnetParams = Params{
 	Net:         appmessage.Testnet,
 	RPCPort:     "19202",
 	DefaultPort: "19102",
-	DNSSeeds:    []string{"test-net10-dns-cryptix.king-krypto.de"},
+	DNSSeeds: []string{
+		//  DNS seeder
+		"seed-cryptix.duckdns.org",
+		"hotfix-dev.duckdns.org",
+	},
 
 	// DAG parameters
 	GenesisBlock:                    &testnetGenesisBlock,
@@ -339,7 +339,6 @@ var TestnetParams = Params{
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
-	HFDAAScore:    0,
 }
 
 // SimnetParams defines the network parameters for the simulation test Cryptix

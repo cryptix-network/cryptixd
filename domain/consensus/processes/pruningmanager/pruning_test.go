@@ -2,12 +2,11 @@ package pruningmanager_test
 
 import (
 	"encoding/json"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 

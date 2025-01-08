@@ -2,9 +2,8 @@ package consensusstatemanager_test
 
 import (
 	"errors"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
+	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 

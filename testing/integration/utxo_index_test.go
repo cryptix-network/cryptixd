@@ -6,6 +6,7 @@ import (
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
@@ -13,7 +14,6 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionid"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/util"
-	"github.com/cryptix-network/go-secp256k1"
 )
 
 func TestUTXOIndex(t *testing.T) {

@@ -4,7 +4,7 @@ Cryptixminer is a CPU-based miner for cryptixd
 
 ## Requirements
 
-Go 1.19 or later.
+Go 1.23 or later.
 
 ## Installation
 
@@ -30,7 +30,7 @@ $ go install .
 - Kapaminer should now be installed in `$(go env GOPATH)/bin`. If you did
   not already add the bin directory to your system path during Go installation,
   you are encouraged to do so now.
-  
+
 ## Usage
 
 The full cryptixminer configuration options can be seen with:
@@ -40,6 +40,7 @@ $ cryptixminer --help
 ```
 
 But the minimum configuration needed to run it is:
+
 ```bash
 $ cryptixminer --miningaddr=<YOUR_MINING_ADDRESS>
 ```

@@ -1,12 +1,12 @@
 package ghostdagdatastore
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/lrucacheghostdagdata"
 	"github.com/cryptix-network/cryptixd/util/staging"
-	"github.com/golang/protobuf/proto"
 )
 
 var ghostdagDataBucketName = []byte("block-ghostdag-data")

@@ -2,11 +2,10 @@ package consensusstatemanager_test
 
 import (
 	"fmt"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 

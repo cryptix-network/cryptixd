@@ -5,12 +5,11 @@
 package appmessage
 
 import (
+	"github.com/davecgh/go-spew/spew"
+	"github.com/cryptix-network/cryptixd/util/mstime"
 	"math"
 	"reflect"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/util/mstime"
-	"github.com/davecgh/go-spew/spew"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 

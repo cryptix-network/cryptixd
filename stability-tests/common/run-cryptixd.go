@@ -2,12 +2,11 @@ package common
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"os"
 	"sync/atomic"
 	"syscall"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 )
 
 // RunCryptixdForTesting runs cryptixd for testing purposes

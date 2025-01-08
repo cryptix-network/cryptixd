@@ -1,10 +1,9 @@
 package txscript
 
 import (
+	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"os"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 )
 
 func TestMain(m *testing.M) {

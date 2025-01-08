@@ -1,15 +1,14 @@
 package integration
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/mining"
 	"math/rand"
 	"reflect"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/mining"
 
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 

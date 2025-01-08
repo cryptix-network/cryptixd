@@ -5,11 +5,10 @@
 package util
 
 import (
-	"math"
-	"strconv"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/pkg/errors"
+	"math"
+	"strconv"
 )
 
 // AmountUnit describes a method of converting an Amount to something
@@ -26,7 +25,7 @@ const (
 	AmountCYTX      AmountUnit = 0
 	AmountMilliCYTX AmountUnit = -3
 	AmountMicroCYTX AmountUnit = -6
-	AmountSompi     AmountUnit = -8
+	AmountSompi    AmountUnit = -8
 )
 
 // String returns the unit as a string. For recognized units, the SI

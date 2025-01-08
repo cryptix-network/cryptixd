@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
 	"github.com/cryptix-network/cryptixd/util"
 )

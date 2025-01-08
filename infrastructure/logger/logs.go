@@ -35,11 +35,10 @@ package logger
 import (
 	"bytes"
 	"fmt"
+	"github.com/cryptix-network/cryptixd/util/mstime"
 	"os"
 	"runtime"
 	"sync/atomic"
-
-	"github.com/cryptix-network/cryptixd/util/mstime"
 )
 
 // Logger is a subsystem logger for a Backend.

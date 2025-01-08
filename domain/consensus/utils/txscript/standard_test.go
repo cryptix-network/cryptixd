@@ -6,10 +6,9 @@ package txscript
 
 import (
 	"bytes"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"reflect"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/util"

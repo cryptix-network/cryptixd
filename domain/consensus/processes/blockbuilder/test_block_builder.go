@@ -2,9 +2,6 @@ package blockbuilder
 
 import (
 	"encoding/binary"
-	"math/big"
-	"sort"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
@@ -14,6 +11,8 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/pkg/errors"
+	"math/big"
+	"sort"
 )
 
 type testBlockBuilder struct {

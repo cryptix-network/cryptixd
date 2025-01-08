@@ -1,9 +1,8 @@
 package dagconfig
 
 import (
-	"time"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
+	"time"
 )
 
 // The documentation refers to the following constants which aren't explicated in the code:
@@ -49,8 +48,8 @@ const (
 	// in block take longer)
 	defaultMergeSetSizeLimit                       = defaultGHOSTDAGK * 10
 	defaultSubsidyGenesisReward                    = 1 * constants.SompiPerCryptix
-	defaultPreDeflationaryPhaseBaseSubsidy         = 500 * constants.SompiPerCryptix
-	defaultDeflationaryPhaseBaseSubsidy            = 440 * constants.SompiPerCryptix
+	defaultPreDeflationaryPhaseBaseSubsidy         = 39 * constants.SompiPerCryptix
+	defaultDeflationaryPhaseBaseSubsidy            = 2 * constants.SompiPerCryptix
 	defaultCoinbasePayloadScriptPublicKeyMaxLength = 150
 	// defaultDifficultyAdjustmentWindowSize is the number of blocks in a block's past used to calculate its difficulty
 	// target.
@@ -79,10 +78,7 @@ const (
 	// defaultDeflationaryPhaseDaaScore is the DAA score after which the pre-deflationary period
 	// switches to the deflationary period. This number is calculated as follows:
 	// We define a year as 365.25 days
-	// Half a year in seconds = 365.25 / 2 * 24 * 60 * 60 = 15778800
-	// The network was down for three days shortly after launch
-	// Three days in seconds = 3 * 24 * 60 * 60 = 259200
-	defaultDeflationaryPhaseDaaScore = 15778800 - 259200
-
+	defaultDeflationaryPhaseDaaScore = 259200
+	
 	defaultMergeDepth = 3600
 )

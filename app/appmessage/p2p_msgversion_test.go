@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
 )
 
 // TestVersion tests the MsgVersion API.

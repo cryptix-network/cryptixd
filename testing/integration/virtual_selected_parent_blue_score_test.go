@@ -1,9 +1,8 @@
 package integration
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
+	"testing"
 )
 
 func TestVirtualSelectedParentBlueScoreAndVirtualDAAScore(t *testing.T) {

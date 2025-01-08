@@ -1,13 +1,13 @@
 package reachabilitydatastore
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/lrucache"
 	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/util/staging"
-	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 

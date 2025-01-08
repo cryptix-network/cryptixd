@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/davecgh/go-spew/spew"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 )
 
 // TestBlockHeader tests the MsgBlockHeader API.

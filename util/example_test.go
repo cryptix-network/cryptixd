@@ -2,10 +2,9 @@ package util_test
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/util/difficulty"
 	"math"
 	"math/big"
-
-	"github.com/cryptix-network/cryptixd/util/difficulty"
 
 	"github.com/cryptix-network/cryptixd/util"
 )

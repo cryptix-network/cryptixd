@@ -2,11 +2,10 @@ package main
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/version"
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/cryptix-network/cryptixd/version"
 )
 
 func showVersion() {

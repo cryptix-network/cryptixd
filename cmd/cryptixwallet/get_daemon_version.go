@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/client"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/pb"
 )

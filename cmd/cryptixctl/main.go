@@ -2,10 +2,9 @@ package main
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/version"
 	"os"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/version"
 
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/server/grpcserver/protowire"
 

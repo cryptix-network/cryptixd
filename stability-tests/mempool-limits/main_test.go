@@ -1,13 +1,12 @@
 package mempoollimits
 
 import (
-	"os"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/network/rpcclient"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
 	"github.com/cryptix-network/cryptixd/util/panics"
 	"github.com/cryptix-network/cryptixd/util/profiling"
+	"os"
+	"testing"
 )
 
 const (

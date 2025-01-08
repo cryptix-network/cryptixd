@@ -8,11 +8,10 @@ package database_test
 import (
 	"bytes"
 	"fmt"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"reflect"
 	"strings"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 )
 
 func prepareCursorForTest(t *testing.T, db database.Database, testName string) database.Cursor {

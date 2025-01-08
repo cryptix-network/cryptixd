@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/server"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/keys"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
 	"github.com/pkg/errors"
@@ -40,7 +41,7 @@ func sign(conf *signConfig) error {
 		}
 		transactionsHex = strings.TrimSpace(string(transactionHexBytes))
 	}
-	partiallySignedTransactions, err := decodeTransactionsFromHex(transactionsHex)
+	partiallySignedTransactions, err := server.DecodeTransactionsFromHex(transactionsHex)
 	if err != nil {
 		return err
 	}
@@ -72,6 +73,6 @@ func sign(conf *signConfig) error {
 		fmt.Fprintln(os.Stderr, "Successfully signed transaction")
 	}
 
-	fmt.Println(encodeTransactionsToHex(updatedPartiallySignedTransactions))
+	fmt.Println(server.EncodeTransactionsToHex(updatedPartiallySignedTransactions))
 	return nil
 }

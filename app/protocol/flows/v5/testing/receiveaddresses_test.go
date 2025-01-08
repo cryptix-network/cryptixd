@@ -1,10 +1,9 @@
 package testing
 
 import (
+	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/addressexchange"
 	"testing"
 	"time"
-
-	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/addressexchange"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"

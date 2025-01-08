@@ -2,21 +2,19 @@ package profiling
 
 import (
 	"fmt"
+	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"time"
 
-	"github.com/cryptix-network/cryptixd/infrastructure/logger"
-
 	// Required for profiling
 	_ "net/http/pprof"
 
+	"github.com/cryptix-network/cryptixd/util/panics"
 	"runtime"
 	"runtime/pprof"
-
-	"github.com/cryptix-network/cryptixd/util/panics"
 )
 
 // heapDumpFileName is the name of the heap dump file. We want every run to have its own

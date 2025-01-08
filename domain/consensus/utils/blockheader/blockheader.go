@@ -1,10 +1,9 @@
 package blockheader
 
 import (
-	"math/big"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/pow"
+	"math/big"
 )
 
 type blockHeader struct {

@@ -1,9 +1,8 @@
 package integration
 
 import (
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/network/addressmanager"
+	"testing"
 )
 
 func TestAddressExchange(t *testing.T) {

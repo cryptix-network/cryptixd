@@ -1,10 +1,9 @@
 package common
 
 import (
-	"time"
-
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	routerpkg "github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
+	"time"
 
 	"github.com/pkg/errors"
 )

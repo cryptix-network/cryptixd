@@ -1,13 +1,12 @@
 package miningmanager
 
 import (
-	"sync"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/blocktemplatebuilder"
 	mempoolpkg "github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
+	"sync"
+	"time"
 )
 
 // Factory instantiates new mining managers

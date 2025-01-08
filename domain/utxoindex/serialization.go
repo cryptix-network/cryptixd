@@ -2,12 +2,11 @@ package utxoindex
 
 import (
 	"encoding/binary"
-	"io"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
+	"io"
 )
 
 func serializeOutpoint(outpoint *externalapi.DomainOutpoint) ([]byte, error) {

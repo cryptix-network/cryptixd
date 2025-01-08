@@ -2,9 +2,6 @@ package grpcclient
 
 import (
 	"context"
-	"io"
-	"time"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/server/grpcserver"
@@ -12,6 +9,8 @@ import (
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/encoding/gzip"
+	"io"
+	"time"
 )
 
 // OnErrorHandler defines a handler function for when errors occur

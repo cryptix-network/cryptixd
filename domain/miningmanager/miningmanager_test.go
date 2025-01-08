@@ -1,15 +1,14 @@
 package miningmanager_test
 
 import (
-	"reflect"
-	"strings"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/model"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/cryptix-network/cryptixd/version"
+	"reflect"
+	"strings"
+	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 

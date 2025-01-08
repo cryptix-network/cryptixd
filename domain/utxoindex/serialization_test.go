@@ -2,12 +2,11 @@ package utxoindex
 
 import (
 	"encoding/binary"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/pkg/errors"
 	"io"
 	"math/rand"
 	"testing"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/pkg/errors"
 )
 
 func Test_serializeHashes(t *testing.T) {

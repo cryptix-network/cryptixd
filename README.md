@@ -4,12 +4,12 @@ The full node reference implementation was [rewritten in Rust](https://github.co
 
 PLEASE NOTE: Any pull requests or issues that will be opened in this repository will be closed without treatment, except for issues or pull requests related to the cryptixwallet, which remains maintained. In any other case, please use the [Rust implementation](https://github.com/cryptix-network/rusty-cryptix) instead.
 
-Cryptixd
-====
+# Cryptixd
 
 [![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](https://choosealicense.com/licenses/isc/)
+[![GoDoc](https://img.shields.io/badge/godoc-reference-blue.svg)](http://godoc.org/github.com/cryptix-network/cryptixd)
 
-Cryptixd is the reference full node Cryptix implementation written in Go (golang).
+Cryptixd was the reference full node Cryptix implementation written in Go (golang).
 
 ## What is cryptix
 
@@ -17,7 +17,7 @@ Cryptix is an attempt at a proof-of-work cryptocurrency with instant confirmatio
 
 ## Requirements
 
-Go 1.18 or later.
+Go 1.23 or later.
 
 ## Installation
 
@@ -44,24 +44,6 @@ $ go install . ./cmd/...
   not already add the bin directory to your system path during Go installation,
   you are encouraged to do so now.
 
-  
-Build Exe:
-
-cd\
-
-go mod tidy
-
-go build -o cryptixd.exe
-
-
-cd \cmd\cryptixwallet
-
-go mod tidy
-
-go build -o cryptixwallet.exe
-
-
-
 ## Getting Started
 
 Cryptixd has several configuration options available to tweak how it runs, but all
@@ -72,7 +54,8 @@ $ cryptixd
 ```
 
 ## Discord
-Join Discord: [Cryptix Discord](https://discord.gg/SxXCXHFFeA)
+
+Join our discord server using the following link: https://discord.gg/YNYnNN5Pf2
 
 ## Issue Tracker
 

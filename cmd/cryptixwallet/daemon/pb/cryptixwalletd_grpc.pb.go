@@ -29,11 +29,16 @@ type CryptixwalletdClient interface {
 	NewAddress(ctx context.Context, in *NewAddressRequest, opts ...grpc.CallOption) (*NewAddressResponse, error)
 	Shutdown(ctx context.Context, in *ShutdownRequest, opts ...grpc.CallOption) (*ShutdownResponse, error)
 	Broadcast(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
-	// Since SendRequest contains a password - this command should only be used on a trusted or secure connection
+	// BroadcastReplacement assumes that all transactions depend on the first one
+	BroadcastReplacement(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error)
+	// Since SendRequest contains a password - this command should only be used on
+	// a trusted or secure connection
 	Send(ctx context.Context, in *SendRequest, opts ...grpc.CallOption) (*SendResponse, error)
-	// Since SignRequest contains a password - this command should only be used on a trusted or secure connection
+	// Since SignRequest contains a password - this command should only be used on
+	// a trusted or secure connection
 	Sign(ctx context.Context, in *SignRequest, opts ...grpc.CallOption) (*SignResponse, error)
 	GetVersion(ctx context.Context, in *GetVersionRequest, opts ...grpc.CallOption) (*GetVersionResponse, error)
+	BumpFee(ctx context.Context, in *BumpFeeRequest, opts ...grpc.CallOption) (*BumpFeeResponse, error)
 }
 
 type cryptixwalletdClient struct {
@@ -107,6 +112,15 @@ func (c *cryptixwalletdClient) Broadcast(ctx context.Context, in *BroadcastReque
 	return out, nil
 }
 
+func (c *cryptixwalletdClient) BroadcastReplacement(ctx context.Context, in *BroadcastRequest, opts ...grpc.CallOption) (*BroadcastResponse, error) {
+	out := new(BroadcastResponse)
+	err := c.cc.Invoke(ctx, "/cryptixwalletd.cryptixwalletd/BroadcastReplacement", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *cryptixwalletdClient) Send(ctx context.Context, in *SendRequest, opts ...grpc.CallOption) (*SendResponse, error) {
 	out := new(SendResponse)
 	err := c.cc.Invoke(ctx, "/cryptixwalletd.cryptixwalletd/Send", in, out, opts...)
@@ -134,6 +148,15 @@ func (c *cryptixwalletdClient) GetVersion(ctx context.Context, in *GetVersionReq
 	return out, nil
 }
 
+func (c *cryptixwalletdClient) BumpFee(ctx context.Context, in *BumpFeeRequest, opts ...grpc.CallOption) (*BumpFeeResponse, error) {
+	out := new(BumpFeeResponse)
+	err := c.cc.Invoke(ctx, "/cryptixwalletd.cryptixwalletd/BumpFee", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // CryptixwalletdServer is the server API for Cryptixwalletd service.
 // All implementations must embed UnimplementedCryptixwalletdServer
 // for forward compatibility
@@ -145,11 +168,16 @@ type CryptixwalletdServer interface {
 	NewAddress(context.Context, *NewAddressRequest) (*NewAddressResponse, error)
 	Shutdown(context.Context, *ShutdownRequest) (*ShutdownResponse, error)
 	Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
-	// Since SendRequest contains a password - this command should only be used on a trusted or secure connection
+	// BroadcastReplacement assumes that all transactions depend on the first one
+	BroadcastReplacement(context.Context, *BroadcastRequest) (*BroadcastResponse, error)
+	// Since SendRequest contains a password - this command should only be used on
+	// a trusted or secure connection
 	Send(context.Context, *SendRequest) (*SendResponse, error)
-	// Since SignRequest contains a password - this command should only be used on a trusted or secure connection
+	// Since SignRequest contains a password - this command should only be used on
+	// a trusted or secure connection
 	Sign(context.Context, *SignRequest) (*SignResponse, error)
 	GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error)
+	BumpFee(context.Context, *BumpFeeRequest) (*BumpFeeResponse, error)
 	mustEmbedUnimplementedCryptixwalletdServer()
 }
 
@@ -178,6 +206,9 @@ func (UnimplementedCryptixwalletdServer) Shutdown(context.Context, *ShutdownRequ
 func (UnimplementedCryptixwalletdServer) Broadcast(context.Context, *BroadcastRequest) (*BroadcastResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Broadcast not implemented")
 }
+func (UnimplementedCryptixwalletdServer) BroadcastReplacement(context.Context, *BroadcastRequest) (*BroadcastResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BroadcastReplacement not implemented")
+}
 func (UnimplementedCryptixwalletdServer) Send(context.Context, *SendRequest) (*SendResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Send not implemented")
 }
@@ -186,6 +217,9 @@ func (UnimplementedCryptixwalletdServer) Sign(context.Context, *SignRequest) (*S
 }
 func (UnimplementedCryptixwalletdServer) GetVersion(context.Context, *GetVersionRequest) (*GetVersionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVersion not implemented")
+}
+func (UnimplementedCryptixwalletdServer) BumpFee(context.Context, *BumpFeeRequest) (*BumpFeeResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BumpFee not implemented")
 }
 func (UnimplementedCryptixwalletdServer) mustEmbedUnimplementedCryptixwalletdServer() {}
 
@@ -326,6 +360,24 @@ func _Cryptixwalletd_Broadcast_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Cryptixwalletd_BroadcastReplacement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BroadcastRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CryptixwalletdServer).BroadcastReplacement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cryptixwalletd.cryptixwalletd/BroadcastReplacement",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CryptixwalletdServer).BroadcastReplacement(ctx, req.(*BroadcastRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Cryptixwalletd_Send_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SendRequest)
 	if err := dec(in); err != nil {
@@ -380,6 +432,24 @@ func _Cryptixwalletd_GetVersion_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Cryptixwalletd_BumpFee_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BumpFeeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(CryptixwalletdServer).BumpFee(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/cryptixwalletd.cryptixwalletd/BumpFee",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(CryptixwalletdServer).BumpFee(ctx, req.(*BumpFeeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Cryptixwalletd_ServiceDesc is the grpc.ServiceDesc for Cryptixwalletd service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -416,6 +486,10 @@ var Cryptixwalletd_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Cryptixwalletd_Broadcast_Handler,
 		},
 		{
+			MethodName: "BroadcastReplacement",
+			Handler:    _Cryptixwalletd_BroadcastReplacement_Handler,
+		},
+		{
 			MethodName: "Send",
 			Handler:    _Cryptixwalletd_Send_Handler,
 		},
@@ -426,6 +500,10 @@ var Cryptixwalletd_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVersion",
 			Handler:    _Cryptixwalletd_GetVersion_Handler,
+		},
+		{
+			MethodName: "BumpFee",
+			Handler:    _Cryptixwalletd_BumpFee_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

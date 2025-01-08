@@ -3,9 +3,9 @@ package main
 import (
 	"path/filepath"
 
+	"github.com/jessevdk/go-flags"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/stability-tests/common"
-	"github.com/jessevdk/go-flags"
 )
 
 const (

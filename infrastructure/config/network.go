@@ -3,15 +3,14 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"math/big"
 	"os"
 	"time"
 
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-
+	"github.com/jessevdk/go-flags"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/util/difficulty"
-	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 

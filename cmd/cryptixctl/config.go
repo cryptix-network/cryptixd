@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/jessevdk/go-flags"
+	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/pkg/errors"
 )
 

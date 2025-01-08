@@ -2,10 +2,6 @@ package consensus_test
 
 import (
 	"fmt"
-	"math"
-	"math/rand"
-	"testing"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -14,6 +10,9 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
 	"github.com/pkg/errors"
+	"math"
+	"math/rand"
+	"testing"
 )
 
 func TestFinality(t *testing.T) {
