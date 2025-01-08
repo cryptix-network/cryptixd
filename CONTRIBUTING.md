@@ -8,7 +8,7 @@ If you want to start contributing to Cryptixd and don't know where to start, you
 the [list](https://github.com/cryptix-network/cryptixd/issues).
 
 If you want to make a big change it's better to discuss it first by opening an issue or talk about it in
-[Discord](https://discord.gg/WmGhhzk) to avoid duplicate work.
+[Discord](https://discord.gg/SxXCXHFFeA) to avoid duplicate work.
 
 ## Pull Request process
 
