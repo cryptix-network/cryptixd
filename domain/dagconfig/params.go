@@ -214,9 +214,16 @@ var MainnetParams = Params{
 	RPCPort:     "19201",
 	DefaultPort: "19101",
 	DNSSeeds: []string{
-		//  DNS seeder
-		"seed-cryptix.duckdns.org",
-		"hotfix-dev.duckdns.org",
+		// DNS Seeder
+		"seed1.cryptix-network.org",
+		"seed2.cryptix-network.org",
+		"seed3.cryptix-network.org",
+		"dyn1.cryptix-network.org",
+		"dyn2.cryptix-network.org",
+		"dyn3.cryptix-network.org",
+		//Backup Domain
+		"cryptix-network-dns.duckdns.org",
+		"cryptix-network-dns2.duckdns.org",
 	},
 
 	// DAG parameters
@@ -283,9 +290,16 @@ var TestnetParams = Params{
 	RPCPort:     "19202",
 	DefaultPort: "19102",
 	DNSSeeds: []string{
-		//  DNS seeder
-		"seed-cryptix.duckdns.org",
-		"hotfix-dev.duckdns.org",
+		// DNS Seeder
+		"t.seed1.cryptix-network.org",
+		"t.seed2.cryptix-network.org",
+		"t.seed3.cryptix-network.org",
+		"t.dyn1.cryptix-network.org",
+		"t.dyn2.cryptix-network.org",
+		"t.dyn3.cryptix-network.org",
+		//Backup Domain
+		"t.cryptix-network-dns.duckdns.org",
+		"t.cryptix-network-dns2.duckdns.org",
 	},
 
 	// DAG parameters
