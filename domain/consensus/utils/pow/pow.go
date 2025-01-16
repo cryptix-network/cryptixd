@@ -7,8 +7,9 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/serialization"
 	"github.com/cryptix-network/cryptixd/util/difficulty"
 
-	"github.com/pkg/errors"
 	"math/big"
+
+	"github.com/pkg/errors"
 )
 
 // State is an intermediate data structure with pre-computed values to speed up mining.
@@ -42,12 +43,6 @@ func NewState(header externalapi.MutableBlockHeader) *State {
 }
 
 // CalculateProofOfWorkValue hashes the internal header and returns its big.Int value
-
-        // Hello ASICs - try to eat this.
-        // Info: Cryptix will never accept or support ASICs. This is just the first step. In the future, multiple iterations may be added, or even other algorithms,
-        // up to the potential integration of RandomX. So don't waste your time and money building an ASIC miner, it won't even work for a week, and the algorithm will 
-        //be changed as soon as there is even a suspicion of ASIC involvement.
-
 func (state *State) CalculateProofOfWorkValue() *big.Int {
 	// PRE_POW_HASH || TIME || 32 zero byte padding || NONCE
 	writer := hashes.NewPoWHashWriter()
@@ -63,15 +58,8 @@ func (state *State) CalculateProofOfWorkValue() *big.Int {
 		panic(errors.Wrap(err, "this should never happen. Hash digest should never return an error"))
 	}
 	powHash := writer.Finalize()
-
-	// First HeavyHash
 	heavyHash := state.mat.HeavyHash(powHash)
-
-	// Second HeavyHash (double hashing step)
-	secondHeavyHash := state.mat.HeavyHash(heavyHash)
-
-	// Return the result as a big.Int
-	return toBig(secondHeavyHash)
+	return toBig(heavyHash)
 }
 
 // IncrementNonce the nonce in State by 1
