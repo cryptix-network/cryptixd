@@ -10,6 +10,7 @@ import (
 	"math/big"
 
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/sha3"
 )
 
 // State is an intermediate data structure with pre-computed values to speed up mining.
@@ -45,7 +46,6 @@ func NewState(header externalapi.MutableBlockHeader) *State {
 func (state *State) CalculateProofOfWorkValue() *big.Int {
 	// PRE_POW_HASH || TIME || 32 zero byte padding || NONCE
 	writer := hashes.NewPoWHashWriter()
-
 	writer.InfallibleWrite(state.prePowHash.ByteSlice())
 	err := serialization.WriteElement(writer, state.Timestamp)
 	if err != nil {
@@ -57,14 +57,18 @@ func (state *State) CalculateProofOfWorkValue() *big.Int {
 	if err != nil {
 		panic(errors.Wrap(err, "this should never happen. Hash digest should never return an error"))
 	}
-
 	powHash := writer.Finalize()
 
-	writer = hashes.NewPoWHashWriter()
-	writer.InfallibleWrite(powHash.ByteSlice())
-	shakeSpinHash := writer.Finalize()
+	sha3Hasher := sha3.New256()
+	sha3Hasher.Write(powHash.ByteSlice())
+	sha3HashBytes := sha3Hasher.Sum(nil)
 
-	heavyHash := state.mat.HeavyHash(shakeSpinHash)
+	sha3DomainHash, err := externalapi.NewDomainHashFromByteSlice(sha3HashBytes)
+	if err != nil {
+		panic(errors.Wrap(err, "failed to create DomainHash from SHA3 hash bytes"))
+	}
+
+	heavyHash := state.mat.HeavyHash(sha3DomainHash)
 
 	return toBig(heavyHash)
 }
