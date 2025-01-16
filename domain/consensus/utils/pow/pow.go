@@ -42,10 +42,10 @@ func NewState(header externalapi.MutableBlockHeader) *State {
 	}
 }
 
-// CalculateProofOfWorkValue hashes the internal header and returns its big.Int value
 func (state *State) CalculateProofOfWorkValue() *big.Int {
 	// PRE_POW_HASH || TIME || 32 zero byte padding || NONCE
 	writer := hashes.NewPoWHashWriter()
+
 	writer.InfallibleWrite(state.prePowHash.ByteSlice())
 	err := serialization.WriteElement(writer, state.Timestamp)
 	if err != nil {
@@ -57,8 +57,15 @@ func (state *State) CalculateProofOfWorkValue() *big.Int {
 	if err != nil {
 		panic(errors.Wrap(err, "this should never happen. Hash digest should never return an error"))
 	}
+
 	powHash := writer.Finalize()
-	heavyHash := state.mat.HeavyHash(powHash)
+
+	writer = hashes.NewPoWHashWriter()
+	writer.InfallibleWrite(powHash.ByteSlice())
+	shakeSpinHash := writer.Finalize()
+
+	heavyHash := state.mat.HeavyHash(shakeSpinHash)
+
 	return toBig(heavyHash)
 }
 
