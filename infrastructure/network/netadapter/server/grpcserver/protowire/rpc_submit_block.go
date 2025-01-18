@@ -1,9 +1,10 @@
 package protowire
 
 import (
+	"math"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/pkg/errors"
-	"math"
 )
 
 func (x *CryptixdMessage_SubmitBlockRequest) toAppMessage() (appmessage.Message, error) {
