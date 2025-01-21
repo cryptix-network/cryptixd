@@ -63,6 +63,17 @@ func (mat *matrix) computeRank() int {
 	return rank
 }
 
+var final_x = [32]byte{
+	0x3F, 0xC2, 0xF2, 0xE2,
+	0xD1, 0x55, 0x81, 0x92,
+	0xA0, 0x6B, 0xF5, 0x3F,
+	0x5A, 0x70, 0x32, 0xB4,
+	0xE4, 0x84, 0xE4, 0xCB,
+	0x81, 0x73, 0xE7, 0xE0,
+	0xD2, 0x7F, 0x8C, 0x55,
+	0xAD, 0x8C, 0x60, 0x8F,
+}
+
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
 	var nibbles [64]uint16
@@ -87,7 +98,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	}
 
 	for i := 0; i < 32; i++ {
-		product[i] ^= hashBytes[i]
+		product[i] ^= hashBytes[i] ^ final_x[i]
 	}
 
 	// Hash again
