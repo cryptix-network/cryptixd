@@ -97,6 +97,10 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		product[i] = byte((aNibble << 4) | bNibble)
 	}
 
+	for i := 0; i < 32; i++ {
+		product[i] ^= hashBytes[i] ^ final_x[i]
+	}
+
 	// Hash again
 	writer := hashes.NewHeavyHashWriter()
 	writer.InfallibleWrite(product[:])
