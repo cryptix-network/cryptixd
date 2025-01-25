@@ -19,75 +19,108 @@ var genesisTxOuts = []*externalapi.DomainTransactionOutput{}
 var genesisTxPayload = []byte{
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // Blue score
 	0x00, 0xE1, 0xF5, 0x05, 0x00, 0x00, 0x00, 0x00, // Subsidy
-	0x00, 0x00, // script version
+	0x00, 0x00, //script version
 	0x01,                                           // Varint
 	0x00,                                           // OP-FALSE
 	0xd7, 0x95, 0xd7, 0x9e, 0xd7, 0x94, 0x20, 0xd7, //
+
 }
 
-// Genesis Coinbase Transaction
+// genesisCoinbaseTx is the coinbase transaction for the genesis blocks for
+// the main network.
 var genesisCoinbaseTx = transactionhelper.NewSubnetworkTransaction(0, []*externalapi.DomainTransactionInput{}, genesisTxOuts,
 	&subnetworks.SubnetworkIDCoinbase, 0, genesisTxPayload)
 
-// Genesis Hash
+// genesisHash is the hash of the first block in the block DAG for the main
+// network (genesis block).
 var genesisHash = externalapi.NewDomainHashFromByteArray(&[externalapi.DomainHashSize]byte{
-	0x1f,
-	0xaa,
-	0xec,
-	0x44,
-	0x47,
-	0x13,
-	0xc5,
-	0x41,
-	0x65,
+	0xab,
+	0xf3,
+	0x3d,
+	0x58,
+	0xa6,
+	0x16,
+	0x54,
+	0xda,
+	0xc8,
+	0x07,
+	0x9d,
 	0x11,
-	0x94,
-	0xfb,
-	0xf2,
-	0x0b,
-	0x4f,
-	0xf7,
-	0x23,
-	0xfb,
-	0xed,
-	0x8b,
-	0x00,
-	0x2d,
-	0x80,
-	0x1e,
-	0xf1,
-	0xe6,
-	0xe8,
-	0x14,
-	0xa3,
-	0x80,
-	0x21,
-	0xe4,
+	0x8c,
+	0xe5,
+	0xc4,
+	0x0c,
+	0x49,
+	0xe0,
+	0xee,
+	0xab,
+	0x7d,
+	0x67,
+	0xd1,
+	0x35,
+	0xb7,
+	0x9f,
+	0xaf,
+	0x42,
+	0x5a,
+	0x9b,
+	0xfe,
+	0xd1,
 })
 
-// Genesis Merkle Root
+// genesisMerkleRoot is the hash of the first transaction in the genesis block
+// for the main network.
 var genesisMerkleRoot = externalapi.NewDomainHashFromByteArray(&[externalapi.DomainHashSize]byte{
-	0xec, 0xc4, 0x29, 0x28, 0xf2, 0xa8, 0x87, 0x02, 0xf8, 0x1f,
-	0xe7, 0x3e, 0x9c, 0x0a, 0x00, 0x6d, 0xc0, 0xa1, 0x8c, 0x41,
-	0xd8, 0x8a, 0x81, 0xe7, 0x7f, 0xf4, 0x97, 0x3d, 0x5d, 0xab,
-	0x41, 0xbc,
+	0xec,
+	0xc4,
+	0x29,
+	0x28,
+	0xf2,
+	0xa8,
+	0x87,
+	0x02,
+	0xf8,
+	0x1f,
+	0xe7,
+	0x3e,
+	0x9c,
+	0x0a,
+	0x00,
+	0x6d,
+	0xc0,
+	0xa1,
+	0x8c,
+	0x41,
+	0xd8,
+	0x8a,
+	0x81,
+	0xe7,
+	0x7f,
+	0xf4,
+	0x97,
+	0x3d,
+	0x5d,
+	0xab,
+	0x41,
+	0xbc,
 })
 
-// Genesis Block
+// genesisBlock defines the genesis block of the block DAG which serves as the
+// public transaction ledger for the main network.
 var genesisBlock = externalapi.DomainBlock{
 	Header: blockheader.NewImmutableBlockHeader(
-		0,                                 // Block version
-		[]externalapi.BlockLevelParents{}, // Block level parents
-		genesisMerkleRoot,                 // Merkle root
-		&externalapi.DomainHash{},         // PreBlockHash
-		externalapi.NewDomainHashFromByteArray(muhash.EmptyMuHashHash.AsArray()), // Block Payload Hash
-		1735689600000,             // Timestamp
-		100,                       //Diff
-		0x9E2F,                    //Nonce
-		0,                         // Checkpoint DAA Score
-		0,                         // Blockchain High
-		big.NewInt(0),             // Subnet
-		&externalapi.DomainHash{}, // Block ID
+		0,
+		[]externalapi.BlockLevelParents{},
+		genesisMerkleRoot,
+		&externalapi.DomainHash{},
+		externalapi.NewDomainHashFromByteArray(muhash.EmptyMuHashHash.AsArray()),
+		1735689600000,
+		486962709,
+		0x3392c,
+		0, // Checkpoint DAA score
+		0,
+		big.NewInt(0),
+		&externalapi.DomainHash{},
 	),
 	Transactions: []*externalapi.DomainTransaction{genesisCoinbaseTx},
 }
