@@ -31,10 +31,10 @@ var genesisCoinbaseTx = transactionhelper.NewSubnetworkTransaction(0, []*externa
 
 // Genesis Hash
 var genesisHash = externalapi.NewDomainHashFromByteArray(&[externalapi.DomainHashSize]byte{
-	0x00, 0x00, 0x2c, 0x14, 0x11, 0xb2, 0x03, 0x41,
-	0x9f, 0xf9, 0x23, 0xc5, 0x87, 0x36, 0xb2, 0x54,
-	0x3c, 0x1f, 0x5e, 0x35, 0x6d, 0x68, 0xf9, 0xaf,
-	0xde, 0x47, 0x5c, 0x44, 0xc6, 0x4e, 0x45, 0x4c,
+	0x00, 0x00, 0xd8, 0x4d, 0xdb, 0x77, 0x55, 0xd4,
+	0x21, 0x81, 0xa9, 0xfb, 0x27, 0x1a, 0xbc, 0xd4,
+	0x04, 0x6a, 0xa3, 0x99, 0xa2, 0x27, 0xe2, 0x36,
+	0x81, 0x7f, 0x9a, 0x62, 0x16, 0xb7, 0x78, 0x7d,
 })
 
 // Genesis Merkle Root
@@ -48,14 +48,14 @@ var genesisMerkleRoot = externalapi.NewDomainHashFromByteArray(&[externalapi.Dom
 // Genesis Block
 var genesisBlock = externalapi.DomainBlock{
 	Header: blockheader.NewImmutableBlockHeader(
-		7,                                 // Block version
+		0,                                 // Block version
 		[]externalapi.BlockLevelParents{}, // Block level parents
 		genesisMerkleRoot,                 // Merkle root
 		&externalapi.DomainHash{},         // PreBlockHash
 		externalapi.NewDomainHashFromByteArray(muhash.EmptyMuHashHash.AsArray()), // Block Payload Hash
 		1735689600000,             // Timestamp
 		100,                       //Diff
-		0xB5D2,                    //Nonce
+		0x9E2F,                    //Nonce
 		0,                         // Checkpoint DAA Score
 		0,                         // Blockchain High
 		big.NewInt(0),             // Subnet
