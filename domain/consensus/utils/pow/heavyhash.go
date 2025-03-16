@@ -63,17 +63,27 @@ func (mat *matrix) computeRank() int {
 	return rank
 }
 
-var final_x = [32]byte{
-	0x3F, 0xC2, 0xF2, 0xE2,
-	0xD1, 0x55, 0x81, 0x92,
-	0xA0, 0x6B, 0xF5, 0x3F,
-	0x5A, 0x70, 0x32, 0xB4,
-	0xE4, 0x84, 0xE4, 0xCB,
-	0x81, 0x73, 0xE7, 0xE0,
-	0xD2, 0x7F, 0x8C, 0x55,
-	0xAD, 0x8C, 0x60, 0x8F,
+// FINAL_CRYPTIX constant
+var FINAL_CRYPTIX = [32]byte{
+	0xE4, 0x7F, 0x3F, 0x73,
+	0xB4, 0xF2, 0xD2, 0x8C,
+	0x55, 0xD1, 0xE7, 0x6B,
+	0xE0, 0xAD, 0x70, 0x55,
+	0xCB, 0x3F, 0x8C, 0x8F,
+	0xF5, 0xA0, 0xE2, 0x60,
+	0x81, 0xC2, 0x5A, 0x84,
+	0x32, 0x81, 0xE4, 0x92,
 }
 
+// non-linear S-box transformation
+func generateNonLinearSBox(input, key byte) byte {
+	result := input * key
+	result = (result >> 3) | (result << 5)
+	result ^= 0x5A
+	return result
+}
+
+// Heavyhash function
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
 	var nibbles [64]uint16
@@ -97,11 +107,90 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		product[i] = byte((aNibble << 4) | bNibble)
 	}
 
+	// XOR with hashBytes
 	for i := 0; i < 32; i++ {
-		product[i] ^= hashBytes[i] ^ final_x[i]
+		product[i] ^= hashBytes[i]
 	}
 
-	// Hash again
+	// Memory-Hard Operation (16 KB Table)
+	var memoryTable [16 * 1024]byte
+	index := 0
+
+	for i := 0; i < 32; i++ {
+		var sum uint16
+		for j := 0; j < 64; j++ {
+			sum += uint16(nibbles[j]) * uint16(mat[2*i][j])
+		}
+
+		// Memory access with non-linear operations
+		for k := 0; k < 12; k++ {
+			index ^= (int(memoryTable[(index*7+i)%len(memoryTable)]) * 19) ^ ((i * 53) % 13)
+			index = (index*73 + i*41) % len(memoryTable)
+
+			shifted := (index + i*13) % len(memoryTable)
+			memoryTable[shifted] ^= byte(sum & 0xFF)
+		}
+	}
+
+	// Final XOR with the memory table
+	for i := 0; i < 32; i++ {
+		shiftVal := (int(product[i])*47 + i) % len(memoryTable)
+		product[i] ^= memoryTable[shiftVal]
+	}
+
+	// XOR with FINAL_CRYPTIX
+	for i := 0; i < 32; i++ {
+		product[i] ^= FINAL_CRYPTIX[i]
+	}
+
+	// **Anti-ASIC Cache**
+	var cache [4096]byte
+	cacheIndex := 0
+	hashValue := byte(0)
+
+	// Initialize the cache
+	for i := 0; i < len(cache); i++ {
+		hashValue = (product[i%32] ^ byte(i)) + hashValue
+		cache[i] = hashValue
+	}
+
+	for iteration := 0; iteration < 8; iteration++ {
+		for i := 0; i < 32; i++ {
+			cacheIndex = (cacheIndex<<5 ^ (int(product[i]) * 17)) % len(cache)
+			cache[cacheIndex] ^= product[i]
+
+			safeIndex := ((cacheIndex * 7) % len(cache))
+			cacheIndex = (cacheIndex + int(product[i])*23) ^ int(cache[safeIndex])%len(cache)
+			cache[cacheIndex] ^= product[(i+11)%32]
+
+			dynamicOffset := ((int(cache[cacheIndex]) * 37) ^ (int(product[i]) * 19)) % len(cache)
+			cache[dynamicOffset] ^= product[(i+3)%32]
+		}
+	}
+
+	// Incorporate cache into the product
+	for i := 0; i < 32; i++ {
+		shiftVal := (int(product[i])*47 + i) % len(cache)
+		product[i] ^= cache[shiftVal]
+	}
+
+	// **S-Box Transformation** (aligned with Rust)
+	var sbox [256]byte
+	for iter := 0; iter < 6; iter++ {
+		for i := 0; i < 256; i++ {
+			value := byte(i)
+			value = generateNonLinearSBox(value, hashBytes[i%len(hashBytes)])
+			value ^= value<<4 | value>>2
+			sbox[i] = value
+		}
+	}
+
+	// Apply the S-Box
+	for i := 0; i < 32; i++ {
+		product[i] = sbox[product[i]]
+	}
+
+	// Final hash calculation
 	writer := hashes.NewHeavyHashWriter()
 	writer.InfallibleWrite(product[:])
 	return writer.Finalize()
