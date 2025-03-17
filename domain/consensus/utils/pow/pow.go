@@ -208,7 +208,7 @@ func (state *State) calculateSha3Rounds(input []byte) int {
 	return int(value%4 + 1) // Rounds from 1 to 4
 }
 
-// ** Byte Mixing Funktion **
+// ** Byte Mixing Function **
 func (state *State) byteMixing(sha3Hash []byte, b3Hash []byte) []byte {
 	var tempBuf [32]byte
 	for i := 0; i < 32; i++ {
