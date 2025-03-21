@@ -196,16 +196,22 @@ func (state *State) blake3Hash(input []byte) []byte {
 
 // Calculating the BLAKE3 rounds
 func (state *State) calculateB3Rounds(input []byte) int {
+	if len(input) < B3_ROUND_OFFSET+ROUND_RANGE_SIZE {
+		panic("input array is too small for BLAKE3 round calculation")
+	}
 	slice := input[B3_ROUND_OFFSET : B3_ROUND_OFFSET+ROUND_RANGE_SIZE]
 	value := binary.LittleEndian.Uint32(slice)
-	return int(value%5 + 1) // Rounds from 1 to 5
+	return int(value%5 + 1)
 }
 
 // Calculating the SHA3 rounds
 func (state *State) calculateSha3Rounds(input []byte) int {
+	if len(input) < SHA3_ROUND_OFFSET+ROUND_RANGE_SIZE {
+		panic("input array is too small for SHA3 round calculation")
+	}
 	slice := input[SHA3_ROUND_OFFSET : SHA3_ROUND_OFFSET+ROUND_RANGE_SIZE]
 	value := binary.LittleEndian.Uint32(slice)
-	return int(value%4 + 1) // Rounds from 1 to 4
+	return int(value%4 + 1)
 }
 
 // ** Byte Mixing Function **

@@ -226,7 +226,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 			// Apply non-linear S-box transformation
 			value = generateNonLinearSBox(value, hashBytes[i%len(hashBytes)])
 
-			// True rotations like in Rust
+			// True rotations
 			value ^= rotateLeft(value, 4) | rotateRight(value, 2)
 
 			sbox[i] = value
