@@ -80,17 +80,17 @@ var FINAL_CRYPTIX = [32]byte{
 func generateNonLinearSBox(input, key byte) byte {
 	result := input
 	result = byte(uint16(result) * uint16(key))
-	result = rotateLeft(result, 5)
+	result = (result >> 3) | (result << 5)
 	result ^= 0x5A
 	return result
 }
 
-// Rotate left (circular shift)
+// Rotate left
 func rotateLeft(value byte, bits int) byte {
 	return (value << bits) | (value >> (8 - bits))
 }
 
-// Rotate right (circular shift)
+// Rotate right
 func rotateRight(value byte, bits int) byte {
 	return (value >> bits) | (value << (8 - bits))
 }
@@ -102,13 +102,13 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	// Security check for hashBytes
 	if len(hashBytes) < 32 {
 		fmt.Println("Error: hashBytes array too small")
-		return nil // Continue, but return nil as an error indicator
+		return nil
 	}
 
 	var nibbles [64]uint16
 	var product [32]byte
 
-	// Break the hashBytes into nibbles (half-bytes)
+	// Break the hashBytes into nibbles
 	for i := 0; i < 32; i++ {
 		nibbles[2*i] = uint16(hashBytes[i] >> 4)
 		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
@@ -139,8 +139,8 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		product[i] ^= hashBytes[i]
 	}
 
-	// Memory-Hard Operation (16 KB Table)
-	var memoryTable [16 * 1024]byte
+	// Memory-Hard Operation
+	var memoryTable [16 * 1024]byte // 16 KB
 	index := 0
 
 	for i := 0; i < 32; i++ {
@@ -149,18 +149,18 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 			sum += uint16(nibbles[j]) * uint16(mat[2*i][j])
 		}
 
-		// Memory access with non-linear operations
+		// Memory access non-linear
 		for k := 0; k < 12; k++ {
 
 			index = (index ^ (int(memoryTable[(index*7+i)%len(memoryTable)]) * 19)) & 0x3FFF
 			index = ((index*73 + i*41) & 0x3FFF) % len(memoryTable)
 
-			// Wrap the index around if necessary (equivalent to `wrapping_add`)
+			// Wrap the index around (wrapping_add)
 			if index < 0 {
 				index += len(memoryTable)
 			}
 
-			// Perform the operation on the memory table
+			// memory table
 			shifted := (index + i*13) % len(memoryTable)
 			memoryTable[shifted] ^= byte(sum & 0xFF)
 		}
@@ -186,7 +186,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		for i := 0; i < 256; i++ {
 			value := byte(i)
 
-			// Apply non-linear S-box transformation
+			// non-linear S-box transformation
 			value = generateNonLinearSBox(value, hashBytes[i%len(hashBytes)])
 
 			// True rotations
