@@ -1,8 +1,6 @@
 package pow
 
 import (
-	"encoding/binary"
-
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashes"
@@ -10,10 +8,8 @@ import (
 	"github.com/cryptix-network/cryptixd/util/difficulty"
 
 	"math/big"
-	"math/bits"
 
 	"github.com/pkg/errors"
-	"github.com/zeebo/blake3"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -47,7 +43,6 @@ func NewState(header externalapi.MutableBlockHeader) *State {
 	}
 }
 
-/*
 func (state *State) CalculateProofOfWorkValue() *big.Int {
 	// PRE_POW_HASH || TIME || 32 zero byte padding || NONCE
 	writer := hashes.NewPoWHashWriter()
@@ -77,8 +72,8 @@ func (state *State) CalculateProofOfWorkValue() *big.Int {
 
 	return toBig(heavyHash)
 }
-*/
 
+/*
 // Constants for the offsets
 const SHA3_ROUND_OFFSET = 8
 const B3_ROUND_OFFSET = 4
@@ -260,7 +255,7 @@ func (state *State) bitManipulations(data []byte) {
 		data[i] ^= byte(i<<2) & 0xFF
 	}
 }
-
+*/
 /*
 
 
