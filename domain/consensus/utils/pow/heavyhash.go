@@ -1,7 +1,7 @@
 package pow
 
 import (
-	"log"
+	"fmt"
 	"math"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -104,7 +104,8 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 	// Security check for hashBytes
 	if len(hashBytes) < 32 {
-		log.Fatal("Error: hashBytes array too small")
+		fmt.Println("Error: hashBytes array too small")
+		return nil // Continue, but return nil as an error indicator
 	}
 
 	var nibbles [64]uint16
@@ -116,10 +117,21 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
 	}
 
+	// Check matrix size before processing
+	if len(mat) < 64 || len(mat[0]) < 64 {
+		fmt.Println("Error: Matrix size is insufficient.")
+		return nil
+	}
+
 	// Process each byte of the hash using matrix multiplication
 	for i := 0; i < 32; i++ {
 		var sum1, sum2 uint16
 		for j := 0; j < 64; j++ {
+			// Check if the index is within bounds
+			if i*2+1 >= len(mat) || j >= len(mat[i*2+1]) {
+				fmt.Println("Error: Index out of range while accessing matrix.")
+				return nil
+			}
 			sum1 += mat[2*i][j] * nibbles[j]
 			sum2 += mat[2*i+1][j] * nibbles[j]
 		}
@@ -147,6 +159,11 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 		// Memory access with non-linear operations
 		for k := 0; k < 12; k++ {
+			// Check if the index is within the table size
+			if index >= len(memoryTable) {
+				fmt.Println("Error: Index out of range in memory table.")
+				return nil
+			}
 			index = (index*7 + i) % len(memoryTable)
 			if index < 0 {
 				index += len(memoryTable)
@@ -183,6 +200,11 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 	for iteration := 0; iteration < 8; iteration++ {
 		for i := 0; i < 32; i++ {
+			// Ensure cache index is within bounds
+			if cacheIndex >= len(cache) {
+				fmt.Println("Error: Cache index out of bounds.")
+				return nil
+			}
 			cacheIndex = (cacheIndex<<5 ^ (int(product[i]) * 17)) % len(cache)
 			if cacheIndex < 0 {
 				cacheIndex += len(cache)
