@@ -1,6 +1,7 @@
 package pow
 
 import (
+	"log"
 	"math"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -86,6 +87,12 @@ func generateNonLinearSBox(input, key byte) byte {
 // Heavyhash function
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
+
+	// Security check for hashBytes
+	if len(hashBytes) < 32 {
+		log.Fatal("Error: hashBytes array too small")
+	}
+
 	var nibbles [64]uint16
 	var product [32]byte
 
@@ -124,17 +131,21 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 		// Memory access with non-linear operations
 		for k := 0; k < 12; k++ {
-			index ^= (int(memoryTable[(index*7+i)%len(memoryTable)]) * 19) ^ ((i * 53) % 13)
-			index = (index*73 + i*41) % len(memoryTable)
+			index = (index*7 + i) % len(memoryTable)
+			if index < 0 {
+				index += len(memoryTable)
+			}
 
-			shifted := (index + i*13) % len(memoryTable)
-			memoryTable[shifted] ^= byte(sum & 0xFF)
+			memoryTable[index] ^= byte(sum & 0xFF)
 		}
 	}
 
 	// Final XOR with the memory table
 	for i := 0; i < 32; i++ {
 		shiftVal := (int(product[i])*47 + i) % len(memoryTable)
+		if shiftVal < 0 {
+			shiftVal += len(memoryTable)
+		}
 		product[i] ^= memoryTable[shiftVal]
 	}
 
@@ -157,13 +168,26 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	for iteration := 0; iteration < 8; iteration++ {
 		for i := 0; i < 32; i++ {
 			cacheIndex = (cacheIndex<<5 ^ (int(product[i]) * 17)) % len(cache)
+			if cacheIndex < 0 {
+				cacheIndex += len(cache)
+			}
 			cache[cacheIndex] ^= product[i]
 
-			safeIndex := ((cacheIndex * 7) % len(cache))
+			safeIndex := (cacheIndex * 7) % len(cache)
+			if safeIndex < 0 {
+				safeIndex += len(cache)
+			}
 			cacheIndex = (cacheIndex + int(product[i])*23) ^ int(cache[safeIndex])%len(cache)
+
+			if cacheIndex < 0 {
+				cacheIndex += len(cache)
+			}
 			cache[cacheIndex] ^= product[(i+11)%32]
 
 			dynamicOffset := ((int(cache[cacheIndex]) * 37) ^ (int(product[i]) * 19)) % len(cache)
+			if dynamicOffset < 0 {
+				dynamicOffset += len(cache)
+			}
 			cache[dynamicOffset] ^= product[(i+3)%32]
 		}
 	}
@@ -171,6 +195,9 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	// Incorporate cache into the product
 	for i := 0; i < 32; i++ {
 		shiftVal := (int(product[i])*47 + i) % len(cache)
+		if shiftVal < 0 {
+			shiftVal += len(cache)
+		}
 		product[i] ^= cache[shiftVal]
 	}
 
