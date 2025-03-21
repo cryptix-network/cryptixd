@@ -76,12 +76,26 @@ var FINAL_CRYPTIX = [32]byte{
 	0x32, 0x81, 0xE4, 0x92,
 }
 
-// non-linear S-box transformation
+// Non-linear sbox
 func generateNonLinearSBox(input, key byte) byte {
-	result := input * key
-	result = (result >> 3) | (result << 5)
-	result ^= 0x5A
+	result := input
+
+	// A combination of multiplication and bitwise permutation
+	result = result * key                  // Multiply by the key
+	result = (result >> 3) | (result << 5) // Bitwise permutation (rotation)
+	result ^= 0x5A                         // XOR
+
 	return result
+}
+
+// Rotate left (circular shift)
+func rotateLeft(value byte, bits int) byte {
+	return (value << bits) | (value >> (8 - bits))
+}
+
+// Rotate right (circular shift)
+func rotateRight(value byte, bits int) byte {
+	return (value >> bits) | (value << (8 - bits))
 }
 
 // Heavyhash function
@@ -96,11 +110,13 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	var nibbles [64]uint16
 	var product [32]byte
 
+	// Break the hashBytes into nibbles (half-bytes)
 	for i := 0; i < 32; i++ {
 		nibbles[2*i] = uint16(hashBytes[i] >> 4)
 		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
 	}
 
+	// Process each byte of the hash using matrix multiplication
 	for i := 0; i < 32; i++ {
 		var sum1, sum2 uint16
 		for j := 0; j < 64; j++ {
@@ -201,13 +217,18 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		product[i] ^= cache[shiftVal]
 	}
 
-	// **S-Box Transformation** (aligned with Rust)
+	// **S-Box Transformation**
 	var sbox [256]byte
 	for iter := 0; iter < 6; iter++ {
 		for i := 0; i < 256; i++ {
 			value := byte(i)
+
+			// Apply non-linear S-box transformation
 			value = generateNonLinearSBox(value, hashBytes[i%len(hashBytes)])
-			value ^= value<<4 | value>>2
+
+			// True rotations like in Rust
+			value ^= rotateLeft(value, 4) | rotateRight(value, 2)
+
 			sbox[i] = value
 		}
 	}
