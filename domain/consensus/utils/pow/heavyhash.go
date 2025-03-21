@@ -127,11 +127,6 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	for i := 0; i < 32; i++ {
 		var sum1, sum2 uint16
 		for j := 0; j < 64; j++ {
-			// Check if the index is within bounds
-			if i*2+1 >= len(mat) || j >= len(mat[i*2+1]) {
-				fmt.Println("Error: Index out of range while accessing matrix.")
-				return nil
-			}
 			sum1 += mat[2*i][j] * nibbles[j]
 			sum2 += mat[2*i+1][j] * nibbles[j]
 		}
@@ -185,58 +180,6 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	// XOR with FINAL_CRYPTIX
 	for i := 0; i < 32; i++ {
 		product[i] ^= FINAL_CRYPTIX[i]
-	}
-
-	// **Anti-ASIC Cache**
-	var cache [4096]byte
-	cacheIndex := 0
-	hashValue := byte(0)
-
-	// Initialize the cache
-	for i := 0; i < len(cache); i++ {
-		hashValue = (product[i%32] ^ byte(i)) + hashValue
-		cache[i] = hashValue
-	}
-
-	for iteration := 0; iteration < 8; iteration++ {
-		for i := 0; i < 32; i++ {
-			// Ensure cache index is within bounds
-			if cacheIndex >= len(cache) {
-				fmt.Println("Error: Cache index out of bounds.")
-				return nil
-			}
-			cacheIndex = (cacheIndex<<5 ^ (int(product[i]) * 17)) % len(cache)
-			if cacheIndex < 0 {
-				cacheIndex += len(cache)
-			}
-			cache[cacheIndex] ^= product[i]
-
-			safeIndex := (cacheIndex * 7) % len(cache)
-			if safeIndex < 0 {
-				safeIndex += len(cache)
-			}
-			cacheIndex = (cacheIndex + int(product[i])*23) ^ int(cache[safeIndex])%len(cache)
-
-			if cacheIndex < 0 {
-				cacheIndex += len(cache)
-			}
-			cache[cacheIndex] ^= product[(i+11)%32]
-
-			dynamicOffset := ((int(cache[cacheIndex]) * 37) ^ (int(product[i]) * 19)) % len(cache)
-			if dynamicOffset < 0 {
-				dynamicOffset += len(cache)
-			}
-			cache[dynamicOffset] ^= product[(i+3)%32]
-		}
-	}
-
-	// Incorporate cache into the product
-	for i := 0; i < 32; i++ {
-		shiftVal := (int(product[i])*47 + i) % len(cache)
-		if shiftVal < 0 {
-			shiftVal += len(cache)
-		}
-		product[i] ^= cache[shiftVal]
 	}
 
 	// **S-Box Transformation**
