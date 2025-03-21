@@ -76,15 +76,12 @@ var FINAL_CRYPTIX = [32]byte{
 	0x32, 0x81, 0xE4, 0x92,
 }
 
-// Non-linear sbox
+// Non-linear S-Box function
 func generateNonLinearSBox(input, key byte) byte {
 	result := input
-
-	// A combination of multiplication and bitwise permutation
-	result = result * key                  // Multiply by the key
-	result = (result >> 3) | (result << 5) // Bitwise permutation (rotation)
-	result ^= 0x5A                         // XOR
-
+	result = byte(uint16(result) * uint16(key))
+	result = rotateLeft(result, 5)
+	result ^= 0x5A
 	return result
 }
 
@@ -154,17 +151,18 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 		// Memory access with non-linear operations
 		for k := 0; k < 12; k++ {
-			// Check if the index is within the table size
-			if index >= len(memoryTable) {
-				fmt.Println("Error: Index out of range in memory table.")
-				return nil
-			}
-			index = (index*7 + i) % len(memoryTable)
+
+			index = (index ^ (int(memoryTable[(index*7+i)%len(memoryTable)]) * 19)) & 0x3FFF
+			index = ((index*73 + i*41) & 0x3FFF) % len(memoryTable)
+
+			// Wrap the index around if necessary (equivalent to `wrapping_add`)
 			if index < 0 {
 				index += len(memoryTable)
 			}
 
-			memoryTable[index] ^= byte(sum & 0xFF)
+			// Perform the operation on the memory table
+			shifted := (index + i*13) % len(memoryTable)
+			memoryTable[shifted] ^= byte(sum & 0xFF)
 		}
 	}
 
@@ -179,7 +177,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 	// XOR with FINAL_CRYPTIX
 	for i := 0; i < 32; i++ {
-		product[i] ^= FINAL_CRYPTIX[i]
+		product[i] = product[i] ^ FINAL_CRYPTIX[i]
 	}
 
 	// **S-Box Transformation**
@@ -192,7 +190,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 			value = generateNonLinearSBox(value, hashBytes[i%len(hashBytes)])
 
 			// True rotations
-			value ^= rotateLeft(value, 4) | rotateRight(value, 2)
+			value ^= rotateLeft(value, 4) ^ rotateRight(value, 2)
 
 			sbox[i] = value
 		}
