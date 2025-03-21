@@ -2,8 +2,9 @@ package appmessage
 
 import (
 	"encoding/hex"
-	"github.com/pkg/errors"
 	"math/big"
+
+	"github.com/pkg/errors"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashes"
