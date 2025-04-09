@@ -1,7 +1,6 @@
 package pow
 
 import (
-	"fmt"
 	"math"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -64,63 +63,27 @@ func (mat *matrix) computeRank() int {
 	return rank
 }
 
-// FINAL_CRYPTIX constant
-var FINAL_CRYPTIX = [32]byte{
-	0xE4, 0x7F, 0x3F, 0x73,
-	0xB4, 0xF2, 0xD2, 0x8C,
-	0x55, 0xD1, 0xE7, 0x6B,
-	0xE0, 0xAD, 0x70, 0x55,
-	0xCB, 0x3F, 0x8C, 0x8F,
-	0xF5, 0xA0, 0xE2, 0x60,
-	0x81, 0xC2, 0x5A, 0x84,
-	0x32, 0x81, 0xE4, 0x92,
+var final_x = [32]byte{
+	0x3F, 0xC2, 0xF2, 0xE2,
+	0xD1, 0x55, 0x81, 0x92,
+	0xA0, 0x6B, 0xF5, 0x3F,
+	0x5A, 0x70, 0x32, 0xB4,
+	0xE4, 0x84, 0xE4, 0xCB,
+	0x81, 0x73, 0xE7, 0xE0,
+	0xD2, 0x7F, 0x8C, 0x55,
+	0xAD, 0x8C, 0x60, 0x8F,
 }
 
-// Non-linear S-Box function
-func generateNonLinearSBox(input, key byte) byte {
-	result := input
-	result = byte(uint16(result) * uint16(key))
-	result = (result >> 3) | (result << 5)
-	result ^= 0x5A
-	return result
-}
-
-// Rotate left
-func rotateLeft(value byte, bits int) byte {
-	return (value << bits) | (value >> (8 - bits))
-}
-
-// Rotate right
-func rotateRight(value byte, bits int) byte {
-	return (value >> bits) | (value << (8 - bits))
-}
-
-// Heavyhash function
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
-
-	// Security check for hashBytes
-	if len(hashBytes) < 32 {
-		fmt.Println("Error: hashBytes array too small")
-		return nil
-	}
-
 	var nibbles [64]uint16
 	var product [32]byte
 
-	// Break the hashBytes into nibbles
 	for i := 0; i < 32; i++ {
 		nibbles[2*i] = uint16(hashBytes[i] >> 4)
 		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
 	}
 
-	// Check matrix size before processing
-	if len(mat) < 64 || len(mat[0]) < 64 {
-		fmt.Println("Error: Matrix size is insufficient.")
-		return nil
-	}
-
-	// Process each byte of the hash using matrix multiplication
 	for i := 0; i < 32; i++ {
 		var sum1, sum2 uint16
 		for j := 0; j < 64; j++ {
@@ -134,74 +97,11 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		product[i] = byte((aNibble << 4) | bNibble)
 	}
 
-	// XOR with hashBytes
 	for i := 0; i < 32; i++ {
-		product[i] ^= hashBytes[i]
+		product[i] ^= hashBytes[i] ^ final_x[i]
 	}
 
-	// Memory-Hard Operation
-	var memoryTable [16 * 1024]byte // 16 KB
-	index := 0
-
-	for i := 0; i < 32; i++ {
-		var sum uint16
-		for j := 0; j < 64; j++ {
-			sum += uint16(nibbles[j]) * uint16(mat[2*i][j])
-		}
-
-		// Memory access non-linear
-		for k := 0; k < 12; k++ {
-
-			index = (index ^ (int(memoryTable[(index*7+i)%len(memoryTable)]) * 19)) & 0x3FFF
-			index = ((index*73 + i*41) & 0x3FFF) % len(memoryTable)
-
-			// Wrap the index around (wrapping_add)
-			if index < 0 {
-				index += len(memoryTable)
-			}
-
-			// memory table
-			shifted := (index + i*13) % len(memoryTable)
-			memoryTable[shifted] ^= byte(sum & 0xFF)
-		}
-	}
-
-	// Final XOR with the memory table
-	for i := 0; i < 32; i++ {
-		shiftVal := (int(product[i])*47 + i) % len(memoryTable)
-		if shiftVal < 0 {
-			shiftVal += len(memoryTable)
-		}
-		product[i] ^= memoryTable[shiftVal]
-	}
-
-	// XOR with FINAL_CRYPTIX
-	for i := 0; i < 32; i++ {
-		product[i] = product[i] ^ FINAL_CRYPTIX[i]
-	}
-
-	// **S-Box Transformation**
-	var sbox [256]byte
-	for iter := 0; iter < 6; iter++ {
-		for i := 0; i < 256; i++ {
-			value := byte(i)
-
-			// non-linear S-box transformation
-			value = generateNonLinearSBox(value, hashBytes[i%len(hashBytes)])
-
-			// True rotations
-			value ^= rotateLeft(value, 4) ^ rotateRight(value, 2)
-
-			sbox[i] = value
-		}
-	}
-
-	// Apply the S-Box
-	for i := 0; i < 32; i++ {
-		product[i] = sbox[product[i]]
-	}
-
-	// Final hash calculation
+	// Hash again
 	writer := hashes.NewHeavyHashWriter()
 	writer.InfallibleWrite(product[:])
 	return writer.Finalize()
