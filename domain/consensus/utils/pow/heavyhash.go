@@ -4,6 +4,8 @@ import (
 	"math"
 	"math/bits"
 
+	"github.com/zeebo/blake3"
+
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashes"
 )
@@ -162,6 +164,16 @@ func octonionMultiply(a, b [8]int64) [8]int64 {
 	return result
 }
 
+// RotateLeft
+func rotateLeft(val byte, shift uint32) byte {
+	return (val << shift) | (val >> (8 - shift))
+}
+
+// RotateRight
+func rotateRight(val byte, shift uint32) byte {
+	return (val >> shift) | (val << (8 - shift))
+}
+
 // Octonion Hash
 func octonionHash(inputHash [32]byte) [8]int64 {
 	var oct [8]int64
@@ -243,7 +255,9 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	}
 
 	// Octonion transformation
-	productBeforeOct := append([]byte(nil), product[:]...)
+	var productBeforeOct [32]byte
+	copy(productBeforeOct[:], product[:32])
+
 	octonionResult := octonionHash(product)
 
 	for i := 0; i < 32; i++ {
@@ -373,8 +387,73 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		sbox[i] = sourceArray[index] ^ value
 	}
 
+	index := int((productBeforeOct[2] % 8) + 1)
+	iterations := 1 + int(product[index]%2)
+
+	// S-Box Update
+	for iter := 0; iter < iterations; iter++ {
+		tempSbox := sbox
+
+		for i := 0; i < 256; i++ {
+			value := tempSbox[i]
+			rotateLeftShift := (uint32(product[(i+1)%len(product)]) + uint32(i) + uint32(i*3)) % 8
+			rotateRightShift := (uint32(hashBytes[(i+2)%len(hashBytes)]) + uint32(i) + uint32(i*5)) % 8
+			rotatedValue := rotateLeft(value, rotateLeftShift) | rotateRight(value, rotateRightShift)
+
+			baseValue := byte(i) + (product[(i*3)%len(product)] ^ hashBytes[(i*7)%len(hashBytes)]) ^ 0xA5
+			shiftedValue := rotateLeft(baseValue, uint32(i%8))
+			xorValue := shiftedValue ^ 0x55
+
+			value ^= rotatedValue ^ xorValue
+			tempSbox[i] = value
+		}
+
+		sbox = tempSbox
+	}
+
+	// BLAKE3 Hashing Chain
+	indexBlake := int((productBeforeOct[5] % 8) + 1)
+	iterationsBlake := 1 + int(product[indexBlake]%3)
+
+	var b3HashArray [32]byte
+	copy(b3HashArray[:], product[:])
+	for i := 0; i < iterationsBlake; i++ {
+		hasher := blake3.New()
+		hasher.Write(b3HashArray[:])
+		sum := hasher.Sum(nil)
+		copy(b3HashArray[:], sum[:32])
+	}
+
+	// After-Compression Product
+	afterCompProduct := computeAfterCompProduct(productBeforeOct)
+
+	// S-Box XOR
+	for i := 0; i < 32; i++ {
+		var refArray []byte
+		switch (i * 31) % 4 {
+		case 0:
+			refArray = nibbleProduct[:]
+		case 1:
+			refArray = hashBytes[:]
+		case 2:
+			refArray = product[:]
+		default:
+			refArray = productBeforeOct[:]
+		}
+
+		byteVal := int(refArray[(i*13)%len(refArray)])
+		index := (byteVal + int(product[(i*31)%len(product)]) + int(hashBytes[(i*19)%len(hashBytes)]) + i*41) % 256
+
+		b3HashArray[i] ^= sbox[index]
+	}
+
+	// Finales XOR
+	for i := 0; i < 32; i++ {
+		b3HashArray[i] ^= afterCompProduct[i]
+	}
+
 	// Hash again
 	writer := hashes.NewHeavyHashWriter()
-	writer.InfallibleWrite(product[:])
+	writer.InfallibleWrite(b3HashArray[:])
 	return writer.Finalize()
 }
