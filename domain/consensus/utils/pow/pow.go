@@ -66,7 +66,6 @@ func (state *State) CalculateProofOfWorkValue() *big.Int {
 		panic("expected 32-byte hash")
 	}
 
-	// Determine number of iterations from first byte
 	iterations := int(hashBytes[0]%2) + 1
 	currentHash := make([]byte, 32)
 	copy(currentHash, hashBytes)
