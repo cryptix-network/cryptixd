@@ -183,6 +183,7 @@ func octonionHash(inputHash [32]byte) [8]int64 {
 
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
+
 	// Nibbles extraction
 	var nibbles [64]uint16
 	var product [32]byte
@@ -242,14 +243,134 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	}
 
 	// Octonion transformation
-	var productBeforeOct []byte
-	productBeforeOct = append([]byte(nil), product[:]...)
+	productBeforeOct := append([]byte(nil), product[:]...)
 	octonionResult := octonionHash(product)
 
 	for i := 0; i < 32; i++ {
 		octValue := octonionResult[i/8]
 		octValueU8 := byte((octValue >> (8 * (i % 8))) & 0xFF)
 		product[i] ^= octValueU8
+	}
+
+	// S-Box Array
+	var sbox [256]byte
+
+	// Iteration von 0 bis 255
+	for i := 0; i < 256; i++ {
+		var sourceArray []byte
+		var rotateLeftVal, rotateRightVal byte
+
+		switch {
+		case i < 16:
+			sourceArray = product[:]
+			rotateLeftVal = byte((nibbleProduct[3] ^ 0x4F) * 3)
+			rotateRightVal = byte((hashBytes[2] ^ 0xD3) * 5)
+		case i < 32:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((product[7] ^ 0xA6) * 2)
+			rotateRightVal = byte((nibbleProduct[5] ^ 0x5B) * 7)
+		case i < 48:
+			sourceArray = nibbleProduct[:]
+			rotateLeftVal = byte((productBeforeOct[1] ^ 0x9C) * 9)
+			rotateRightVal = byte((product[0] ^ 0x8E) * 3)
+		case i < 64:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((product[6] ^ 0x71) * 4)
+			rotateRightVal = byte((productBeforeOct[3] ^ 0x2F) * 5)
+		case i < 80:
+			sourceArray = productBeforeOct[:]
+			rotateLeftVal = byte((nibbleProduct[4] ^ 0xB2) * 3)
+			rotateRightVal = byte((hashBytes[7] ^ 0x6D) * 7)
+		case i < 96:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((product[0] ^ 0x58) * 6)
+			rotateRightVal = byte((nibbleProduct[1] ^ 0xEE) * 9)
+		case i < 112:
+			sourceArray = product[:]
+			rotateLeftVal = byte((productBeforeOct[2] ^ 0x37) * 2)
+			rotateRightVal = byte((hashBytes[6] ^ 0x44) * 6)
+		case i < 128:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((product[5] ^ 0x1A) * 5)
+			rotateRightVal = byte((hashBytes[4] ^ 0x7C) * 8)
+		case i < 144:
+			sourceArray = productBeforeOct[:]
+			rotateLeftVal = byte((nibbleProduct[3] ^ 0x93) * 7)
+			rotateRightVal = byte((product[2] ^ 0xAF) * 3)
+		case i < 160:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((product[7] ^ 0x29) * 9)
+			rotateRightVal = byte((nibbleProduct[5] ^ 0xDC) * 2)
+		case i < 176:
+			sourceArray = nibbleProduct[:]
+			rotateLeftVal = byte((productBeforeOct[1] ^ 0x4E) * 4)
+			rotateRightVal = byte((hashBytes[0] ^ 0x8B) * 3)
+		case i < 192:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((nibbleProduct[6] ^ 0xF3) * 5)
+			rotateRightVal = byte((productBeforeOct[3] ^ 0x62) * 8)
+		case i < 208:
+			sourceArray = productBeforeOct[:]
+			rotateLeftVal = byte((product[4] ^ 0xB7) * 6)
+			rotateRightVal = byte((product[7] ^ 0x15) * 2)
+		case i < 224:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((product[0] ^ 0x2D) * 8)
+			rotateRightVal = byte((productBeforeOct[1] ^ 0xC8) * 7)
+		case i < 240:
+			sourceArray = product[:]
+			rotateLeftVal = byte((productBeforeOct[2] ^ 0x6F) * 3)
+			rotateRightVal = byte((nibbleProduct[6] ^ 0x99) * 9)
+		default:
+			sourceArray = hashBytes[:]
+			rotateLeftVal = byte((nibbleProduct[5] ^ 0xE1) * 7)
+			rotateRightVal = byte((hashBytes[4] ^ 0x3B) * 5)
+		}
+
+		var value byte
+		switch {
+		case i < 16:
+			value = (product[i%32] ^ 0x03 + byte(i) ^ 0xAA) & 0xFF
+		case i < 32:
+			value = (hashBytes[(i-16)%32] ^ 0x05 + byte(i-16) ^ 0xBB) & 0xFF
+		case i < 48:
+			value = (productBeforeOct[(i-32)%32] ^ 0x07 + byte(i-32) ^ 0xCC) & 0xFF
+		case i < 64:
+			value = (nibbleProduct[(i-48)%32] ^ 0x0F + byte(i-48) ^ 0xDD) & 0xFF
+		case i < 80:
+			value = (product[(i-64)%32] ^ 0x11 + byte(i-64) ^ 0xEE) & 0xFF
+		case i < 96:
+			value = (hashBytes[(i-80)%32] ^ 0x13 + byte(i-80) ^ 0xFF) & 0xFF
+		case i < 112:
+			value = (productBeforeOct[(i-96)%32] ^ 0x17 + byte(i-96) ^ 0x11) & 0xFF
+		case i < 128:
+			value = (nibbleProduct[(i-112)%32] ^ 0x19 + byte(i-112) ^ 0x22) & 0xFF
+		case i < 144:
+			value = (product[(i-128)%32] ^ 0x1D + byte(i-128) ^ 0x33) & 0xFF
+		case i < 160:
+			value = (hashBytes[(i-144)%32] ^ 0x1F + byte(i-144) ^ 0x44) & 0xFF
+		case i < 176:
+			value = (productBeforeOct[(i-160)%32] ^ 0x23 + byte(i-160) ^ 0x55) & 0xFF
+		case i < 192:
+			value = (nibbleProduct[(i-176)%32] ^ 0x29 + byte(i-176) ^ 0x66) & 0xFF
+		case i < 208:
+			value = (product[(i-192)%32] ^ 0x2F + byte(i-192) ^ 0x77) & 0xFF
+		case i < 224:
+			value = (hashBytes[(i-208)%32] ^ 0x31 + byte(i-208) ^ 0x88) & 0xFF
+		case i < 240:
+			value = (productBeforeOct[(i-224)%32] ^ 0x37 + byte(i-224) ^ 0x99) & 0xFF
+		default:
+			value = (nibbleProduct[(i-240)%32] ^ 0x3F + byte(i-240) ^ 0xAA) & 0xFF
+		}
+
+		rotateLeftShift := (product[(i+1)%32] + byte(i)) % 8
+		rotateRightShift := (hashBytes[(i+2)%32] + byte(i)) % 8
+
+		rotationLeft := rotateLeftVal << rotateLeftShift
+		rotationRight := rotateRightVal >> rotateRightShift
+
+		index := (i + int(rotationLeft) + int(rotationRight)) % len(sourceArray)
+		sbox[i] = sourceArray[index] ^ value
 	}
 
 	// Hash again
