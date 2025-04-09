@@ -90,10 +90,14 @@ func recursiveFibonacciModulated(x uint32, depth uint8) uint32 {
 		temp := b
 		b = b + (a ^ bits.RotateLeft32(xMod, int(b%17)))
 		a = temp
-		xMod = bits.RotateRight32(xMod, int(a%13)) ^ b
+		xMod = rotateRight32(xMod, a%13) ^ b
 	}
 
 	return xMod
+}
+
+func rotateRight32(x uint32, n uint32) uint32 {
+	return bits.RotateLeft32(x, -int(n))
 }
 
 func antiFPGAHash(input uint32) uint32 {
