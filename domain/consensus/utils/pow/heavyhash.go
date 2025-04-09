@@ -183,40 +183,6 @@ func octonionHash(inputHash [32]byte) [8]int64 {
 
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
-	var nibbles [64]uint16
-	var product [32]byte
-
-	for i := 0; i < 32; i++ {
-		nibbles[2*i] = uint16(hashBytes[i] >> 4)
-		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
-	}
-
-	for i := 0; i < 32; i++ {
-		var sum1, sum2 uint16
-		for j := 0; j < 64; j++ {
-			sum1 += mat[2*i][j] * nibbles[j]
-			sum2 += mat[2*i+1][j] * nibbles[j]
-		}
-
-		aNibble := (sum1 & 0xF) ^ ((sum2 >> 4) & 0xF) ^ ((sum1 >> 8) & 0xF)
-		bNibble := (sum2 & 0xF) ^ ((sum1 >> 4) & 0xF) ^ ((sum2 >> 8) & 0xF)
-
-		product[i] = byte((aNibble << 4) | bNibble)
-	}
-
-	for i := 0; i < 32; i++ {
-		product[i] ^= hashBytes[i]
-	}
-
-	// Hash again
-	writer := hashes.NewHeavyHashWriter()
-	writer.InfallibleWrite(product[:])
-	return writer.Finalize()
-}
-
-func (mat *matrix) CryptixHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
-	hashBytes := hash.ByteArray()
-
 	// Nibbles extraction
 	var nibbles [64]uint16
 	var product [32]byte
@@ -286,7 +252,7 @@ func (mat *matrix) CryptixHash(hash *externalapi.DomainHash) *externalapi.Domain
 		product[i] ^= octValueU8
 	}
 
-	// Final hash after the transformation
+	// Hash again
 	writer := hashes.NewHeavyHashWriter()
 	writer.InfallibleWrite(product[:])
 	return writer.Finalize()
