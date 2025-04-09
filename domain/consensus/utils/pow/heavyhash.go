@@ -269,7 +269,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	// S-Box Array
 	var sbox [256]byte
 
-	// Iteration von 0 bis 255
+	// Iterations
 	for i := 0; i < 256; i++ {
 		var sourceArray []byte
 		var rotateLeftVal, rotateRightVal byte
