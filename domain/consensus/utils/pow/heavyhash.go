@@ -131,6 +131,7 @@ func computeAfterCompProduct(preCompProduct [32]byte) [32]byte {
 
 // Otionion
 
+// Octonion Multiply
 func octonionMultiply(a, b [8]int64) [8]int64 {
 	var result [8]int64
 
@@ -161,6 +162,7 @@ func octonionMultiply(a, b [8]int64) [8]int64 {
 	return result
 }
 
+// Octonion Hash
 func octonionHash(inputHash [32]byte) [8]int64 {
 	var oct [8]int64
 
@@ -168,7 +170,7 @@ func octonionHash(inputHash [32]byte) [8]int64 {
 		oct[i] = int64(inputHash[i])
 	}
 
-	for i := 8; i < 32; i++ {
+	for i := 8; i < len(inputHash); i++ {
 		var rotation [8]int64
 		for j := 0; j < 8; j++ {
 			rotation[j] = int64(inputHash[(i+j)%32])
@@ -177,19 +179,6 @@ func octonionHash(inputHash [32]byte) [8]int64 {
 	}
 
 	return oct
-}
-
-// OLD
-
-var final_x = [32]byte{
-	0x3F, 0xC2, 0xF2, 0xE2,
-	0xD1, 0x55, 0x81, 0x92,
-	0xA0, 0x6B, 0xF5, 0x3F,
-	0x5A, 0x70, 0x32, 0xB4,
-	0xE4, 0x84, 0xE4, 0xCB,
-	0x81, 0x73, 0xE7, 0xE0,
-	0xD2, 0x7F, 0x8C, 0x55,
-	0xAD, 0x8C, 0x60, 0x8F,
 }
 
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
@@ -216,10 +205,88 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	}
 
 	for i := 0; i < 32; i++ {
-		product[i] ^= hashBytes[i] ^ final_x[i]
+		product[i] ^= hashBytes[i]
 	}
 
 	// Hash again
+	writer := hashes.NewHeavyHashWriter()
+	writer.InfallibleWrite(product[:])
+	return writer.Finalize()
+}
+
+func (mat *matrix) CryptixHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
+	hashBytes := hash.ByteArray()
+
+	// Nibbles extraction
+	var nibbles [64]uint16
+	var product [32]byte
+	var nibbleProduct [32]byte
+
+	for i := 0; i < 32; i++ {
+		nibbles[2*i] = uint16(hashBytes[i] >> 4)
+		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
+	}
+
+	// Matrix and vector multiplication
+	for i := 0; i < 32; i++ {
+		var sum1, sum2, sum3, sum4 uint32
+		for j := 0; j < 64; j++ {
+			elem := nibbles[j]
+			sum1 += uint32(mat[2*i][j]) * uint32(elem)
+			sum2 += uint32(mat[2*i+1][j]) * uint32(elem)
+			sum3 += uint32(mat[1*i+2][j]) * uint32(elem)
+			sum4 += uint32(mat[1*i+3][j]) * uint32(elem)
+		}
+
+		// Nibble calculations
+		aNibble := (sum1 & 0xF) ^ ((sum2 >> 4) & 0xF) ^ ((sum3 >> 8) & 0xF) ^
+			((sum1*0xABCD)>>12)&0xF ^
+			((sum1*0x1234)>>8)&0xF ^
+			((sum2*0x5678)>>16)&0xF ^
+			((sum3*0x9ABC)>>4)&0xF ^
+			((sum1 << 3) & 0xF) ^ (sum3>>5)&0xF
+
+		bNibble := (sum2 & 0xF) ^ ((sum1 >> 4) & 0xF) ^ ((sum4 >> 8) & 0xF) ^
+			((sum2*0xDCBA)>>14)&0xF ^
+			((sum2*0x8765)>>10)&0xF ^
+			((sum1*0x4321)>>6)&0xF ^
+			((sum4<<2)^sum1>>1)&0xF
+
+		cNibble := (sum3 & 0xF) ^ ((sum2 >> 4) & 0xF) ^ ((sum2 >> 8) & 0xF) ^
+			((sum3*0xF135)>>10)&0xF ^
+			((sum3*0x2468)>>12)&0xF ^
+			((sum4*0xACEF)>>8)&0xF ^
+			((sum2*0x1357)>>4)&0xF ^
+			((sum3 << 5) & 0xF) ^ (sum1>>7)&0xF
+
+		dNibble := (sum1 & 0xF) ^ ((sum4 >> 4) & 0xF) ^ ((sum1 >> 8) & 0xF) ^
+			((sum4*0x57A3)>>6)&0xF ^
+			((sum3*0xD4E3)>>12)&0xF ^
+			((sum1*0x9F8B)>>10)&0xF ^
+			((sum4<<4)^sum1+sum2)&0xF
+
+		nibbleProduct[i] = byte((cNibble << 4) | dNibble)
+		product[i] = byte((aNibble << 4) | bNibble)
+	}
+
+	// XOR with original hash
+	for i := 0; i < 32; i++ {
+		product[i] ^= hashBytes[i]
+		nibbleProduct[i] ^= hashBytes[i]
+	}
+
+	// Octonion transformation
+	var productBeforeOct []byte
+	productBeforeOct = append([]byte(nil), product[:]...)
+	octonionResult := octonionHash(product)
+
+	for i := 0; i < 32; i++ {
+		octValue := octonionResult[i/8]
+		octValueU8 := byte((octValue >> (8 * (i % 8))) & 0xFF)
+		product[i] ^= octValueU8
+	}
+
+	// Final hash after the transformation
 	writer := hashes.NewHeavyHashWriter()
 	writer.InfallibleWrite(product[:])
 	return writer.Finalize()
