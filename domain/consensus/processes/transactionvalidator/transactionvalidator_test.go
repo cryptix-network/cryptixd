@@ -1,7 +1,6 @@
 package transactionvalidator_test
 
 import (
-	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/domain/consensus"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
@@ -9,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 	"github.com/cryptix-network/cryptixd/util"
+	"github.com/cryptix-network/go-secp256k1"
 
 	"testing"
 
@@ -58,7 +58,7 @@ func TestValidateTransactionInContextAndPopulateFee(t *testing.T) {
 			Sequence:         constants.MaxTxInSequenceNum,
 			SigOpCount:       1,
 			UTXOEntry: utxo.NewUTXOEntry(
-				100_000_000, // 1 CYTX
+				100_000_000, // 1 CPAY
 				scriptPublicKey,
 				true,
 				uint64(5)),
@@ -68,7 +68,7 @@ func TestValidateTransactionInContextAndPopulateFee(t *testing.T) {
 			SignatureScript:  []byte{},
 			SigOpCount:       1,
 			UTXOEntry: utxo.NewUTXOEntry(
-				100_000_000, // 1 CYTX
+				100_000_000, // 1 CPAY
 				scriptPublicKey,
 				true,
 				uint64(5)),
@@ -79,7 +79,7 @@ func TestValidateTransactionInContextAndPopulateFee(t *testing.T) {
 			Sequence:         constants.MaxTxInSequenceNum,
 			SigOpCount:       1,
 			UTXOEntry: utxo.NewUTXOEntry(
-				100_000_000, // 1 CYTX
+				100_000_000, // 1 CPAY
 				scriptPublicKey,
 				true,
 				uint64(6)),
@@ -110,11 +110,11 @@ func TestValidateTransactionInContextAndPopulateFee(t *testing.T) {
 		}
 
 		txOutput := externalapi.DomainTransactionOutput{
-			Value:           100000000, // 1 CYTX
+			Value:           100000000, // 1 CPAY
 			ScriptPublicKey: scriptPublicKey,
 		}
 		txOutputBigValue := externalapi.DomainTransactionOutput{
-			Value:           200_000_000, // 2 CYTX
+			Value:           200_000_000, // 2 CPAY
 			ScriptPublicKey: scriptPublicKey,
 		}
 

@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/cryptix-network/go-secp256k1"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/client"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/pb"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
@@ -21,6 +20,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/cryptix-network/cryptixd/util/txmass"
+	"github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 )
 
@@ -116,12 +116,12 @@ func sweep(conf *sweepConfig) error {
 	fmt.Println("\nTransaction ID(s):")
 	for i, txID := range response.TxIDs {
 		fmt.Printf("\t%s\n", txID)
-		fmt.Println("\tSwept:\t", utils.FormatCytx(splitTransactions[i].Outputs[0].Value), " CYTX")
+		fmt.Println("\tSwept:\t", utils.FormatCpay(splitTransactions[i].Outputs[0].Value), " CPAY")
 		totalExtracted = totalExtracted + splitTransactions[i].Outputs[0].Value
 	}
 
 	fmt.Println("\nTotal Funds swept (including transaction fees):")
-	fmt.Println("\t", utils.FormatCytx(totalExtracted), " CYTX")
+	fmt.Println("\t", utils.FormatCpay(totalExtracted), " CPAY")
 
 	return nil
 }

@@ -35,7 +35,7 @@ func send(conf *sendConfig) error {
 
 	var sendAmountSompi uint64
 	if !conf.IsSendAll {
-		sendAmountSompi, err = utils.CytxToSompi(conf.SendAmount)
+		sendAmountSompi, err = utils.CpayToSompi(conf.SendAmount)
 
 		if err != nil {
 			return err

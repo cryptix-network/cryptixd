@@ -32,10 +32,10 @@ $ go install .
 
 ## Usage
 
-The full cytxpctl configuration options can be seen with:
+The full cpaypctl configuration options can be seen with:
 
 ```bash
-$ cytxpctl --help
+$ cpaypctl --help
 ```
 
 But the minimum configuration needed to run it is:

@@ -30,11 +30,11 @@ func InterruptListener() chan struct{} {
 		// channel to notify the caller.
 		select {
 		case sig := <-interruptChannel:
-			cytxdLog.Infof("Received signal (%s). Shutting down...",
+			cpaydLog.Infof("Received signal (%s). Shutting down...",
 				sig)
 
 		case <-ShutdownRequestChannel:
-			cytxdLog.Info("Shutdown requested. Shutting down...")
+			cpaydLog.Info("Shutdown requested. Shutting down...")
 		}
 		close(c)
 
@@ -44,11 +44,11 @@ func InterruptListener() chan struct{} {
 		for {
 			select {
 			case sig := <-interruptChannel:
-				cytxdLog.Infof("Received signal (%s). Already "+
+				cpaydLog.Infof("Received signal (%s). Already "+
 					"shutting down...", sig)
 
 			case <-ShutdownRequestChannel:
-				cytxdLog.Info("Shutdown requested. Already " +
+				cpaydLog.Info("Shutdown requested. Already " +
 					"shutting down...")
 			}
 		}

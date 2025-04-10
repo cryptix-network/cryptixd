@@ -5,10 +5,11 @@
 package util
 
 import (
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
-	"github.com/pkg/errors"
 	"math"
 	"strconv"
+
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
+	"github.com/pkg/errors"
 )
 
 // AmountUnit describes a method of converting an Amount to something
@@ -20,33 +21,33 @@ type AmountUnit int
 // These constants define various units used when describing a cryptix
 // monetary amount.
 const (
-	AmountMegaCYTX  AmountUnit = 6
-	AmountKiloCYTX  AmountUnit = 3
-	AmountCYTX      AmountUnit = 0
-	AmountMilliCYTX AmountUnit = -3
-	AmountMicroCYTX AmountUnit = -6
-	AmountSompi    AmountUnit = -8
+	AmountMegaCPAY  AmountUnit = 6
+	AmountKiloCPAY  AmountUnit = 3
+	AmountCPAY      AmountUnit = 0
+	AmountMilliCPAY AmountUnit = -3
+	AmountMicroCPAY AmountUnit = -6
+	AmountSompi     AmountUnit = -8
 )
 
 // String returns the unit as a string. For recognized units, the SI
 // prefix is used, or "Sompi" for the base unit. For all unrecognized
-// units, "1eN CYTX" is returned, where N is the AmountUnit.
+// units, "1eN CPAY" is returned, where N is the AmountUnit.
 func (u AmountUnit) String() string {
 	switch u {
-	case AmountMegaCYTX:
-		return "MCYTX"
-	case AmountKiloCYTX:
-		return "kCYTX"
-	case AmountCYTX:
-		return "CYTX"
-	case AmountMilliCYTX:
-		return "mCYTX"
-	case AmountMicroCYTX:
-		return "μCYTX"
+	case AmountMegaCPAY:
+		return "MCPAY"
+	case AmountKiloCPAY:
+		return "kCPAY"
+	case AmountCPAY:
+		return "CPAY"
+	case AmountMilliCPAY:
+		return "mCPAY"
+	case AmountMicroCPAY:
+		return "μCPAY"
 	case AmountSompi:
 		return "Sompi"
 	default:
-		return "1e" + strconv.FormatInt(int64(u), 10) + " CYTX"
+		return "1e" + strconv.FormatInt(int64(u), 10) + " CPAY"
 	}
 }
 
@@ -70,10 +71,10 @@ func round(f float64) Amount {
 // does not check that the amount is within the total amount of cryptix
 // producible as f may not refer to an amount at a single moment in time.
 //
-// NewAmount is for specifically for converting CYTX to Sompi.
+// NewAmount is for specifically for converting CPAY to Sompi.
 // For creating a new Amount with an int64 value which denotes a quantity of Sompi,
 // do a simple type conversion from type int64 to Amount.
-// TODO: Refactor NewAmount. When amounts are more than 1e9 CYTX, the precision
+// TODO: Refactor NewAmount. When amounts are more than 1e9 CPAY, the precision
 // can be higher than one sompi (1e9 and 1e9+1e-8 will result as the same number)
 func NewAmount(f float64) (Amount, error) {
 	// The amount is only considered invalid if it cannot be represented
@@ -96,9 +97,9 @@ func (a Amount) ToUnit(u AmountUnit) float64 {
 	return float64(a) / math.Pow10(int(u+8))
 }
 
-// ToCYTX is the equivalent of calling ToUnit with AmountCYTX.
-func (a Amount) ToCYTX() float64 {
-	return a.ToUnit(AmountCYTX)
+// ToCPAY is the equivalent of calling ToUnit with AmountCPAY.
+func (a Amount) ToCPAY() float64 {
+	return a.ToUnit(AmountCPAY)
 }
 
 // Format formats a monetary amount counted in cryptix base units as a
@@ -110,9 +111,9 @@ func (a Amount) Format(u AmountUnit) string {
 	return strconv.FormatFloat(a.ToUnit(u), 'f', -int(u+8), 64) + units
 }
 
-// String is the equivalent of calling Format with AmountCYTX.
+// String is the equivalent of calling Format with AmountCPAY.
 func (a Amount) String() string {
-	return a.Format(AmountCYTX)
+	return a.Format(AmountCPAY)
 }
 
 // MulF64 multiplies an Amount by a floating point value. While this is not

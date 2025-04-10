@@ -1,14 +1,15 @@
 package miningmanager_test
 
 import (
+	"reflect"
+	"strings"
+	"testing"
+
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/model"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/cryptix-network/cryptixd/version"
-	"reflect"
-	"strings"
-	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 
@@ -929,7 +930,7 @@ func createTransactionWithUTXOEntry(t *testing.T, i int, daaScore uint64) *exter
 		SignatureScript:  signatureScript,
 		Sequence:         constants.MaxTxInSequenceNum,
 		UTXOEntry: utxo.NewUTXOEntry(
-			100000000, // 1 CYTX
+			100000000, // 1 CPAY
 			scriptPublicKey,
 			true,
 			daaScore),

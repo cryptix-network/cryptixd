@@ -9,4 +9,4 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 )
 
-var log = logger.RegisterSubSystem("CYTXD")
+var log = logger.RegisterSubSystem("CPAYD")

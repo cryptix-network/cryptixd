@@ -1,8 +1,9 @@
 package dagconfig
 
 import (
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"time"
+
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 )
 
 // The documentation refers to the following constants which aren't explicated in the code:
@@ -14,11 +15,11 @@ import (
 //
 // For more information about the DAA constants defaultDifficultyAdjustmentWindowSize, defaultTimestampDeviationTolerance,
 // and their relation to defaultGHOSTDAGK and defaultTargetTimePerBlock see:
-// https://research.cytx.pa/t/handling-timestamp-manipulations/97
+// https://research.cpay.pa/t/handling-timestamp-manipulations/97
 //
 // For more information about defaultMergeSetSizeLimit, defaultFinalityDuration and their relation to pruning, see:
-// https://research.cytx.pa/t/a-proposal-for-finality-in-ghostdag/66/17
-// https://research.cytx.pa/t/some-of-the-intuition-behind-the-design-of-the-invalidation-rules-for-pruning/95
+// https://research.cpay.pa/t/a-proposal-for-finality-in-ghostdag/66/17
+// https://research.cpay.pa/t/some-of-the-intuition-behind-the-design-of-the-invalidation-rules-for-pruning/95
 //
 
 const (
@@ -79,6 +80,6 @@ const (
 	// switches to the deflationary period. This number is calculated as follows:
 	// We define a year as 365.25 days
 	defaultDeflationaryPhaseDaaScore = 86400
-	
+
 	defaultMergeDepth = 3600
 )

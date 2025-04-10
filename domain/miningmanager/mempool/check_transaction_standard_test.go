@@ -215,7 +215,7 @@ func TestCheckTransactionStandardInIsolation(t *testing.T) {
 		t.Fatalf("PayToAddrScript: unexpected error: %v", err)
 	}
 	dummyTxOut := externalapi.DomainTransactionOutput{
-		Value:           100000000, // 1 CYTX
+		Value:           100000000, // 1 CPAY
 		ScriptPublicKey: dummyScriptPublicKey,
 	}
 

@@ -32,12 +32,12 @@ func balance(conf *balanceConfig) error {
 		println("Address                                                                       Available             Pending")
 		println("-----------------------------------------------------------------------------------------------------------")
 		for _, addressBalance := range response.AddressBalances {
-			fmt.Printf("%s %s %s\n", addressBalance.Address, utils.FormatCytx(addressBalance.Available), utils.FormatCytx(addressBalance.Pending))
+			fmt.Printf("%s %s %s\n", addressBalance.Address, utils.FormatCpay(addressBalance.Available), utils.FormatCpay(addressBalance.Pending))
 		}
 		println("-----------------------------------------------------------------------------------------------------------")
 		print("                                                 ")
 	}
-	fmt.Printf("Total balance, CYTX %s %s%s\n", utils.FormatCytx(response.Available), utils.FormatCytx(response.Pending), pendingSuffix)
+	fmt.Printf("Total balance, CPAY %s %s%s\n", utils.FormatCpay(response.Available), utils.FormatCpay(response.Pending), pendingSuffix)
 
 	return nil
 }

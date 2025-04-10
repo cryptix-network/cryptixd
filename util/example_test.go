@@ -2,9 +2,10 @@ package util_test
 
 import (
 	"fmt"
-	"github.com/cryptix-network/cryptixd/util/difficulty"
 	"math"
 	"math/big"
+
+	"github.com/cryptix-network/cryptixd/util/difficulty"
 
 	"github.com/cryptix-network/cryptixd/util"
 )
@@ -20,9 +21,9 @@ func ExampleAmount() {
 	a = util.Amount(1e5)
 	fmt.Println("100,000 Sompi:", a)
 	// Output:
-	// Zero Sompi: 0 CYTX
-	// 100,000,000 Sompi: 1 CYTX
-	// 100,000 Sompi: 0.001 CYTX
+	// Zero Sompi: 0 CPAY
+	// 100,000,000 Sompi: 1 CPAY
+	// 100,000 Sompi: 0.001 CPAY
 }
 
 func ExampleNewAmount() {
@@ -54,26 +55,26 @@ func ExampleNewAmount() {
 	}
 	fmt.Println(amountNaN) //Output 4
 
-	// Output: 1 CYTX
-	// 0.01234567 CYTX
-	// 0 CYTX
+	// Output: 1 CPAY
+	// 0.01234567 CPAY
+	// 0 CPAY
 	// invalid cryptix amount
 }
 
 func ExampleAmount_unitConversions() {
 	amount := util.Amount(44433322211100)
 
-	fmt.Println("Sompi to kCYTX:", amount.Format(util.AmountKiloCYTX))
-	fmt.Println("Sompi to CYTX:", amount)
-	fmt.Println("Sompi to MilliCYTX:", amount.Format(util.AmountMilliCYTX))
-	fmt.Println("Sompi to MicroCYTX:", amount.Format(util.AmountMicroCYTX))
+	fmt.Println("Sompi to kCPAY:", amount.Format(util.AmountKiloCPAY))
+	fmt.Println("Sompi to CPAY:", amount)
+	fmt.Println("Sompi to MilliCPAY:", amount.Format(util.AmountMilliCPAY))
+	fmt.Println("Sompi to MicroCPAY:", amount.Format(util.AmountMicroCPAY))
 	fmt.Println("Sompi to Sompi:", amount.Format(util.AmountSompi))
 
 	// Output:
-	// Sompi to kCYTX: 444.333222111 kCYTX
-	// Sompi to CYTX: 444333.222111 CYTX
-	// Sompi to MilliCYTX: 444333222.111 mCYTX
-	// Sompi to MicroCYTX: 444333222111 μCYTX
+	// Sompi to kCPAY: 444.333222111 kCPAY
+	// Sompi to CPAY: 444333.222111 CPAY
+	// Sompi to MilliCPAY: 444333222.111 mCPAY
+	// Sompi to MicroCPAY: 444333222111 μCPAY
 	// Sompi to Sompi: 44433322211100 Sompi
 }
 

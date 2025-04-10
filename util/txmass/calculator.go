@@ -12,7 +12,7 @@ type Calculator struct {
 	massPerScriptPubKeyByte uint64
 	massPerSigOp            uint64
 
-	// The parameter for scaling inverse CYTX value to mass units (KIP-0009)
+	// The parameter for scaling inverse CPAY value to mass units (KIP-0009)
 	storageMassParameter uint64
 }
 

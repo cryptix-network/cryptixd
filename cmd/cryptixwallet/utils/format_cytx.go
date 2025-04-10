@@ -11,8 +11,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// FormatCytx takes the amount of sompis as uint64, and returns amount of CYTX with 8  decimal places
-func FormatCytx(amount uint64) string {
+// FormatCpay takes the amount of sompis as uint64, and returns amount of CPAY with 8  decimal places
+func FormatCpay(amount uint64) string {
 	res := "                   "
 	if amount > 0 {
 		res = fmt.Sprintf("%19.8f", float64(amount)/constants.SompiPerCryptix)
@@ -20,9 +20,9 @@ func FormatCytx(amount uint64) string {
 	return res
 }
 
-// CytxToSompi takes in a string representation of the Cytx value to convert to Sompi
-func CytxToSompi(amount string) (uint64, error) {
-	err := validateCYTXAmountFormat(amount)
+// CpayToSompi takes in a string representation of the Cpay value to convert to Sompi
+func CpayToSompi(amount string) (uint64, error) {
+	err := validateCPAYAmountFormat(amount)
 
 	if err != nil {
 		return 0, err
@@ -52,7 +52,7 @@ func CytxToSompi(amount string) (uint64, error) {
 	return convertedAmount, err
 }
 
-func validateCYTXAmountFormat(amount string) error {
+func validateCPAYAmountFormat(amount string) error {
 	// Check whether it's an integer, or a float with max 8 digits
 	match, err := regexp.MatchString("^([1-9]\\d{0,11}|0)(\\.\\d{0,8})?$", amount)
 

@@ -15,10 +15,10 @@ import (
 )
 
 // The minimal change amount to target in order to avoid large storage mass (see KIP9 for more details).
-// By having at least 10CYTX in the change output we make sure that the storage mass charged for change is
-// at most 1000 gram. Generally, if the payment is above 10CYTX as well, the resulting storage mass will be
+// By having at least 10CPAY in the change output we make sure that the storage mass charged for change is
+// at most 1000 gram. Generally, if the payment is above 10CPAY as well, the resulting storage mass will be
 // in the order of magnitude of compute mass and wil not incur additional charges.
-// Additionally, every transaction with send value > ~0.1 CYTX should succeed (at most ~99K storage mass for payment
+// Additionally, every transaction with send value > ~0.1 CPAY should succeed (at most ~99K storage mass for payment
 // output, thus overall lower than standard mass upper bound which is 100K gram)
 const minChangeTarget = constants.SompiPerCryptix * 10
 
@@ -76,7 +76,7 @@ func (s *server) calculateFeeLimits(requestFeePolicy *pb.FeePolicy) (feeRate flo
 			return 0, 0, err
 		}
 		feeRate = estimate.Estimate.NormalBuckets[0].Feerate
-		// Default to a bound of max 1 CYTX as fee
+		// Default to a bound of max 1 CPAY as fee
 		maxFee = constants.SompiPerCryptix
 	}
 

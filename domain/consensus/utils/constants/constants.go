@@ -12,7 +12,7 @@ const (
 	// MaxScriptPublicKeyVersion is the current latest supported public key script version.
 	MaxScriptPublicKeyVersion uint16 = 0
 
-	// SompiPerCryptix is the number of sompi in one cryptix (1 CYTX).
+	// SompiPerCryptix is the number of sompi in one cryptix (1 CPAY).
 	SompiPerCryptix = 100_000_000
 
 	// MaxSompi is the maximum transaction amount allowed in sompi.
