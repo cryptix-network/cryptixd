@@ -341,7 +341,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		product[i] ^= octValueU8
 	}
 
-	// S-Box Array
+	// **Nonlinear S-Box**
 	var sbox [256]byte
 
 	for i := 0; i < 256; i++ {
@@ -501,6 +501,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 
 	sboxSlice := sbox[:]
 
+	// Update Sbox Values
 	index := (int(productBeforeOct[2]) % 8) + 1
 	iterations := 1 + int(product[index]%2)
 
@@ -529,6 +530,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		copy(sboxSlice, tempSbox)
 	}
 
+	// Anti FPGA Sidedoor
 	preCompProduct := product
 	afterCompProduct := computeAfterCompProduct(preCompProduct)
 
