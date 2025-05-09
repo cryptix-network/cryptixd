@@ -224,20 +224,18 @@ func octonionMultiply(a, b [8]int64) [8]int64 {
 	return result
 }
 
-// RotateLeft
 func rotateLeft(val byte, shift uint32) byte {
+	shift = shift % 8
 	return (val << shift) | (val >> (8 - shift))
 }
 
-// RotateRight
 func rotateRight(val byte, shift uint32) byte {
+	shift = shift % 8
 	return (val >> shift) | (val << (8 - shift))
 }
 
-// Octonion Hash
 func octonionHash(inputHash [32]byte) [8]int64 {
 	var oct [8]int64
-
 	for i := 0; i < 8; i++ {
 		oct[i] = int64(inputHash[i])
 	}
