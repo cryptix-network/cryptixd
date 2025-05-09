@@ -66,7 +66,36 @@ func (mat *matrix) computeRank() int {
 	return rank
 }
 
+// Helpers
+
+func rotateLeft(val byte, shift uint32) byte {
+	shift = shift % 8
+	return (val << shift) | (val >> (8 - shift))
+}
+
+func rotateRight(val byte, shift uint32) byte {
+	shift = shift % 8
+	return (val >> shift) | (val << (8 - shift))
+}
+
+func rotateLeftu32(x uint32, n uint) uint32 {
+	return (x << n) | (x >> (32 - n))
+}
+
+func rotateRightu32(x uint32, n uint) uint32 {
+	return (x >> n) | (x << (32 - n))
+}
+
+func wrappingMul32(a, b uint32) uint32 {
+	return uint32(int32(a) * int32(b))
+}
+
+func wrapMuli64(a, b int64) int64 {
+	return int64(uint64(a) * uint64(b))
+}
+
 // ***Anti-FPGA Sidedoor***
+
 func chaoticRandom(x uint32) uint32 {
 	return (x * 362605) ^ 0xA5A5A5A5
 }
@@ -131,11 +160,7 @@ func computeAfterCompProduct(preCompProduct [32]byte) [32]byte {
 	return afterCompProduct
 }
 
-func wrapMuli64(a, b int64) int64 {
-	return int64(uint64(a) * uint64(b))
-}
-
-// Otionion
+// *** Octionion ***
 
 // Octonion Multiply
 func octonionMultiply(a, b [8]int64) [8]int64 {
@@ -224,15 +249,7 @@ func octonionMultiply(a, b [8]int64) [8]int64 {
 	return result
 }
 
-func rotateLeft(val byte, shift uint32) byte {
-	shift = shift % 8
-	return (val << shift) | (val >> (8 - shift))
-}
-
-func rotateRight(val byte, shift uint32) byte {
-	shift = shift % 8
-	return (val >> shift) | (val << (8 - shift))
-}
+// Octionion Hash
 
 func octonionHash(inputHash [32]byte) [8]int64 {
 	var oct [8]int64
@@ -251,17 +268,20 @@ func octonionHash(inputHash [32]byte) [8]int64 {
 	return oct
 }
 
+// *** Main Hash ***
+
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
 
-	// Nibbles extraction
-	var nibbles [64]uint16
+	// Nibble extraction
+	var nibbles [64]uint8
 	var product [32]byte
 	var nibbleProduct [32]byte
 
+	// Extract nibbles
 	for i := 0; i < 32; i++ {
-		nibbles[2*i] = uint16(hashBytes[i] >> 4)
-		nibbles[2*i+1] = uint16(hashBytes[i] & 0x0F)
+		nibbles[2*i] = uint8(hashBytes[i] >> 4)
+		nibbles[2*i+1] = uint8(hashBytes[i] & 0x0F)
 	}
 
 	// Matrix and vector multiplication
@@ -269,44 +289,50 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		var sum1, sum2, sum3, sum4 uint32
 		for j := 0; j < 64; j++ {
 			elem := nibbles[j]
+			// Matrix-vector multiplication (sum)
 			sum1 += uint32(mat[2*i][j]) * uint32(elem)
 			sum2 += uint32(mat[2*i+1][j]) * uint32(elem)
 			sum3 += uint32(mat[1*i+2][j]) * uint32(elem)
 			sum4 += uint32(mat[1*i+3][j]) * uint32(elem)
 		}
 
-		// Nibble calculations
+		// A-Nibble
 		aNibble := (sum1 & 0xF) ^ ((sum2 >> 4) & 0xF) ^ ((sum3 >> 8) & 0xF) ^
-			((sum1*0xABCD)>>12)&0xF ^
-			((sum1*0x1234)>>8)&0xF ^
-			((sum2*0x5678)>>16)&0xF ^
-			((sum3*0x9ABC)>>4)&0xF ^
-			((sum1 << 3) & 0xF) ^ (sum3>>5)&0xF
+			(wrappingMul32(sum1, 0xABCD) >> 12 & 0xF) ^
+			(wrappingMul32(sum1, 0x1234) >> 8 & 0xF) ^
+			(wrappingMul32(sum2, 0x5678) >> 16 & 0xF) ^
+			(wrappingMul32(sum3, 0x9ABC) >> 4 & 0xF) ^
+			(rotateLeftu32(sum1, 3) & 0xF) ^ (rotateRightu32(sum3, 5) & 0xF)
 
+		// B-Nibble
 		bNibble := (sum2 & 0xF) ^ ((sum1 >> 4) & 0xF) ^ ((sum4 >> 8) & 0xF) ^
-			((sum2*0xDCBA)>>14)&0xF ^
-			((sum2*0x8765)>>10)&0xF ^
-			((sum1*0x4321)>>6)&0xF ^
-			((sum4<<2)^sum1>>1)&0xF
+			(wrappingMul32(sum2, 0xDCBA) >> 14 & 0xF) ^
+			(wrappingMul32(sum2, 0x8765) >> 10 & 0xF) ^
+			(wrappingMul32(sum1, 0x4321) >> 6 & 0xF) ^
+			(rotateLeftu32(sum4, 2)^rotateRightu32(sum1, 1))&0xF
 
+		// C-Nibble
 		cNibble := (sum3 & 0xF) ^ ((sum2 >> 4) & 0xF) ^ ((sum2 >> 8) & 0xF) ^
-			((sum3*0xF135)>>10)&0xF ^
-			((sum3*0x2468)>>12)&0xF ^
-			((sum4*0xACEF)>>8)&0xF ^
-			((sum2*0x1357)>>4)&0xF ^
-			((sum3 << 5) & 0xF) ^ (sum1>>7)&0xF
+			(wrappingMul32(sum3, 0xF135) >> 10 & 0xF) ^
+			(wrappingMul32(sum3, 0x2468) >> 12 & 0xF) ^
+			(wrappingMul32(sum4, 0xACEF) >> 8 & 0xF) ^
+			(wrappingMul32(sum2, 0x1357) >> 4 & 0xF) ^
+			(rotateLeftu32(sum3, 5) & 0xF) ^ (rotateRightu32(sum1, 7) & 0xF)
 
+		// D-Nibble
 		dNibble := (sum1 & 0xF) ^ ((sum4 >> 4) & 0xF) ^ ((sum1 >> 8) & 0xF) ^
-			((sum4*0x57A3)>>6)&0xF ^
-			((sum3*0xD4E3)>>12)&0xF ^
-			((sum1*0x9F8B)>>10)&0xF ^
-			((sum4<<4)^sum1+sum2)&0xF
+			(wrappingMul32(sum4, 0x57A3) >> 6 & 0xF) ^
+			(wrappingMul32(sum3, 0xD4E3) >> 12 & 0xF) ^
+			(wrappingMul32(sum1, 0x9F8B) >> 10 & 0xF) ^
+			(rotateLeftu32(sum4, 4)^sum1+sum2)&0xF
 
+		// Combine c_nibble and d_nibble to form nibbleProduct
 		nibbleProduct[i] = byte((cNibble << 4) | dNibble)
+		// Combine a_nibble and b_nibble to form product
 		product[i] = byte((aNibble << 4) | bNibble)
 	}
 
-	// XOR with original hash
+	// XOR with the hash
 	for i := 0; i < 32; i++ {
 		product[i] ^= hashBytes[i]
 		nibbleProduct[i] ^= hashBytes[i]
