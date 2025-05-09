@@ -1,6 +1,7 @@
 package pow
 
 import (
+	"fmt"
 	"math"
 	"math/bits"
 
@@ -67,7 +68,6 @@ func (mat *matrix) computeRank() int {
 }
 
 // Helpers
-
 func rotateRight32(x uint32, n uint32) uint32 {
 	return bits.RotateLeft32(x, -int(n))
 }
@@ -88,20 +88,19 @@ func wrapMuli64(a, b int64) int64 {
 	return int64(uint64(a) * uint64(b))
 }
 
-func wrappingMulSbox(a, b byte) byte {
-	return byte(uint16(a) * uint16(b) & 0xFF)
+func wrappingMulSbox(value byte, mul byte) byte {
+	return (value * mul) & 0xFF
 }
 
-func rotateLeftSbox(value byte, shift uint32) byte {
-	return byte(bits.RotateLeft8(uint8(value), int(shift)))
+func wrappingMul(a byte, b byte) byte {
+	return byte((int(a) * int(b)) & 0xFF)
 }
 
-func rotateRightSbox(value byte, shift uint32) byte {
-	return (value >> shift) | (value << (8 - shift))
+func wrappingAdd(a byte, b byte) byte {
+	return byte((int(a) + int(b)) & 0xFF)
 }
 
 // ***Anti-FPGA Sidedoor***
-
 func chaoticRandom(x uint32) uint32 {
 	return (x * 362605) ^ 0xA5A5A5A5
 }
@@ -163,7 +162,6 @@ func computeAfterCompProduct(preCompProduct [32]byte) [32]byte {
 }
 
 // *** Octionion ***
-
 // Octonion Multiply
 func octonionMultiply(a, b [8]int64) [8]int64 {
 	var result [8]int64
@@ -252,7 +250,6 @@ func octonionMultiply(a, b [8]int64) [8]int64 {
 }
 
 // Octionion Hash
-
 func octonionHash(inputHash [32]byte) [8]int64 {
 	var oct [8]int64
 	for i := 0; i < 8; i++ {
@@ -271,7 +268,6 @@ func octonionHash(inputHash [32]byte) [8]int64 {
 }
 
 // *** Main Hash ***
-
 func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHash {
 	hashBytes := hash.ByteArray()
 
@@ -291,7 +287,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		var sum1, sum2, sum3, sum4 uint32
 		for j := 0; j < 64; j++ {
 			elem := nibbles[j]
-			// Matrix-vector multiplication (sum)
+
 			sum1 += uint32(mat[2*i][j]) * uint32(elem)
 			sum2 += uint32(mat[2*i+1][j]) * uint32(elem)
 			sum3 += uint32(mat[1*i+2][j]) * uint32(elem)
@@ -328,9 +324,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 			(wrappingMul32(sum1, 0x9F8B) >> 10 & 0xF) ^
 			(rotateLeftu32(sum4, 4)^sum1+sum2)&0xF
 
-		// Combine c_nibble and d_nibble to form nibbleProduct
 		nibbleProduct[i] = byte((cNibble << 4) | dNibble)
-		// Combine a_nibble and b_nibble to form product
 		product[i] = byte((aNibble << 4) | bNibble)
 	}
 
@@ -355,148 +349,131 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 	// S-Box Array
 	var sbox [256]byte
 
-	// Iterations
+	// Iterationen
 	for i := 0; i < 256; i++ {
 		var sourceArray []byte
 		var rotateLeftVal, rotateRightVal byte
 
 		switch {
 		case i < 16:
-			sourceArray = product[:]
-			rotateLeftVal = wrappingMulSbox(byte(nibbleProduct[3]^0x4F), 3)
-			rotateRightVal = wrappingMulSbox(byte(hashBytes[2]^0xD3), 5)
+			sourceArray, rotateLeftVal, rotateRightVal = product[:], wrappingMulSbox(byte(nibbleProduct[3]^0x4F), 3), wrappingMulSbox(byte(hashBytes[2]^0xD3), 5)
 		case i < 32:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[7] ^ 0xA6)), 2)
-			rotateRightVal = wrappingMulSbox(byte((nibbleProduct[5] ^ 0x5B)), 7)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(product[7]^0xA6), 2), wrappingMulSbox(byte(nibbleProduct[5]^0x5B), 7)
 		case i < 48:
-			sourceArray = nibbleProduct[:]
-			rotateLeftVal = wrappingMulSbox(byte((productBeforeOct[1] ^ 0x9C)), 9)
-			rotateRightVal = wrappingMulSbox(byte((product[0] ^ 0x8E)), 3)
+			sourceArray, rotateLeftVal, rotateRightVal = nibbleProduct[:], wrappingMulSbox(byte(productBeforeOct[1]^0x9C), 9), wrappingMulSbox(byte(product[0]^0x8E), 3)
 		case i < 64:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[6] ^ 0x71)), 4)
-			rotateRightVal = wrappingMulSbox(byte((productBeforeOct[3] ^ 0x2F)), 5)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(product[6]^0x71), 4), wrappingMulSbox(byte(productBeforeOct[3]^0x2F), 5)
 		case i < 80:
-			sourceArray = productBeforeOct[:]
-			rotateLeftVal = wrappingMulSbox(byte((nibbleProduct[4] ^ 0xB2)), 3)
-			rotateRightVal = wrappingMulSbox(byte((hashBytes[7] ^ 0x6D)), 7)
+			sourceArray, rotateLeftVal, rotateRightVal = productBeforeOct[:], wrappingMulSbox(byte(nibbleProduct[4]^0xB2), 3), wrappingMulSbox(byte(hashBytes[7]^0x6D), 7)
 		case i < 96:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[0] ^ 0x58)), 6)
-			rotateRightVal = wrappingMulSbox(byte((nibbleProduct[1] ^ 0xEE)), 9)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(product[0]^0x58), 6), wrappingMulSbox(byte(nibbleProduct[1]^0xEE), 9)
 		case i < 112:
-			sourceArray = product[:]
-			rotateLeftVal = wrappingMulSbox(byte((productBeforeOct[2] ^ 0x37)), 2)
-			rotateRightVal = wrappingMulSbox(byte((hashBytes[6] ^ 0x44)), 6)
+			sourceArray, rotateLeftVal, rotateRightVal = product[:], wrappingMulSbox(byte(productBeforeOct[2]^0x37), 2), wrappingMulSbox(byte(hashBytes[6]^0x44), 6)
 		case i < 128:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[5] ^ 0x1A)), 5)
-			rotateRightVal = wrappingMulSbox(byte((hashBytes[4] ^ 0x7C)), 8)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(product[5]^0x1A), 5), wrappingMulSbox(byte(hashBytes[4]^0x7C), 8)
 		case i < 144:
-			sourceArray = productBeforeOct[:]
-			rotateLeftVal = wrappingMulSbox(byte((nibbleProduct[3] ^ 0x93)), 7)
-			rotateRightVal = wrappingMulSbox(byte((product[2] ^ 0xAF)), 3)
+			sourceArray, rotateLeftVal, rotateRightVal = productBeforeOct[:], wrappingMulSbox(byte(nibbleProduct[3]^0x93), 7), wrappingMulSbox(byte(product[2]^0xAF), 3)
 		case i < 160:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[7] ^ 0x29)), 9)
-			rotateRightVal = wrappingMulSbox(byte((nibbleProduct[5] ^ 0xDC)), 2)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(product[7]^0x29), 9), wrappingMulSbox(byte(nibbleProduct[5]^0xDC), 2)
 		case i < 176:
-			sourceArray = nibbleProduct[:]
-			rotateLeftVal = wrappingMulSbox(byte((productBeforeOct[1] ^ 0x4E)), 4)
-			rotateRightVal = wrappingMulSbox(byte((hashBytes[0] ^ 0x8B)), 3)
+			sourceArray, rotateLeftVal, rotateRightVal = nibbleProduct[:], wrappingMulSbox(byte(productBeforeOct[1]^0x4E), 4), wrappingMulSbox(byte(hashBytes[0]^0x8B), 3)
 		case i < 192:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((nibbleProduct[6] ^ 0xF3)), 5)
-			rotateRightVal = wrappingMulSbox(byte((productBeforeOct[3] ^ 0x62)), 8)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(nibbleProduct[6]^0xF3), 5), wrappingMulSbox(byte(productBeforeOct[3]^0x62), 8)
 		case i < 208:
-			sourceArray = productBeforeOct[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[4] ^ 0xB7)), 6)
-			rotateRightVal = wrappingMulSbox(byte((product[7] ^ 0x15)), 2)
+			sourceArray, rotateLeftVal, rotateRightVal = productBeforeOct[:], wrappingMulSbox(byte(product[4]^0xB7), 6), wrappingMulSbox(byte(product[7]^0x15), 2)
 		case i < 224:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((product[0] ^ 0x2D)), 8)
-			rotateRightVal = wrappingMulSbox(byte((productBeforeOct[1] ^ 0xC8)), 7)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(product[0]^0x2D), 8), wrappingMulSbox(byte(productBeforeOct[1]^0xC8), 7)
 		case i < 240:
-			sourceArray = product[:]
-			rotateLeftVal = wrappingMulSbox(byte((productBeforeOct[2] ^ 0x6F)), 3)
-			rotateRightVal = wrappingMulSbox(byte((nibbleProduct[6] ^ 0x99)), 9)
+			sourceArray, rotateLeftVal, rotateRightVal = product[:], wrappingMulSbox(byte(productBeforeOct[2]^0x6F), 3), wrappingMulSbox(byte(nibbleProduct[6]^0x99), 9)
 		default:
-			sourceArray = hashBytes[:]
-			rotateLeftVal = wrappingMulSbox(byte((nibbleProduct[5] ^ 0xE1)), 7)
-			rotateRightVal = wrappingMulSbox(byte((hashBytes[4] ^ 0x3B)), 5)
+			sourceArray, rotateLeftVal, rotateRightVal = hashBytes[:], wrappingMulSbox(byte(nibbleProduct[5]^0xE1), 7), wrappingMulSbox(byte(hashBytes[4]^0x3B), 5)
 		}
+
+		fmt.Printf("i: %d, sourceArray: %v, rotateLeftVal: %X, rotateRightVal: %X\n", i, sourceArray, rotateLeftVal, rotateRightVal)
 
 		var value byte
 		switch {
 		case i < 16:
-			value = (product[i%32] ^ 0x03 + byte(i) ^ 0xAA) & 0xFF
+			value = (wrappingMul(product[i%32], 0x03) + wrappingAdd(byte(i), 0xAA)) & 0xFF
 		case i < 32:
-			value = (hashBytes[(i-16)%32] ^ 0x05 + byte(i-16) ^ 0xBB) & 0xFF
+			value = (wrappingMul(hashBytes[(i-16)%32], 0x05) + wrappingAdd(byte(i-16), 0xBB)) & 0xFF
 		case i < 48:
-			value = (productBeforeOct[(i-32)%32] ^ 0x07 + byte(i-32) ^ 0xCC) & 0xFF
+			value = (wrappingMul(productBeforeOct[(i-32)%32], 0x07) + wrappingAdd(byte(i-32), 0xCC)) & 0xFF
 		case i < 64:
-			value = (nibbleProduct[(i-48)%32] ^ 0x0F + byte(i-48) ^ 0xDD) & 0xFF
+			value = (wrappingMul(nibbleProduct[(i-48)%32], 0x0F) + wrappingAdd(byte(i-48), 0xDD)) & 0xFF
 		case i < 80:
-			value = (product[(i-64)%32] ^ 0x11 + byte(i-64) ^ 0xEE) & 0xFF
+			value = (wrappingMul(product[(i-64)%32], 0x11) + wrappingAdd(byte(i-64), 0xEE)) & 0xFF
 		case i < 96:
-			value = (hashBytes[(i-80)%32] ^ 0x13 + byte(i-80) ^ 0xFF) & 0xFF
+			value = (wrappingMul(hashBytes[(i-80)%32], 0x13) + wrappingAdd(byte(i-80), 0xFF)) & 0xFF
 		case i < 112:
-			value = (productBeforeOct[(i-96)%32] ^ 0x17 + byte(i-96) ^ 0x11) & 0xFF
+			value = (wrappingMul(productBeforeOct[(i-96)%32], 0x17) + wrappingAdd(byte(i-96), 0x11)) & 0xFF
 		case i < 128:
-			value = (nibbleProduct[(i-112)%32] ^ 0x19 + byte(i-112) ^ 0x22) & 0xFF
+			value = (wrappingMul(nibbleProduct[(i-112)%32], 0x19) + wrappingAdd(byte(i-112), 0x22)) & 0xFF
 		case i < 144:
-			value = (product[(i-128)%32] ^ 0x1D + byte(i-128) ^ 0x33) & 0xFF
+			value = (wrappingMul(product[(i-128)%32], 0x1D) + wrappingAdd(byte(i-128), 0x33)) & 0xFF
 		case i < 160:
-			value = (hashBytes[(i-144)%32] ^ 0x1F + byte(i-144) ^ 0x44) & 0xFF
+			value = (wrappingMul(hashBytes[(i-144)%32], 0x1F) + wrappingAdd(byte(i-144), 0x44)) & 0xFF
 		case i < 176:
-			value = (productBeforeOct[(i-160)%32] ^ 0x23 + byte(i-160) ^ 0x55) & 0xFF
+			value = (wrappingMul(productBeforeOct[(i-160)%32], 0x23) + wrappingAdd(byte(i-160), 0x55)) & 0xFF
 		case i < 192:
-			value = (nibbleProduct[(i-176)%32] ^ 0x29 + byte(i-176) ^ 0x66) & 0xFF
+			value = (wrappingMul(nibbleProduct[(i-176)%32], 0x29) + wrappingAdd(byte(i-176), 0x66)) & 0xFF
 		case i < 208:
-			value = (product[(i-192)%32] ^ 0x2F + byte(i-192) ^ 0x77) & 0xFF
+			value = (wrappingMul(product[(i-192)%32], 0x2F) + wrappingAdd(byte(i-192), 0x77)) & 0xFF
 		case i < 224:
-			value = (hashBytes[(i-208)%32] ^ 0x31 + byte(i-208) ^ 0x88) & 0xFF
+			value = (wrappingMul(hashBytes[(i-208)%32], 0x31) + wrappingAdd(byte(i-208), 0x88)) & 0xFF
 		case i < 240:
-			value = (productBeforeOct[(i-224)%32] ^ 0x37 + byte(i-224) ^ 0x99) & 0xFF
+			value = (wrappingMul(productBeforeOct[(i-224)%32], 0x37) + wrappingAdd(byte(i-224), 0x99)) & 0xFF
 		default:
-			value = (nibbleProduct[(i-240)%32] ^ 0x3F + byte(i-240) ^ 0xAA) & 0xFF
+			value = (wrappingMul(nibbleProduct[(i-240)%32], 0x3F) + wrappingAdd(byte(i-240), 0xAA)) & 0xFF
 		}
 
-		rotateLeftShift := (product[(i+1)%32] + byte(i)) % 8
-		rotateRightShift := (hashBytes[(i+2)%32] + byte(i)) % 8
+		fmt.Printf("i: %d, value: %X\n", i, value)
 
-		rotationLeft := rotateLeftVal << rotateLeftShift
-		rotationRight := rotateRightVal >> rotateRightShift
+		rotateLeftShift := (int(product[(i+1)%32]) + int(i)) % 8
+		rotateRightShift := (int(hashBytes[(i+2)%32]) + int(i)) % 8
+
+		rotationLeft := (rotateLeftVal << rotateLeftShift) | (rotateLeftVal >> (8 - rotateLeftShift))
+		rotationRight := (rotateRightVal >> rotateRightShift) | (rotateRightVal << (8 - rotateRightShift))
 
 		index := (i + int(rotationLeft) + int(rotationRight)) % len(sourceArray)
+
 		sbox[i] = sourceArray[index] ^ value
+
+		fmt.Printf("  Sbox[%d]: %02X\n", i, sbox[i])
 	}
+
+	sboxSlice := sbox[:]
 
 	index := (int(productBeforeOct[2]) % 8) + 1
 	iterations := 1 + int(product[index]%2)
 
-	// S-Box Update
 	for iter := 0; iter < iterations; iter++ {
-		tempSbox := sbox
+		tempSbox := make([]byte, len(sboxSlice))
+		copy(tempSbox, sboxSlice)
 
 		for i := 0; i < 256; i++ {
 			value := tempSbox[i]
 
 			rotateLeftShift := (uint32(product[(i+1)%len(product)]) + uint32(i) + uint32(i*3)) % 8
 			rotateRightShift := (uint32(hashBytes[(i+2)%len(hashBytes)]) + uint32(i) + uint32(i*5)) % 8
-			rotatedValue := rotateLeftSbox(value, rotateLeftShift) | rotateRightSbox(value, rotateRightShift)
+
+			rotatedLeft := (value << rotateLeftShift) | (value >> (8 - rotateLeftShift))
+			rotatedRight := (value >> rotateRightShift) | (value << (8 - rotateRightShift))
+			rotatedValue := rotatedLeft | rotatedRight
 
 			baseValue := byte(i) + (product[(i*3)%len(product)] ^ hashBytes[(i*7)%len(hashBytes)]) ^ 0xA5
-			shiftedValue := rotateLeftSbox(baseValue, uint32(i%8))
+			shiftedValue := (baseValue << uint(i%8)) | (baseValue >> (8 - uint(i%8)))
 			xorValue := shiftedValue ^ 0x55
 
 			value ^= rotatedValue ^ xorValue
 			tempSbox[i] = value
 		}
 
-		sbox = tempSbox
+		copy(sboxSlice, tempSbox)
 	}
+
+	preCompProduct := product
+	afterCompProduct := computeAfterCompProduct(preCompProduct)
 
 	// BLAKE3 Hashing Chain
 	indexBlake := int((productBeforeOct[5] % 8) + 1)
@@ -511,10 +488,7 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		copy(b3HashArray[:], sum[:32])
 	}
 
-	// After-Compression Product
-	afterCompProduct := computeAfterCompProduct(productBeforeOct)
-
-	// S-Box
+	// S-Box Update
 	for i := 0; i < 32; i++ {
 		var refArray []byte
 
@@ -529,10 +503,11 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 			refArray = productBeforeOct[:]
 		}
 
-		byteVal := int(refArray[(i*13)%len(refArray)])
-		index := (byteVal + int(product[(i*31)%len(product)]) + int(hashBytes[(i*19)%len(hashBytes)]) + i*41) % 256
+		byteVal := refArray[(i*13)%len(refArray)]
 
-		b3HashArray[i] ^= sbox[index]
+		index := (int(byteVal) + int(product[(i*31)%len(product)]) + int(hashBytes[(i*19)%len(hashBytes)]) + i*41) % 256
+
+		b3HashArray[i] ^= sboxSlice[index]
 	}
 
 	// Finales XOR
@@ -540,9 +515,20 @@ func (mat *matrix) HeavyHash(hash *externalapi.DomainHash) *externalapi.DomainHa
 		b3HashArray[i] ^= afterCompProduct[i]
 	}
 
+	// hashBytes done | passed
+	// Nibble Prodct done | passed
+	// productBeforeOct done | passed
+	// product done | passed
+	// b3 Hasharray done | passed
+	// Pre Comp product done | passed
+	// Afer Product done | passed
+	// After oct done | passed
+
+	// Sbox fail | Fail
+	// @Cryptis: Your Sbox makes me crazy, can you do it?
+
 	// Hash again
 	writer := hashes.NewHeavyHashWriter()
 	writer.InfallibleWrite(b3HashArray[:])
-	// writer.InfallibleWrite(product[:])
 	return writer.Finalize()
 }
