@@ -1,11 +1,12 @@
 package coinbasemanager
 
 import (
+	"strconv"
+	"testing"
+
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
-	"strconv"
-	"testing"
 )
 
 func TestCalcDeflationaryPeriodBlockSubsidy(t *testing.T) {
@@ -107,7 +108,7 @@ func TestBuildSubsidyTable(t *testing.T) {
 	coinbaseManagerInstance := coinbaseManagerInterface.(*coinbaseManager)
 
 	var subsidyTable []uint64
-	for M := uint64(0); M < 426; M++ {  // Schleife auf genau 426 Iterationen begrenzen
+	for M := uint64(0); M < 426; M++ {
 		subsidy := coinbaseManagerInstance.calcDeflationaryPeriodBlockSubsidyFloatCalc(M)
 		subsidyTable = append(subsidyTable, subsidy)
 		if subsidy == 0 {

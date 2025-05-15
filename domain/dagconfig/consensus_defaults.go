@@ -49,8 +49,8 @@ const (
 	// in block take longer)
 	defaultMergeSetSizeLimit                       = defaultGHOSTDAGK * 10
 	defaultSubsidyGenesisReward                    = 1 * constants.SompiPerCryptix
-	defaultPreDeflationaryPhaseBaseSubsidy         = 1179 * constants.SompiPerCryptix
-	defaultDeflationaryPhaseBaseSubsidy            = 10 * constants.SompiPerCryptix
+	defaultPreDeflationaryPhaseBaseSubsidy         = 1673 * constants.SompiPerCryptix
+	defaultDeflationaryPhaseBaseSubsidy            = uint64(7.93700525 * float64(constants.SompiPerCryptix))
 	defaultCoinbasePayloadScriptPublicKeyMaxLength = 150
 	// defaultDifficultyAdjustmentWindowSize is the number of blocks in a block's past used to calculate its difficulty
 	// target.
@@ -73,13 +73,11 @@ const (
 	// Should be parametrized such that the average width of the DAG is about defaultMaxBlockParents and such that most of the
 	// time the width of the DAG is at most defaultGHOSTDAGK.
 	defaultTargetTimePerBlock = 1 * time.Second
-
-	defaultPruningProofM = 1000
+	defaultPruningProofM      = 1000
 
 	// defaultDeflationaryPhaseDaaScore is the DAA score after which the pre-deflationary period
 	// switches to the deflationary period. This number is calculated as follows:
 	// We define a year as 365.25 days
 	defaultDeflationaryPhaseDaaScore = 86400
-
-	defaultMergeDepth = 3600
+	defaultMergeDepth                = 3600
 )
