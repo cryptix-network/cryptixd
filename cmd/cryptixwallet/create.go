@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet/bip32"
@@ -18,10 +19,24 @@ func create(conf *createConfig) error {
 	var signerExtendedPublicKeys []string
 	var err error
 	isMultisig := conf.NumPublicKeys > 1
+
+	cmdLinePassword := ""
+	if conf.PasswordFile != "" {
+		b, err := os.ReadFile(conf.PasswordFile)
+		if err != nil {
+			return fmt.Errorf("reading password file: %w", err)
+		}
+		cmdLinePassword = strings.TrimRight(string(b), "\r\n")
+	} else if conf.Password != "" {
+		cmdLinePassword = conf.Password
+	} else if env := os.Getenv("CRYPTIX_WALLET_PASSWORD"); env != "" {
+		cmdLinePassword = env
+	}
+
 	if !conf.Import {
-		encryptedMnemonics, signerExtendedPublicKeys, err = keys.CreateMnemonics(conf.NetParams(), conf.NumPrivateKeys, conf.Password, isMultisig)
+		encryptedMnemonics, signerExtendedPublicKeys, err = keys.CreateMnemonics(conf.NetParams(), conf.NumPrivateKeys, cmdLinePassword, isMultisig)
 	} else {
-		encryptedMnemonics, signerExtendedPublicKeys, err = keys.ImportMnemonics(conf.NetParams(), conf.NumPrivateKeys, conf.Password, isMultisig)
+		encryptedMnemonics, signerExtendedPublicKeys, err = keys.ImportMnemonics(conf.NetParams(), conf.NumPrivateKeys, cmdLinePassword, isMultisig)
 	}
 	if err != nil {
 		return err
@@ -31,9 +46,9 @@ func create(conf *createConfig) error {
 		fmt.Printf("Extended public key of mnemonic #%d:\n%s\n\n", i+1, extendedPublicKey)
 	}
 
-	fmt.Printf("Notice the above is neither a secret key to your wallet " +
-		"(use \"cryptixwallet dump-unencrypted-data\" to see a secret seed phrase) " +
-		"nor a wallet public address (use \"cryptixwallet new-address\" to create and see one)\n\n")
+	fmt.Printf("Notice: Above keys are not wallet addresses or secret seeds.\n" +
+		"Use \"cryptixwallet dump-unencrypted-data\" for secret seed phrases\n" +
+		"and \"cryptixwallet new-address\" for wallet addresses.\n\n")
 
 	extendedPublicKeys := make([]string, conf.NumPrivateKeys, conf.NumPublicKeys)
 	copy(extendedPublicKeys, signerExtendedPublicKeys)
@@ -51,11 +66,9 @@ func create(conf *createConfig) error {
 		}
 
 		fmt.Println()
-
 		extendedPublicKeys = append(extendedPublicKeys, string(extendedPublicKey))
 	}
 
-	// For a read only wallet the cosigner index is 0
 	cosignerIndex := uint32(0)
 	if len(signerExtendedPublicKeys) > 0 {
 		cosignerIndex, err = libcryptixwallet.MinimumCosignerIndex(signerExtendedPublicKeys, extendedPublicKeys)

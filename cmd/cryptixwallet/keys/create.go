@@ -53,11 +53,15 @@ func encryptedMnemonicExtendedPublicKeyPairs(params *dagconfig.Params, mnemonics
 	password := []byte(cmdLinePassword)
 	if len(password) == 0 {
 
-		password = []byte(GetPassword("Enter password for the key file:"))
-		confirmPassword := []byte(GetPassword("Confirm password:"))
+		if pw := os.Getenv("CRYPTIX_WALLET_PASSWORD"); pw != "" {
+			password = []byte(pw)
+		} else {
 
-		if subtle.ConstantTimeCompare(password, confirmPassword) != 1 {
-			return nil, nil, errors.New("Passwords are not identical")
+			password = []byte(GetPassword("Enter password for the key file:"))
+			confirmPassword := []byte(GetPassword("Confirm password:"))
+			if subtle.ConstantTimeCompare(password, confirmPassword) != 1 {
+				return nil, nil, errors.New("Passwords are not identical")
+			}
 		}
 	}
 
