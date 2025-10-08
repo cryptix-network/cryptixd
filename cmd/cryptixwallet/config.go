@@ -40,15 +40,16 @@ type configFlags struct {
 }
 
 type createConfig struct {
-	KeysFile          string `long:"keys-file" short:"f" description:"Keys file location (default: ~/.cryptixwallet/keys.json (*nix), %USERPROFILE%\\AppData\\Local\\Cryptixwallet\\key.json (Windows))"`
-	Password          string `long:"password" short:"p" description:"Wallet password"`
-	PasswordFile      string `long:"password-file" description:"Read wallet password from file instead of command line"`
-	Yes               bool   `long:"yes" short:"y" description:"Assume \"yes\" to all questions"`
-	MinimumSignatures uint32 `long:"min-signatures" short:"m" description:"Minimum required signatures" default:"1"`
-	NumPrivateKeys    uint32 `long:"num-private-keys" short:"k" description:"Number of private keys" default:"1"`
-	NumPublicKeys     uint32 `long:"num-public-keys" short:"n" description:"Total number of keys" default:"1"`
-	ECDSA             bool   `long:"ecdsa" description:"Create an ECDSA wallet"`
-	Import            bool   `long:"import" short:"i" description:"Import private keys (as opposed to generating them)"`
+	KeysFile          string   `long:"keys-file" short:"f" description:"Keys file location (default: ~/.cryptixwallet/keys.json (*nix), %USERPROFILE%\\AppData\\Local\\Cryptixwallet\\key.json (Windows))"`
+	Password          string   `long:"password" short:"p" description:"Wallet password"`
+	PasswordFile      string   `long:"password-file" description:"Read wallet password from file instead of command line"`
+	Yes               bool     `long:"yes" short:"y" description:"Assume \"yes\" to all questions"`
+	MinimumSignatures uint32   `long:"min-signatures" short:"m" description:"Minimum required signatures" default:"1"`
+	NumPrivateKeys    uint32   `long:"num-private-keys" short:"k" description:"Number of private keys" default:"1"`
+	NumPublicKeys     uint32   `long:"num-public-keys" short:"n" description:"Total number of keys" default:"1"`
+	PublicKeys        []string `long:"public-keys" description:"Additional public keys (extended) for multisig"`
+	ECDSA             bool     `long:"ecdsa" description:"Create an ECDSA wallet"`
+	Import            bool     `long:"import" short:"i" description:"Import private keys (as opposed to generating them)"`
 	config.NetworkFlags
 }
 

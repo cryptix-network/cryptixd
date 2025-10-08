@@ -52,21 +52,32 @@ func create(conf *createConfig) error {
 
 	extendedPublicKeys := make([]string, conf.NumPrivateKeys, conf.NumPublicKeys)
 	copy(extendedPublicKeys, signerExtendedPublicKeys)
-	reader := bufio.NewReader(os.Stdin)
-	for i := conf.NumPrivateKeys; i < conf.NumPublicKeys; i++ {
+
+	for i := int(conf.NumPrivateKeys); i < int(conf.NumPublicKeys); i++ {
+		if i-int(conf.NumPrivateKeys) < len(conf.PublicKeys) {
+			extendedPublicKey := conf.PublicKeys[i-int(conf.NumPrivateKeys)]
+			_, err = bip32.DeserializeExtendedKey(extendedPublicKey)
+			if err != nil {
+				return errors.Wrapf(err, "%s is invalid extended public key", extendedPublicKey)
+			}
+			extendedPublicKeys = append(extendedPublicKeys, extendedPublicKey)
+			continue
+		}
+
 		fmt.Printf("Enter public key #%d here:\n", i+1)
+		reader := bufio.NewReader(os.Stdin)
 		extendedPublicKey, err := utils.ReadLine(reader)
 		if err != nil {
 			return err
 		}
 
-		_, err = bip32.DeserializeExtendedKey(string(extendedPublicKey))
+		_, err = bip32.DeserializeExtendedKey(extendedPublicKey)
 		if err != nil {
-			return errors.Wrapf(err, "%s is invalid extended public key", string(extendedPublicKey))
+			return errors.Wrapf(err, "%s is invalid extended public key", extendedPublicKey)
 		}
 
 		fmt.Println()
-		extendedPublicKeys = append(extendedPublicKeys, string(extendedPublicKey))
+		extendedPublicKeys = append(extendedPublicKeys, extendedPublicKey)
 	}
 
 	cosignerIndex := uint32(0)
