@@ -50,21 +50,19 @@ func create(conf *createConfig) error {
 		"Use \"cryptixwallet dump-unencrypted-data\" for secret seed phrases\n" +
 		"and \"cryptixwallet new-address\" for wallet addresses.\n\n")
 
-	extendedPublicKeys := make([]string, conf.NumPrivateKeys, conf.NumPublicKeys)
-	copy(extendedPublicKeys, signerExtendedPublicKeys)
+	extendedPublicKeys := make([]string, 0, conf.NumPublicKeys)
+	extendedPublicKeys = append(extendedPublicKeys, signerExtendedPublicKeys...)
 
-	for i := int(conf.NumPrivateKeys); i < int(conf.NumPublicKeys); i++ {
-		if i-int(conf.NumPrivateKeys) < len(conf.PublicKeys) {
-			extendedPublicKey := conf.PublicKeys[i-int(conf.NumPrivateKeys)]
-			_, err = bip32.DeserializeExtendedKey(extendedPublicKey)
-			if err != nil {
-				return errors.Wrapf(err, "%s is invalid extended public key", extendedPublicKey)
-			}
-			extendedPublicKeys = append(extendedPublicKeys, extendedPublicKey)
-			continue
+	for _, extendedPublicKey := range conf.PublicKeys {
+		_, err = bip32.DeserializeExtendedKey(extendedPublicKey)
+		if err != nil {
+			return errors.Wrapf(err, "%s is invalid extended public key", extendedPublicKey)
 		}
+		extendedPublicKeys = append(extendedPublicKeys, extendedPublicKey)
+	}
 
-		fmt.Printf("Enter public key #%d here:\n", i+1)
+	for len(extendedPublicKeys) < int(conf.NumPublicKeys) {
+		fmt.Printf("Enter public key #%d here:\n", len(extendedPublicKeys)+1)
 		reader := bufio.NewReader(os.Stdin)
 		extendedPublicKey, err := utils.ReadLine(reader)
 		if err != nil {
