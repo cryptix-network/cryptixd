@@ -25,9 +25,22 @@ func sign(conf *signConfig) error {
 		return err
 	}
 
-	if len(conf.Password) == 0 {
-		conf.Password = keys.GetPassword("Password:")
+	cmdLinePassword := ""
+	if conf.PasswordFile != "" {
+		b, err := os.ReadFile(conf.PasswordFile)
+		if err != nil {
+			return fmt.Errorf("reading password file: %w", err)
+		}
+		cmdLinePassword = strings.TrimRight(string(b), "\r\n")
+	} else if conf.Password != "" {
+		cmdLinePassword = conf.Password
+	} else if env := os.Getenv("CRYPTIX_WALLET_PASSWORD"); env != "" {
+		cmdLinePassword = env
+	} else {
+		cmdLinePassword = keys.GetPassword("Password:")
 	}
+	conf.Password = cmdLinePassword
+
 	privateKeys, err := keysFile.DecryptMnemonics(conf.Password)
 	if err != nil {
 		return err
@@ -57,7 +70,6 @@ func sign(conf *signConfig) error {
 
 	areAllTransactionsFullySigned := true
 	for _, updatedPartiallySignedTransaction := range updatedPartiallySignedTransactions {
-		// This is somewhat redundant to check all transactions, but we do that just-in-case
 		isFullySigned, err := libcryptixwallet.IsTransactionFullySigned(updatedPartiallySignedTransaction)
 		if err != nil {
 			return err

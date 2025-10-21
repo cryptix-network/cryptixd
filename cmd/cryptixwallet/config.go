@@ -97,6 +97,7 @@ type createUnsignedTransactionConfig struct {
 type signConfig struct {
 	KeysFile        string `long:"keys-file" short:"f" description:"Keys file location (default: ~/.cryptixwallet/keys.json (*nix), %USERPROFILE%\\AppData\\Local\\Cryptixwallet\\key.json (Windows))"`
 	Password        string `long:"password" short:"p" description:"Wallet password"`
+	PasswordFile    string `long:"password-file" description:"Read wallet password from file instead of command line"`
 	Transaction     string `long:"transaction" short:"t" description:"The unsigned transaction(s) to sign on (encoded in hex)"`
 	TransactionFile string `long:"transaction-file" short:"F" description:"The file containing the unsigned transaction(s) to sign on (encoded in hex)"`
 	config.NetworkFlags
@@ -106,6 +107,8 @@ type broadcastConfig struct {
 	DaemonAddress    string `long:"daemonaddress" short:"d" description:"Wallet daemon server to connect to"`
 	Transactions     string `long:"transaction" short:"t" description:"The signed transaction to broadcast (encoded in hex)"`
 	TransactionsFile string `long:"transaction-file" short:"F" description:"The file containing the unsigned transaction to sign on (encoded in hex)"`
+	Password         string `long:"password" short:"p" description:"Wallet password"`
+	PasswordFile     string `long:"password-file" description:"Read wallet password from file instead of command line"`
 	config.NetworkFlags
 }
 

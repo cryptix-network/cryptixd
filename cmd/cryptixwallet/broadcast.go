@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/daemon/client"
@@ -13,6 +14,20 @@ import (
 )
 
 func broadcast(conf *broadcastConfig) error {
+	cmdLinePassword := ""
+	if conf.PasswordFile != "" {
+		b, err := os.ReadFile(conf.PasswordFile)
+		if err != nil {
+			return fmt.Errorf("reading password file: %w", err)
+		}
+		cmdLinePassword = strings.TrimRight(string(b), "\r\n")
+	} else if conf.Password != "" {
+		cmdLinePassword = conf.Password
+	} else if env := os.Getenv("CRYPTIX_WALLET_PASSWORD"); env != "" {
+		cmdLinePassword = env
+	}
+	conf.Password = cmdLinePassword
+
 	daemonClient, tearDown, err := client.Connect(conf.DaemonAddress)
 	if err != nil {
 		return err
@@ -47,11 +62,11 @@ func broadcast(conf *broadcastConfig) error {
 	if err != nil {
 		return err
 	}
+
 	fmt.Println("Transactions were sent successfully")
-	fmt.Println("Transaction ID(s): ")
+	fmt.Println("Transaction ID(s):")
 	for _, txID := range response.TxIDs {
 		fmt.Printf("\t%s\n", txID)
 	}
-
 	return nil
 }
