@@ -42,22 +42,26 @@ func create(conf *createConfig) error {
 		return err
 	}
 
-	partialPath := conf.KeysFile + ".mnemonics"
-	partialFile := keys.File{
-		Version:            keys.LastVersion,
-		EncryptedMnemonics: encryptedMnemonics,
-		ExtendedPublicKeys: signerExtendedPublicKeys,
+	if isMultisig {
+		partialPath := conf.KeysFile + ".mnemonics"
+		partialFile := keys.File{
+			Version:            keys.LastVersion,
+			EncryptedMnemonics: encryptedMnemonics,
+			ExtendedPublicKeys: signerExtendedPublicKeys,
+			MinimumSignatures:  conf.MinimumSignatures,
+			ECDSA:              conf.ECDSA,
+		}
+		if err := partialFile.SetPath(conf.NetParams(), partialPath, conf.Yes); err != nil {
+			return err
+		}
+		if err := partialFile.TryLock(); err != nil {
+			return err
+		}
+		if err := partialFile.Save(); err != nil {
+			return err
+		}
+		fmt.Printf("Wrote multisig mnemonic file into %s\n", partialFile.Path())
 	}
-	if err := partialFile.SetPath(conf.NetParams(), partialPath, conf.Yes); err != nil {
-		return err
-	}
-	if err := partialFile.TryLock(); err != nil {
-		return err
-	}
-	if err := partialFile.Save(); err != nil {
-		return err
-	}
-	fmt.Printf("Wrote encrypted mnemonics and own public key into %s\n", partialFile.Path())
 
 	for i, extendedPublicKey := range signerExtendedPublicKeys {
 		fmt.Printf("Extended public key of mnemonic #%d:\n%s\n\n", i+1, extendedPublicKey)
