@@ -50,6 +50,7 @@ type Config struct {
 	MinimumRelayTransactionFee            util.Amount
 	MinimumStandardTransactionVersion     uint16
 	MaximumStandardTransactionVersion     uint16
+	MaxPayloadLengthStandard              uint64
 }
 
 // DefaultConfig returns the default mempool configuration
@@ -70,5 +71,6 @@ func DefaultConfig(dagParams *dagconfig.Params) *Config {
 		MinimumRelayTransactionFee:            defaultMinimumRelayTransactionFee,
 		MinimumStandardTransactionVersion:     defaultMinimumStandardTransactionVersion,
 		MaximumStandardTransactionVersion:     defaultMaximumStandardTransactionVersion,
+		MaxPayloadLengthStandard:              dagParams.PayloadMaxLengthStandard,
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/pkg/errors"
@@ -257,6 +258,19 @@ func TestCheckTransactionStandardInIsolation(t *testing.T) {
 				SignatureScript:  bytes.Repeat([]byte{0x00}, maximumStandardSignatureScriptSize+1),
 				Sequence:         constants.MaxTxInSequenceNum,
 			}}, Outputs: []*externalapi.DomainTransactionOutput{&dummyTxOut}},
+			height:     300000,
+			isStandard: false,
+			code:       RejectNonstandard,
+		},
+		{
+			name: "Payload subnetwork payload exceeds standard limit",
+			tx: &externalapi.DomainTransaction{
+				Version:      0,
+				Inputs:       []*externalapi.DomainTransactionInput{&dummyTxIn},
+				Outputs:      []*externalapi.DomainTransactionOutput{&dummyTxOut},
+				SubnetworkID: subnetworks.SubnetworkIDPayload,
+				Payload:      bytes.Repeat([]byte{0x01}, 2049),
+			},
 			height:     300000,
 			isStandard: false,
 			code:       RejectNonstandard,

@@ -43,7 +43,12 @@ func parse(conf *parseConfig) error {
 		return err
 	}
 
-	txMassCalculator := txmass.NewCalculator(conf.NetParams().MassPerTxByte, conf.NetParams().MassPerScriptPubKeyByte, conf.NetParams().MassPerSigOp)
+	txMassCalculator := txmass.NewCalculator(
+		conf.NetParams().MassPerTxByte,
+		conf.NetParams().MassPerScriptPubKeyByte,
+		conf.NetParams().MassPerSigOp,
+		conf.NetParams().PayloadWeightMultiplier,
+	)
 	for i, transaction := range transactions {
 
 		partiallySignedTransaction, err := serialization.DeserializePartiallySignedTransaction(transaction)

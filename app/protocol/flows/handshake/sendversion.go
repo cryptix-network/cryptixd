@@ -62,7 +62,16 @@ func (flow *sendVersionFlow) start() error {
 	}
 	msg := appmessage.NewMsgVersion(localAddress, flow.NetAdapter().ID(),
 		flow.Config().ActiveNetParams.Name, subnetworkID, flow.Config().ProtocolVersion)
-	msg.AddUserAgent(userAgentName, userAgentVersion, flow.Config().UserAgentComments...)
+	baseUserAgentComments := append([]string{}, flow.Config().UserAgentComments...)
+	userAgentComments := baseUserAgentComments
+	if strongNodeID := flow.NetAdapter().StrongNodeID(); strongNodeID != "" {
+		userAgentComments = append(append([]string{}, baseUserAgentComments...), "strong-id="+strongNodeID)
+	}
+	msg.AddUserAgent(userAgentName, userAgentVersion, userAgentComments...)
+	if err := appmessage.ValidateUserAgent(msg.UserAgent); err != nil {
+		msg.UserAgent = appmessage.DefaultUserAgent
+		msg.AddUserAgent(userAgentName, userAgentVersion, baseUserAgentComments...)
+	}
 
 	// Advertise the services flag
 	msg.Services = defaultServices

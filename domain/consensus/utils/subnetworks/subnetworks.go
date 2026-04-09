@@ -11,6 +11,9 @@ var (
 
 	// SubnetworkIDRegistry is the subnetwork ID which is used for adding new sub networks to the registry
 	SubnetworkIDRegistry = externalapi.DomainSubnetworkID{2}
+
+	// SubnetworkIDPayload is the subnetwork ID used for non-coinbase payload transactions
+	SubnetworkIDPayload = externalapi.DomainSubnetworkID{3}
 )
 
 // IsBuiltIn returns true if the subnetwork is a built in subnetwork, which
@@ -24,4 +27,9 @@ func IsBuiltIn(id externalapi.DomainSubnetworkID) bool {
 // see IsBuiltIn for further details
 func IsBuiltInOrNative(id externalapi.DomainSubnetworkID) bool {
 	return id == SubnetworkIDNative || IsBuiltIn(id)
+}
+
+// IsPayload returns true if the subnetwork is the payload subnetwork.
+func IsPayload(id externalapi.DomainSubnetworkID) bool {
+	return id == SubnetworkIDPayload
 }

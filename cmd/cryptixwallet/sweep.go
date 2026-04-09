@@ -148,7 +148,12 @@ func createSplitTransactionsWithSchnorrPrivteKey(
 
 	extraMass := uint64(7000) // Account for future signatures.
 
-	massCalculater := txmass.NewCalculator(params.MassPerTxByte, params.MassPerScriptPubKeyByte, params.MassPerSigOp)
+	massCalculater := txmass.NewCalculator(
+		params.MassPerTxByte,
+		params.MassPerScriptPubKeyByte,
+		params.MassPerSigOp,
+		params.PayloadWeightMultiplier,
+	)
 
 	scriptPublicKey, err := txscript.PayToAddrScript(toAddress)
 	if err != nil {

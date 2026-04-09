@@ -9,6 +9,7 @@ import (
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 )
 
@@ -61,6 +62,13 @@ func (mp *mempool) checkTransactionStandardInIsolation(transaction *externalapi.
 	if transaction.Mass > MaximumStandardTransactionMass {
 		str := fmt.Sprintf("transaction mass of %d is larger than max allowed size of %d",
 			transaction.Mass, MaximumStandardTransactionMass)
+		return transactionRuleError(RejectNonstandard, str)
+	}
+
+	if subnetworks.IsPayload(transaction.SubnetworkID) &&
+		uint64(len(transaction.Payload)) > mp.config.MaxPayloadLengthStandard {
+		str := fmt.Sprintf("payload transaction payload length of %d bytes is larger than standard limit of %d bytes",
+			len(transaction.Payload), mp.config.MaxPayloadLengthStandard)
 		return transactionRuleError(RejectNonstandard, str)
 	}
 

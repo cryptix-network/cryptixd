@@ -11,6 +11,8 @@ import (
 
 // ValidateTransactionInIsolation validates the parts of the transaction that can be validated context-free
 func (v *transactionValidator) ValidateTransactionInIsolation(tx *externalapi.DomainTransaction, povDAAScore uint64) error {
+	payloadHfActivated := povDAAScore >= v.payloadHfActivationDAAScore
+
 	err := v.checkTransactionInputCount(tx)
 	if err != nil {
 		return err
@@ -27,7 +29,7 @@ func (v *transactionValidator) ValidateTransactionInIsolation(tx *externalapi.Do
 	if err != nil {
 		return err
 	}
-	err = v.checkGasInBuiltInOrNativeTransactions(tx)
+	err = v.checkGas(tx)
 	if err != nil {
 		return err
 	}
@@ -36,13 +38,12 @@ func (v *transactionValidator) ValidateTransactionInIsolation(tx *externalapi.Do
 		return err
 	}
 
-	err = v.checkNativeTransactionPayload(tx)
+	err = v.checkTransactionSubnetwork(tx, nil, payloadHfActivated)
 	if err != nil {
 		return err
 	}
 
-	// TODO: fill it with the node's subnetwork id.
-	err = v.checkTransactionSubnetwork(tx, nil)
+	err = v.checkTransactionPayload(tx, payloadHfActivated)
 	if err != nil {
 		return err
 	}
@@ -146,11 +147,10 @@ func (v *transactionValidator) checkCoinbaseInIsolation(tx *externalapi.DomainTr
 	return nil
 }
 
-func (v *transactionValidator) checkGasInBuiltInOrNativeTransactions(tx *externalapi.DomainTransaction) error {
-	// Transactions in native, registry and coinbase subnetworks must have Gas = 0
-	if subnetworks.IsBuiltInOrNative(tx.SubnetworkID) && tx.Gas > 0 {
-		return errors.Wrapf(ruleerrors.ErrInvalidGas, "transaction in the native or "+
-			"registry subnetworks has gas > 0 ")
+func (v *transactionValidator) checkGas(tx *externalapi.DomainTransaction) error {
+	// Keep this aligned with Rust consensus: non-coinbase gas is currently disabled.
+	if tx.Gas > 0 {
+		return errors.Wrapf(ruleerrors.ErrInvalidGas, "transaction has gas > 0")
 	}
 	return nil
 }
@@ -167,26 +167,56 @@ func (v *transactionValidator) checkSubnetworkRegistryTransaction(tx *externalap
 	return nil
 }
 
-func (v *transactionValidator) checkNativeTransactionPayload(tx *externalapi.DomainTransaction) error {
-	if tx.SubnetworkID == subnetworks.SubnetworkIDNative && len(tx.Payload) > 0 {
-		return errors.Wrapf(ruleerrors.ErrInvalidPayload, "transaction in the native subnetwork "+
-			"includes a payload")
+func (v *transactionValidator) checkTransactionPayload(tx *externalapi.DomainTransaction, payloadHfActivated bool) error {
+	if transactionhelper.IsCoinBase(tx) {
+		return nil
 	}
+
+	if !payloadHfActivated {
+		if len(tx.Payload) > 0 {
+			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "non-coinbase transaction includes a payload before payload hardfork activation")
+		}
+		return nil
+	}
+
+	if subnetworks.IsPayload(tx.SubnetworkID) {
+		if len(tx.Payload) == 0 {
+			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "payload subnetwork transaction must have a non-empty payload")
+		}
+		if uint64(len(tx.Payload)) > v.payloadMaxLengthConsensus {
+			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "payload length %d exceeds max allowed %d",
+				len(tx.Payload), v.payloadMaxLengthConsensus)
+		}
+		return nil
+	}
+
+	if len(tx.Payload) > 0 {
+		return errors.Wrapf(ruleerrors.ErrInvalidPayload, "payload is only allowed in the payload subnetwork")
+	}
+
 	return nil
 }
 
 func (v *transactionValidator) checkTransactionSubnetwork(tx *externalapi.DomainTransaction,
-	localNodeSubnetworkID *externalapi.DomainSubnetworkID) error {
-	if !v.enableNonNativeSubnetworks && tx.SubnetworkID != subnetworks.SubnetworkIDNative &&
-		tx.SubnetworkID != subnetworks.SubnetworkIDCoinbase {
-		return errors.Wrapf(ruleerrors.ErrSubnetworksDisabled, "transaction has non native or coinbase "+
-			"subnetwork ID")
+	localNodeSubnetworkID *externalapi.DomainSubnetworkID, payloadHfActivated bool) error {
+	if !payloadHfActivated {
+		if tx.SubnetworkID != subnetworks.SubnetworkIDNative && tx.SubnetworkID != subnetworks.SubnetworkIDCoinbase {
+			return errors.Wrapf(ruleerrors.ErrSubnetworksDisabled, "transaction has disabled subnetwork ID before payload hardfork activation")
+		}
+	} else {
+		if tx.SubnetworkID != subnetworks.SubnetworkIDNative &&
+			tx.SubnetworkID != subnetworks.SubnetworkIDCoinbase &&
+			tx.SubnetworkID != subnetworks.SubnetworkIDPayload {
+			return errors.Wrapf(ruleerrors.ErrSubnetworksDisabled, "transaction has disabled subnetwork ID")
+		}
 	}
 
 	// If we are a partial node, only transactions on built in subnetworks
 	// or our own subnetwork may have a payload
 	isLocalNodeFull := localNodeSubnetworkID == nil
-	shouldTxBeFull := subnetworks.IsBuiltIn(tx.SubnetworkID) || tx.SubnetworkID.Equal(localNodeSubnetworkID)
+	shouldTxBeFull := subnetworks.IsBuiltIn(tx.SubnetworkID) ||
+		subnetworks.IsPayload(tx.SubnetworkID) ||
+		tx.SubnetworkID.Equal(localNodeSubnetworkID)
 	if !isLocalNodeFull && !shouldTxBeFull && len(tx.Payload) > 0 {
 		return errors.Wrapf(ruleerrors.ErrInvalidPayload,
 			"transaction that was expected to be partial has a payload "+

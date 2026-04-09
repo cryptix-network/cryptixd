@@ -5,6 +5,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	routerpkg "github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
+	"sync"
 	"sync/atomic"
 
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
@@ -15,6 +16,8 @@ import (
 type NetConnection struct {
 	connection            server.Connection
 	id                    *id.ID
+	strongNodeID          string
+	metadataLock          sync.RWMutex
 	router                *routerpkg.Router
 	onDisconnectedHandler server.OnDisconnectedHandler
 	isRouterClosed        uint32
@@ -63,6 +66,20 @@ func (c *NetConnection) ID() *id.ID {
 // SetID sets the ID associated with this connection
 func (c *NetConnection) SetID(peerID *id.ID) {
 	c.id = peerID
+}
+
+// StrongNodeID returns the strong-node ID associated with this connection.
+func (c *NetConnection) StrongNodeID() string {
+	c.metadataLock.RLock()
+	defer c.metadataLock.RUnlock()
+	return c.strongNodeID
+}
+
+// SetStrongNodeID sets the strong-node ID associated with this connection.
+func (c *NetConnection) SetStrongNodeID(strongNodeID string) {
+	c.metadataLock.Lock()
+	defer c.metadataLock.Unlock()
+	c.strongNodeID = strongNodeID
 }
 
 // Address returns the address associated with this connection

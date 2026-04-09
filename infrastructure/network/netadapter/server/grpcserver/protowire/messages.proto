@@ -51,6 +51,7 @@ message CryptixdMessage {
     IbdChainBlockLocatorMessage ibdChainBlockLocator = 54;
     RequestAnticoneMessage requestAnticone = 55;
     RequestNextPruningPointAndItsAnticoneBlocksMessage requestNextPruningPointAndItsAnticoneBlocks = 56;
+    StrongNodeAnnouncementMessage strongNodeAnnouncement = 60;
 
     GetCurrentNetworkRequestMessage getCurrentNetworkRequest = 1001;
     GetCurrentNetworkResponseMessage getCurrentNetworkResponse = 1002;

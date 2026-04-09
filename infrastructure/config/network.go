@@ -8,9 +8,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/jessevdk/go-flags"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/util/difficulty"
+	"github.com/jessevdk/go-flags"
 	"github.com/pkg/errors"
 )
 
@@ -33,6 +33,7 @@ type overrideDAGParamsConfig struct {
 	MassPerTxByte                           *uint64            `json:"massPerTxByte"`
 	MassPerScriptPubKeyByte                 *uint64            `json:"massPerScriptPubKeyByte"`
 	MassPerSigOp                            *uint64            `json:"massPerSigOp"`
+	PayloadWeightMultiplier                 *uint64            `json:"payloadWeightMultiplier"`
 	CoinbasePayloadScriptPublicKeyMaxLength *uint8             `json:"coinbasePayloadScriptPublicKeyMaxLength"`
 	PowMax                                  *string            `json:"powMax"`
 	BlockCoinbaseMaturity                   *uint64            `json:"blockCoinbaseMaturity"`
@@ -49,6 +50,9 @@ type overrideDAGParamsConfig struct {
 	DisableDifficultyAdjustment             *bool              `json:"disableDifficultyAdjustment"`
 	SkipProofOfWork                         *bool              `json:"skipProofOfWork"`
 	HardForkOmitGenesisFromParentsDAAScore  *uint64            `json:"hardForkOmitGenesisFromParentsDaaScore"`
+	PayloadHfActivationDAAScore             *uint64            `json:"payloadHfActivationDaaScore"`
+	PayloadMaxLengthConsensus               *uint64            `json:"payloadMaxLengthConsensus"`
+	PayloadMaxLengthStandard                *uint64            `json:"payloadMaxLengthStandard"`
 }
 
 // ResolveNetwork parses the network command line argument and sets NetParams accordingly.
@@ -150,6 +154,10 @@ func (networkFlags *NetworkFlags) overrideDAGParams() error {
 		networkFlags.ActiveNetParams.MassPerSigOp = *config.MassPerSigOp
 	}
 
+	if config.PayloadWeightMultiplier != nil {
+		networkFlags.ActiveNetParams.PayloadWeightMultiplier = *config.PayloadWeightMultiplier
+	}
+
 	if config.CoinbasePayloadScriptPublicKeyMaxLength != nil {
 		networkFlags.ActiveNetParams.CoinbasePayloadScriptPublicKeyMaxLength = *config.CoinbasePayloadScriptPublicKeyMaxLength
 	}
@@ -211,6 +219,18 @@ func (networkFlags *NetworkFlags) overrideDAGParams() error {
 
 	if config.SkipProofOfWork != nil {
 		networkFlags.ActiveNetParams.SkipProofOfWork = *config.SkipProofOfWork
+	}
+
+	if config.PayloadHfActivationDAAScore != nil {
+		networkFlags.ActiveNetParams.PayloadHfActivationDAAScore = *config.PayloadHfActivationDAAScore
+	}
+
+	if config.PayloadMaxLengthConsensus != nil {
+		networkFlags.ActiveNetParams.PayloadMaxLengthConsensus = *config.PayloadMaxLengthConsensus
+	}
+
+	if config.PayloadMaxLengthStandard != nil {
+		networkFlags.ActiveNetParams.PayloadMaxLengthStandard = *config.PayloadMaxLengthStandard
 	}
 
 	return nil

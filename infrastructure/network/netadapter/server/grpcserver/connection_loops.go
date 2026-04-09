@@ -1,9 +1,9 @@
 package grpcserver
 
 import (
-	"github.com/davecgh/go-spew/spew"
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
+	"github.com/davecgh/go-spew/spew"
 	"io"
 	"os"
 	"strconv"
@@ -87,6 +87,10 @@ func (c *gRPCConnection) receiveLoop() error {
 		}
 		message, err := protoMessage.ToAppMessage()
 		if err != nil {
+			if errors.Is(err, protowire.ErrUnknownMessagePayload) {
+				log.Debugf("Ignoring unknown message payload from %s", c)
+				continue
+			}
 			if c.onInvalidMessageHandler != nil {
 				c.onInvalidMessageHandler(err)
 			}

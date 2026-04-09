@@ -25,6 +25,7 @@ type RouterInitializer func(*routerpkg.Router, *NetConnection)
 type NetAdapter struct {
 	cfg                  *config.Config
 	id                   *id.ID
+	strongNodeID         string
 	p2pServer            server.P2PServer
 	p2pRouterInitializer RouterInitializer
 	rpcServer            server.Server
@@ -42,6 +43,11 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 	if err != nil {
 		return nil, err
 	}
+	strongNodeID, err := loadOrCreateStrongNodeID(cfg.AppDir)
+	if err != nil {
+		log.Warnf("Strong-node ID initialization failed, continuing without one: %s", err)
+		strongNodeID = ""
+	}
 	p2pServer, err := grpcserver.NewP2PServer(cfg.Listeners)
 	if err != nil {
 		return nil, err
@@ -51,10 +57,11 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 		return nil, err
 	}
 	adapter := NetAdapter{
-		cfg:       cfg,
-		id:        netAdapterID,
-		p2pServer: p2pServer,
-		rpcServer: rpcServer,
+		cfg:          cfg,
+		id:           netAdapterID,
+		strongNodeID: strongNodeID,
+		p2pServer:    p2pServer,
+		rpcServer:    rpcServer,
 
 		p2pConnections: make(map[*NetConnection]struct{}),
 	}
@@ -170,6 +177,11 @@ func (na *NetAdapter) SetRPCRouterInitializer(routerInitializer RouterInitialize
 // ID returns this netAdapter's ID in the network
 func (na *NetAdapter) ID() *id.ID {
 	return na.id
+}
+
+// StrongNodeID returns the node's local strong-node ID in 64-char lowercase hex form.
+func (na *NetAdapter) StrongNodeID() string {
+	return na.strongNodeID
 }
 
 // P2PBroadcast sends the given `message` to every peer corresponding

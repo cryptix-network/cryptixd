@@ -22,6 +22,8 @@ type txSubnetworkData struct {
 func TestValidateTransactionInIsolationAndPopulateMass(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		cfg := *consensusConfig
+		cfg.PayloadHfActivationDAAScore = 100
+		cfg.PayloadMaxLengthConsensus = 8192
 
 		factory := consensus.NewFactory()
 		tc, teardown, err := factory.NewTestConsensus(&cfg, "TestValidateTransactionInIsolationAndPopulateMass")
@@ -112,6 +114,33 @@ func TestValidateTransactionInIsolationAndPopulateMass(t *testing.T) {
 					tx.Payload = []byte{1}
 				},
 				ruleerrors.ErrInvalidPayload, 0},
+			{"non-zero payload in Cryptix after payload hardfork", 1, 1, 1,
+				subnetworks.SubnetworkIDNative,
+				nil,
+				func(tx *externalapi.DomainTransaction) {
+					tx.Payload = []byte{1}
+				},
+				ruleerrors.ErrInvalidPayload, cfg.PayloadHfActivationDAAScore},
+			{"payload tx before payload hardfork", 1, 1, 1,
+				subnetworks.SubnetworkIDPayload,
+				&txSubnetworkData{subnetworks.SubnetworkIDPayload, 0, []byte{1}},
+				nil,
+				ruleerrors.ErrSubnetworksDisabled, cfg.PayloadHfActivationDAAScore - 1},
+			{"payload tx after payload hardfork", 1, 1, 1,
+				subnetworks.SubnetworkIDPayload,
+				&txSubnetworkData{subnetworks.SubnetworkIDPayload, 0, []byte{1}},
+				nil,
+				nil, cfg.PayloadHfActivationDAAScore},
+			{"empty payload tx after payload hardfork", 1, 1, 1,
+				subnetworks.SubnetworkIDPayload,
+				&txSubnetworkData{subnetworks.SubnetworkIDPayload, 0, []byte{}},
+				nil,
+				ruleerrors.ErrInvalidPayload, cfg.PayloadHfActivationDAAScore},
+			{"payload tx above consensus max after payload hardfork", 1, 1, 1,
+				subnetworks.SubnetworkIDPayload,
+				&txSubnetworkData{subnetworks.SubnetworkIDPayload, 0, make([]byte, int(cfg.PayloadMaxLengthConsensus)+1)},
+				nil,
+				ruleerrors.ErrInvalidPayload, cfg.PayloadHfActivationDAAScore},
 		}
 
 		for _, test := range tests {

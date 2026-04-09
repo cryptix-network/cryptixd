@@ -73,6 +73,19 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		}
 		defer m.context.RemoveFromPeers(peer)
 
+		if m.context.ConnectionManager().IsNodeIDBanned(peer.ID()) {
+			log.Infof("Peer %s is externally banned by node ID. Disconnecting...", netConnection)
+			netConnection.Disconnect()
+			return
+		}
+		if strongNodeID := m.context.ConnectionManager().UpdateConnectionStrongNodeIDFromUserAgent(netConnection, peer.UserAgent()); strongNodeID != "" {
+			if m.context.ConnectionManager().IsStrongNodeIDBanned(strongNodeID) {
+				log.Infof("Peer %s is externally banned by strong-node ID %s. Disconnecting...", netConnection, strongNodeID)
+				netConnection.Disconnect()
+				return
+			}
+		}
+
 		var flows []*common.Flow
 		log.Infof("Registering p2p flows for peer %s for protocol version %d", peer, peer.ProtocolVersion())
 		switch peer.ProtocolVersion() {

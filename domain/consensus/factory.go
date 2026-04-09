@@ -204,7 +204,12 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		config.MaxBlockLevel,
 	)
 
-	txMassCalculator := txmass.NewCalculator(config.MassPerTxByte, config.MassPerScriptPubKeyByte, config.MassPerSigOp)
+	txMassCalculator := txmass.NewCalculator(
+		config.MassPerTxByte,
+		config.MassPerScriptPubKeyByte,
+		config.MassPerSigOp,
+		config.PayloadWeightMultiplier,
+	)
 
 	pastMedianTimeManager := f.pastMedianTimeConsructor(
 		config.TimestampDeviationTolerance,
@@ -215,6 +220,8 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		config.GenesisHash)
 	transactionValidator := transactionvalidator.New(config.BlockCoinbaseMaturity,
 		config.EnableNonNativeSubnetworks,
+		config.PayloadHfActivationDAAScore,
+		config.PayloadMaxLengthConsensus,
 		config.MaxCoinbasePayloadLength,
 		config.K,
 		config.CoinbasePayloadScriptPublicKeyMaxLength,

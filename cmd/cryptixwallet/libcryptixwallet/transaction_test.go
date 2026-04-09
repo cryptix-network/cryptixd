@@ -2,10 +2,11 @@ package libcryptixwallet_test
 
 import (
 	"fmt"
-	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet/serialization"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"strings"
 	"testing"
+
+	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet/serialization"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 
 	"github.com/cryptix-network/cryptixd/cmd/cryptixwallet/libcryptixwallet"
 	"github.com/cryptix-network/cryptixd/domain/consensus"

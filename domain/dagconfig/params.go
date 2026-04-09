@@ -5,6 +5,7 @@
 package dagconfig
 
 import (
+	"math"
 	"math/big"
 	"time"
 
@@ -169,6 +170,9 @@ type Params struct {
 	// signature operation adds to a transaction.
 	MassPerSigOp uint64
 
+	// PayloadWeightMultiplier scales payload byte mass for payload-subnetwork transactions.
+	PayloadWeightMultiplier uint64
+
 	// MergeSetSizeLimit is the maximum number of blocks in a block's merge set
 	MergeSetSizeLimit uint64
 
@@ -181,6 +185,15 @@ type Params struct {
 	// DeflationaryPhaseDaaScore is the DAA score after which the monetary policy switches
 	// to its deflationary phase
 	DeflationaryPhaseDaaScore uint64
+
+	// PayloadHfActivationDAAScore is the DAA score after which payload-subnetwork transactions are accepted.
+	PayloadHfActivationDAAScore uint64
+
+	// PayloadMaxLengthConsensus is the consensus hard cap for non-coinbase payload length.
+	PayloadMaxLengthConsensus uint64
+
+	// PayloadMaxLengthStandard is the relay/mempool policy cap for non-coinbase payload length.
+	PayloadMaxLengthStandard uint64
 
 	DisallowDirectBlocksOnTopOfGenesis bool
 
@@ -270,10 +283,14 @@ var MainnetParams = Params{
 	MassPerTxByte:                           defaultMassPerTxByte,
 	MassPerScriptPubKeyByte:                 defaultMassPerScriptPubKeyByte,
 	MassPerSigOp:                            defaultMassPerSigOp,
+	PayloadWeightMultiplier:                 defaultPayloadWeightMultiplier,
 	MergeSetSizeLimit:                       defaultMergeSetSizeLimit,
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
+	PayloadHfActivationDAAScore:             math.MaxUint64,
+	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
+	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 	DisallowDirectBlocksOnTopOfGenesis:      true,
 
 	// This is technically 255, but we clamped it at 256 - block level of mainnet genesis
@@ -346,10 +363,14 @@ var TestnetParams = Params{
 	MassPerTxByte:                           defaultMassPerTxByte,
 	MassPerScriptPubKeyByte:                 defaultMassPerScriptPubKeyByte,
 	MassPerSigOp:                            defaultMassPerSigOp,
+	PayloadWeightMultiplier:                 defaultPayloadWeightMultiplier,
 	MergeSetSizeLimit:                       defaultMergeSetSizeLimit,
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
+	PayloadHfActivationDAAScore:             math.MaxUint64,
+	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
+	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
@@ -412,10 +433,14 @@ var SimnetParams = Params{
 	MassPerTxByte:                           defaultMassPerTxByte,
 	MassPerScriptPubKeyByte:                 defaultMassPerScriptPubKeyByte,
 	MassPerSigOp:                            defaultMassPerSigOp,
+	PayloadWeightMultiplier:                 defaultPayloadWeightMultiplier,
 	MergeSetSizeLimit:                       defaultMergeSetSizeLimit,
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
+	PayloadHfActivationDAAScore:             math.MaxUint64,
+	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
+	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
@@ -474,10 +499,14 @@ var DevnetParams = Params{
 	MassPerTxByte:                           defaultMassPerTxByte,
 	MassPerScriptPubKeyByte:                 defaultMassPerScriptPubKeyByte,
 	MassPerSigOp:                            defaultMassPerSigOp,
+	PayloadWeightMultiplier:                 defaultPayloadWeightMultiplier,
 	MergeSetSizeLimit:                       defaultMergeSetSizeLimit,
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
+	PayloadHfActivationDAAScore:             math.MaxUint64,
+	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
+	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,

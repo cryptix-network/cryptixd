@@ -3,6 +3,7 @@ package txmass
 import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 )
 
@@ -11,17 +12,19 @@ type Calculator struct {
 	massPerTxByte           uint64
 	massPerScriptPubKeyByte uint64
 	massPerSigOp            uint64
+	payloadWeightMultiplier uint64
 
 	// The parameter for scaling inverse CPAY value to mass units (KIP-0009)
 	storageMassParameter uint64
 }
 
 // NewCalculator creates a new instance of Calculator
-func NewCalculator(massPerTxByte, massPerScriptPubKeyByte, massPerSigOp uint64) *Calculator {
+func NewCalculator(massPerTxByte, massPerScriptPubKeyByte, massPerSigOp, payloadWeightMultiplier uint64) *Calculator {
 	return &Calculator{
 		massPerTxByte:           massPerTxByte,
 		massPerScriptPubKeyByte: massPerScriptPubKeyByte,
 		massPerSigOp:            massPerSigOp,
+		payloadWeightMultiplier: payloadWeightMultiplier,
 		storageMassParameter:    constants.SompiPerCryptix * 10_000,
 	}
 }
@@ -61,7 +64,16 @@ func (c *Calculator) CalculateTransactionMass(transaction *externalapi.DomainTra
 	massForSigOps := totalSigOpCount * c.massPerSigOp
 
 	// Sum all components of mass
-	return massForSize + massForScriptPubKey + massForSigOps
+	return massForSize + massForScriptPubKey + massForSigOps + c.calculatePayloadMassDelta(transaction)
+}
+
+func (c *Calculator) calculatePayloadMassDelta(transaction *externalapi.DomainTransaction) uint64 {
+	if transaction.SubnetworkID != subnetworks.SubnetworkIDPayload || c.payloadWeightMultiplier <= 1 {
+		return 0
+	}
+
+	payloadBaseMass := uint64(len(transaction.Payload)) * c.massPerTxByte
+	return payloadBaseMass * (c.payloadWeightMultiplier - 1)
 }
 
 // CalculateTransactionStorageMass calculates the storage mass of the given transaction (see KIP-0009)

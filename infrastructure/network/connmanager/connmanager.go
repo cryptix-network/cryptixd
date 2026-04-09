@@ -42,6 +42,11 @@ type ConnectionManager struct {
 	stop                   uint32
 	connectionRequestsLock sync.RWMutex
 
+	externalBanlistLock      sync.RWMutex
+	externallyBannedIPs      map[string]struct{}
+	externallyBannedNodeIDs  map[string]struct{}
+	nextExternalBanlistFetch time.Time
+
 	resetLoopChan chan struct{}
 	loopTicker    *time.Ticker
 }
@@ -49,15 +54,17 @@ type ConnectionManager struct {
 // New instantiates a new instance of a ConnectionManager
 func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *addressmanager.AddressManager) (*ConnectionManager, error) {
 	c := &ConnectionManager{
-		cfg:              cfg,
-		netAdapter:       netAdapter,
-		addressManager:   addressManager,
-		activeRequested:  map[string]*connectionRequest{},
-		pendingRequested: map[string]*connectionRequest{},
-		activeOutgoing:   map[string]struct{}{},
-		activeIncoming:   map[string]struct{}{},
-		resetLoopChan:    make(chan struct{}),
-		loopTicker:       time.NewTicker(connectionsLoopInterval),
+		cfg:                     cfg,
+		netAdapter:              netAdapter,
+		addressManager:          addressManager,
+		activeRequested:         map[string]*connectionRequest{},
+		pendingRequested:        map[string]*connectionRequest{},
+		activeOutgoing:          map[string]struct{}{},
+		activeIncoming:          map[string]struct{}{},
+		externallyBannedIPs:     map[string]struct{}{},
+		externallyBannedNodeIDs: map[string]struct{}{},
+		resetLoopChan:           make(chan struct{}),
+		loopTicker:              time.NewTicker(connectionsLoopInterval),
 	}
 
 	connectPeers := cfg.AddPeers
@@ -101,6 +108,13 @@ func (c *ConnectionManager) run() {
 }
 
 func (c *ConnectionManager) initiateConnection(address string) error {
+	isAddressBanned, err := c.isAddressExternallyBanned(address)
+	if err != nil {
+		log.Warnf("Skipping external banlist address check for %s: %s", address, err)
+	} else if isAddressBanned {
+		return errors.Errorf("address %s is blocked by external antifraud banlist", address)
+	}
+
 	log.Infof("Connecting to %s", address)
 	return c.netAdapter.P2PConnect(address)
 }
@@ -110,7 +124,9 @@ const connectionsLoopInterval = 30 * time.Second
 func (c *ConnectionManager) connectionsLoop() {
 
 	for atomic.LoadUint32(&c.stop) == 0 {
+		c.refreshExternalBanlistIfNeeded(time.Now())
 		connections := c.netAdapter.P2PConnections()
+		c.disconnectExternallyBannedConnections(connections)
 
 		// We convert the connections list to a set, so that connections can be found quickly
 		// Then we go over the set, classifying connection by category: requested, outgoing or incoming.
@@ -168,6 +184,10 @@ func (c *ConnectionManager) BanByIP(ip net.IP) error {
 
 // IsBanned returns whether the given netConnection is banned
 func (c *ConnectionManager) IsBanned(netConnection *netadapter.NetConnection) (bool, error) {
+	if c.isNetConnectionExternallyBanned(netConnection) {
+		return true, nil
+	}
+
 	if c.isPermanent(netConnection.Address()) {
 		return false, nil
 	}

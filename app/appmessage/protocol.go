@@ -13,7 +13,7 @@ import (
 const (
 	// DefaultServices describes the default services that are supported by
 	// the server.
-	DefaultServices = SFNodeNetwork | SFNodeBloom | SFNodeCF
+	DefaultServices = SFNodeNetwork | SFNodeBloom | SFNodeCF | SFNodeStrongNodes
 )
 
 // ServiceFlag identifies services supported by a cryptix peer.
@@ -43,19 +43,27 @@ const (
 	SFNodeCF
 )
 
+const (
+	// SFNodeStrongNodes is a flag used to indicate a peer accepts strong-node
+	// announcement payloads.
+	SFNodeStrongNodes ServiceFlag = 1 << 21
+)
+
 // Map of service flags back to their constant names for pretty printing.
 var sfStrings = map[ServiceFlag]string{
-	SFNodeNetwork: "SFNodeNetwork",
-	SFNodeGetUTXO: "SFNodeGetUTXO",
-	SFNodeBloom:   "SFNodeBloom",
-	SFNodeXthin:   "SFNodeXthin",
-	SFNodeBit5:    "SFNodeBit5",
-	SFNodeCF:      "SFNodeCF",
+	SFNodeNetwork:     "SFNodeNetwork",
+	SFNodeGetUTXO:     "SFNodeGetUTXO",
+	SFNodeBloom:       "SFNodeBloom",
+	SFNodeXthin:       "SFNodeXthin",
+	SFNodeBit5:        "SFNodeBit5",
+	SFNodeCF:          "SFNodeCF",
+	SFNodeStrongNodes: "SFNodeStrongNodes",
 }
 
 // orderedSFStrings is an ordered list of service flags from highest to
 // lowest.
 var orderedSFStrings = []ServiceFlag{
+	SFNodeStrongNodes,
 	SFNodeNetwork,
 	SFNodeGetUTXO,
 	SFNodeBloom,

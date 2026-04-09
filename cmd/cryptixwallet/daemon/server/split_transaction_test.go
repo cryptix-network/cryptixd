@@ -26,11 +26,16 @@ func TestEstimateComputeMassAfterSignatures(t *testing.T) {
 		defer teardown(false)
 
 		serverInstance := &server{
-			params:           params,
-			keysFile:         &keys.File{MinimumSignatures: 2},
-			shutdown:         make(chan struct{}),
-			addressSet:       make(walletAddressSet),
-			txMassCalculator: txmass.NewCalculator(params.MassPerTxByte, params.MassPerScriptPubKeyByte, params.MassPerSigOp),
+			params:     params,
+			keysFile:   &keys.File{MinimumSignatures: 2},
+			shutdown:   make(chan struct{}),
+			addressSet: make(walletAddressSet),
+			txMassCalculator: txmass.NewCalculator(
+				params.MassPerTxByte,
+				params.MassPerScriptPubKeyByte,
+				params.MassPerSigOp,
+				params.PayloadWeightMultiplier,
+			),
 		}
 
 		estimatedMassAfterSignatures, err := serverInstance.estimateComputeMassAfterSignatures(unsignedTransaction)
@@ -81,11 +86,16 @@ func TestEstimateMassAfterSignatures(t *testing.T) {
 		}
 
 		serverInstance := &server{
-			params:           params,
-			keysFile:         &keys.File{MinimumSignatures: 2},
-			shutdown:         make(chan struct{}),
-			addressSet:       make(walletAddressSet),
-			txMassCalculator: txmass.NewCalculator(params.MassPerTxByte, params.MassPerScriptPubKeyByte, params.MassPerSigOp),
+			params:     params,
+			keysFile:   &keys.File{MinimumSignatures: 2},
+			shutdown:   make(chan struct{}),
+			addressSet: make(walletAddressSet),
+			txMassCalculator: txmass.NewCalculator(
+				params.MassPerTxByte,
+				params.MassPerScriptPubKeyByte,
+				params.MassPerSigOp,
+				params.PayloadWeightMultiplier,
+			),
 		}
 
 		estimatedMassAfterSignatures, err := serverInstance.estimateMassAfterSignatures(unsignedTransaction)

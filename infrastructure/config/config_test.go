@@ -69,4 +69,8 @@ func TestConstants(t *testing.T) {
 	if subnetworks.SubnetworkIDRegistry != two {
 		t.Errorf("subnetworks.SubnetworkIDRegistry value was changed from 2, therefore you probably need to update the help text for SubnetworkID")
 	}
+	three := externalapi.DomainSubnetworkID{3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+	if subnetworks.SubnetworkIDPayload != three {
+		t.Errorf("subnetworks.SubnetworkIDPayload value was changed from 3, therefore you probably need to update the help text for SubnetworkID")
+	}
 }

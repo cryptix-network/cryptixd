@@ -1,6 +1,8 @@
 package protowire
 
 import (
+	stdErrors "errors"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/pkg/errors"
 )
@@ -9,6 +11,9 @@ type converter interface {
 	toAppMessage() (appmessage.Message, error)
 }
 
+// ErrUnknownMessagePayload is returned when a message payload type is unknown to this node version.
+var ErrUnknownMessagePayload = stdErrors.New("received unknown message payload")
+
 // ToAppMessage converts a CryptixdMessage to its appmessage.Message representation
 func (x *CryptixdMessage) ToAppMessage() (appmessage.Message, error) {
 	if x == nil {
@@ -16,7 +21,7 @@ func (x *CryptixdMessage) ToAppMessage() (appmessage.Message, error) {
 	}
 	converter, ok := x.Payload.(converter)
 	if !ok {
-		return nil, errors.Errorf("received invalid message")
+		return nil, ErrUnknownMessagePayload
 	}
 	appMessage, err := converter.toAppMessage()
 	if err != nil {
@@ -354,6 +359,13 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 		return payload, nil
 	case *appmessage.MsgRequestAnticone:
 		payload := new(CryptixdMessage_RequestAnticone)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgStrongNodeAnnouncement:
+		payload := new(CryptixdMessage_StrongNodeAnnouncement)
 		err := payload.fromAppMessage(message)
 		if err != nil {
 			return nil, err

@@ -72,6 +72,7 @@ type sendConfig struct {
 	FeeRate                  float64  `long:"fee-rate" short:"r" description:"Fee rate in Sompi/gram to use for the transaction. This option will override any fee estimate from the connected node."`
 	MaxFee                   uint64   `long:"max-fee" short:"x" description:"Maximum fee in Sompi (not Sompi/gram) to use for the transaction. The wallet will take the minimum between the fee estimate from the connected node and this value. If no other fee policy is specified, it will set the max fee to 1 CPAY"`
 	Verbose                  bool     `long:"show-serialized" short:"s" description:"Show a list of hex encoded sent transactions"`
+
 	config.NetworkFlags
 }
 
@@ -91,6 +92,7 @@ type createUnsignedTransactionConfig struct {
 	MaxFeeRate               float64  `long:"max-fee-rate" short:"m" description:"Maximum fee rate in Sompi/gram to use for the transaction. The wallet will take the minimum between the fee rate estimate from the connected node and this value."`
 	FeeRate                  float64  `long:"fee-rate" short:"r" description:"Fee rate in Sompi/gram to use for the transaction. This option will override any fee estimate from the connected node."`
 	MaxFee                   uint64   `long:"max-fee" short:"x" description:"Maximum fee in Sompi (not Sompi/gram) to use for the transaction. The wallet will take the minimum between the fee estimate from the connected node and this value. If no other fee policy is specified, it will set the max fee to 1 CPAY"`
+
 	config.NetworkFlags
 }
 

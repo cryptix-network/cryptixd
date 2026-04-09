@@ -28,15 +28,17 @@ import (
 )
 
 const (
-	defaultConfigFilename      = "cryptixd.conf"
-	defaultLogLevel            = "info"
-	defaultLogDirname          = "logs"
-	defaultLogFilename         = "cryptixd.log"
-	defaultErrLogFilename      = "cryptixd_err.log"
-	defaultTargetOutboundPeers = 8
-	defaultMaxInboundPeers     = 117
-	defaultBanDuration         = time.Hour * 24
-	defaultBanThreshold        = 100
+	defaultConfigFilename        = "cryptixd.conf"
+	defaultLogLevel              = "info"
+	defaultLogDirname            = "logs"
+	defaultLogFilename           = "cryptixd.log"
+	defaultErrLogFilename        = "cryptixd_err.log"
+	defaultTargetOutboundPeers   = 8
+	defaultMaxInboundPeers       = 117
+	defaultBanDuration           = time.Hour * 24
+	defaultBanThreshold          = 100
+	defaultEnableExternalBanlist = true
+	defaultExternalBanlistURL    = "https://antifraud.cryptix-network.org/api/confirmed-cases/iplist"
 	//DefaultConnectTimeout is the default connection timeout when dialing
 	DefaultConnectTimeout = time.Second * 30
 	//DefaultMaxRPCClients is the default max number of RPC clients
@@ -90,6 +92,9 @@ type Flags struct {
 	EnableBanning                   bool          `long:"enablebanning" description:"Enable banning of misbehaving peers"`
 	BanDuration                     time.Duration `long:"banduration" description:"How long to ban misbehaving peers. Valid time units are {s, m, h}. Minimum 1 second"`
 	BanThreshold                    uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
+	EnableExternalBanlist           bool          `long:"external-banlist" description:"Enable external antifraud banlist synchronization (IP and node ID)"`
+	DisableExternalBanlist          bool          `long:"no-external-banlist" description:"Disable external antifraud banlist synchronization (overrides --external-banlist)"`
+	ExternalBanlistURL              string        `long:"external-banlist-url" description:"External antifraud banlist endpoint URL"`
 	Whitelists                      []string      `long:"whitelist" description:"Add an IP network or IP that will not be banned. (eg. 192.168.1.0/24 or ::1)"`
 	RPCListeners                    []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: 19201, testnet: 19202)"`
 	RPCCert                         string        `long:"rpccert" description:"File containing the certificate file"`
@@ -174,25 +179,27 @@ func newConfigParser(cfgFlags *Flags, options flags.Options) *flags.Parser {
 
 func defaultFlags() *Flags {
 	return &Flags{
-		ConfigFile:           defaultConfigFile,
-		LogLevel:             defaultLogLevel,
-		TargetOutboundPeers:  defaultTargetOutboundPeers,
-		MaxInboundPeers:      defaultMaxInboundPeers,
-		BanDuration:          defaultBanDuration,
-		BanThreshold:         defaultBanThreshold,
-		RPCMaxClients:        DefaultMaxRPCClients,
-		RPCMaxWebsockets:     defaultMaxRPCWebsockets,
-		RPCMaxConcurrentReqs: defaultMaxRPCConcurrentReqs,
-		AppDir:               defaultDataDir,
-		RPCKey:               defaultRPCKeyFile,
-		RPCCert:              defaultRPCCertFile,
-		BlockMaxMass:         defaultBlockMaxMass,
-		MaxOrphanTxs:         defaultMaxOrphanTransactions,
-		SigCacheMaxSize:      defaultSigCacheMaxSize,
-		MinRelayTxFee:        defaultMinRelayTxFee,
-		MaxUTXOCacheSize:     defaultMaxUTXOCacheSize,
-		ServiceOptions:       &ServiceOptions{},
-		ProtocolVersion:      defaultProtocolVersion,
+		ConfigFile:            defaultConfigFile,
+		LogLevel:              defaultLogLevel,
+		TargetOutboundPeers:   defaultTargetOutboundPeers,
+		MaxInboundPeers:       defaultMaxInboundPeers,
+		BanDuration:           defaultBanDuration,
+		BanThreshold:          defaultBanThreshold,
+		EnableExternalBanlist: defaultEnableExternalBanlist,
+		ExternalBanlistURL:    defaultExternalBanlistURL,
+		RPCMaxClients:         DefaultMaxRPCClients,
+		RPCMaxWebsockets:      defaultMaxRPCWebsockets,
+		RPCMaxConcurrentReqs:  defaultMaxRPCConcurrentReqs,
+		AppDir:                defaultDataDir,
+		RPCKey:                defaultRPCKeyFile,
+		RPCCert:               defaultRPCCertFile,
+		BlockMaxMass:          defaultBlockMaxMass,
+		MaxOrphanTxs:          defaultMaxOrphanTransactions,
+		SigCacheMaxSize:       defaultSigCacheMaxSize,
+		MinRelayTxFee:         defaultMinRelayTxFee,
+		MaxUTXOCacheSize:      defaultMaxUTXOCacheSize,
+		ServiceOptions:        &ServiceOptions{},
+		ProtocolVersion:       defaultProtocolVersion,
 	}
 }
 
@@ -235,6 +242,7 @@ func LoadConfig() (*Config, error) {
 	appName := filepath.Base(os.Args[0])
 	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 	usageMessage := fmt.Sprintf("Use %s -h to show usage", appName)
+	funcName := "loadConfig"
 
 	// Show the version and exit if the version flag was specified.
 	if preCfg.ShowVersion {
@@ -275,8 +283,20 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
+	// --no-external-banlist always has priority over --external-banlist.
+	if cfg.DisableExternalBanlist {
+		cfg.EnableExternalBanlist = false
+	}
+
+	cfg.ExternalBanlistURL = strings.TrimSpace(cfg.ExternalBanlistURL)
+	if cfg.EnableExternalBanlist && cfg.ExternalBanlistURL == "" {
+		err := errors.Errorf("%s: external banlist is enabled but external-banlist-url is empty", funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, err
+	}
+
 	// Create the home directory if it doesn't already exist.
-	funcName := "loadConfig"
 	err = os.MkdirAll(DefaultAppDir, 0700)
 	if err != nil {
 		// Show a nicer error message if it's because a symlink is

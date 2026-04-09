@@ -8,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/blockrelay"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/ping"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/rejects"
+	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/strongnodes"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/transactionrelay"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	routerpkg "github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
@@ -31,6 +32,7 @@ func Register(m protocolManager, router *routerpkg.Router, errChan chan error, i
 	flows = append(flows, registerPingFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerTransactionRelayFlow(m, router, isStopping, errChan)...)
 	flows = append(flows, registerRejectsFlow(m, router, isStopping, errChan)...)
+	flows = append(flows, registerStrongNodeFlows(m, router, isStopping, errChan)...)
 
 	return flows
 }
@@ -203,6 +205,19 @@ func registerRejectsFlow(m protocolManager, router *routerpkg.Router, isStopping
 			[]appmessage.MessageCommand{appmessage.CmdReject}, isStopping, errChan,
 			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
 				return rejects.HandleRejects(m.Context(), incomingRoute, outgoingRoute)
+			},
+		),
+	}
+}
+
+func registerStrongNodeFlows(m protocolManager, router *routerpkg.Router, isStopping *uint32, errChan chan error) []*common.Flow {
+	return []*common.Flow{
+		m.RegisterFlow("HandleStrongNodeAnnouncements", router,
+			[]appmessage.MessageCommand{appmessage.CmdStrongNodeAnnouncement},
+			isStopping,
+			errChan,
+			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+				return strongnodes.HandleStrongNodeAnnouncements(m.Context(), incomingRoute, peer)
 			},
 		),
 	}

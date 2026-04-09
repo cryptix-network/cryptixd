@@ -24,6 +24,12 @@ import (
 
 const (
 	defaultMaxCoinbasePayloadLength = 204
+	// defaultPayloadMaxLengthConsensus is the consensus hard limit for non-coinbase payload transactions.
+	defaultPayloadMaxLengthConsensus = 8192
+	// defaultPayloadMaxLengthStandard is the policy limit for relayed payload transactions.
+	defaultPayloadMaxLengthStandard = 2048
+	// defaultPayloadWeightMultiplier scales payload byte mass in the payload subnetwork.
+	defaultPayloadWeightMultiplier = 4
 	// defaultMaxBlockMass is a bound on the mass of a block, larger values increase the bound d
 	// on the round trip time of a block, which affects the other parameters as described below
 	defaultMaxBlockMass = 500_000
