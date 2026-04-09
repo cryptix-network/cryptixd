@@ -302,7 +302,7 @@ var MainnetParams = Params{
 // TestnetParams defines the network parameters for the test Cryptix network.
 var TestnetParams = Params{
 	K:           defaultGHOSTDAGK,
-	Name:        "cryptix-testnet-10",
+	Name:        "cryptix-testnet",
 	Net:         appmessage.Testnet,
 	RPCPort:     "19202",
 	DefaultPort: "19102",

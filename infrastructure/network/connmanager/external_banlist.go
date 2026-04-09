@@ -381,7 +381,7 @@ func (c *ConnectionManager) ApplyStrongNodeAnnouncement(netConnection *netadapte
 	if message.SchemaVersion != strongNodeSchemaVersion {
 		return ""
 	}
-	if c.cfg == nil || message.Network != c.cfg.NetParams().Name {
+	if c.cfg == nil || !isCompatibleStrongNodeNetwork(c.cfg.NetParams().Name, message.Network) {
 		return ""
 	}
 	if len(message.Network) == 0 || len(message.Network) > strongNodeNetworkMaxLen {
@@ -524,6 +524,17 @@ func appendU64LE(buffer []byte, value uint64) []byte {
 	var bytes [8]byte
 	binary.LittleEndian.PutUint64(bytes[:], value)
 	return append(buffer, bytes[:]...)
+}
+
+func isCompatibleStrongNodeNetwork(localNetwork, remoteNetwork string) bool {
+	if localNetwork == remoteNetwork {
+		return true
+	}
+	return isTestnetNetworkAlias(localNetwork) && isTestnetNetworkAlias(remoteNetwork)
+}
+
+func isTestnetNetworkAlias(name string) bool {
+	return name == "cryptix-testnet" || strings.HasPrefix(name, "cryptix-testnet-")
 }
 
 func (c *ConnectionManager) isNetConnectionExternallyBanned(netConnection *netadapter.NetConnection) bool {

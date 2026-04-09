@@ -1,6 +1,8 @@
 package handshake
 
 import (
+	"strings"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
@@ -66,8 +68,8 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 		return nil, protocolerrors.New(false, "connected to self")
 	}
 
-	// Disconnect and ban peers from a different network
-	if msgVersion.Network != flow.Config().ActiveNetParams.Name {
+	// Disconnect and ban peers from a different network.
+	if !isCompatiblePeerNetwork(flow.Config().ActiveNetParams.Name, msgVersion.Network) {
 		return nil, protocolerrors.Errorf(true, "wrong network")
 	}
 
@@ -114,4 +116,15 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	flow.peer.Connection().SetID(msgVersion.ID)
 
 	return msgVersion.Address, nil
+}
+
+func isCompatiblePeerNetwork(localNetwork, remoteNetwork string) bool {
+	if localNetwork == remoteNetwork {
+		return true
+	}
+	return isTestnetNetworkAlias(localNetwork) && isTestnetNetworkAlias(remoteNetwork)
+}
+
+func isTestnetNetworkAlias(name string) bool {
+	return name == "cryptix-testnet" || strings.HasPrefix(name, "cryptix-testnet-")
 }
