@@ -10,8 +10,8 @@ const validCharacters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrs
 
 const (
 	appMajor uint = 0
-	appMinor uint = 12
-	appPatch uint = 19
+	appMinor uint = 16
+	appPatch uint = 0
 )
 
 // appBuild is defined as a variable so it can be overridden during the build
@@ -50,3 +50,4 @@ func checkAppBuild(appBuild string) {
 		}
 	}
 }
+

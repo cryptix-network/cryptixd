@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	externalBanlistFetchInterval   = 5 * time.Minute
+	externalBanlistFetchInterval   = 20 * time.Minute
 	externalBanlistRequestTimeout  = 10 * time.Second
 	externalBanlistMaxResponseSize = 2 * 1024 * 1024
 	externalBanlistMaxIPs          = 4096
