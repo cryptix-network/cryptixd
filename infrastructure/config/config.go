@@ -55,7 +55,7 @@ const (
 	defaultSigCacheMaxSize  = 100_000
 	sampleConfigFilename    = "sample-cryptixd.conf"
 	defaultMaxUTXOCacheSize = 5_000_000_000
-	defaultProtocolVersion  = 5
+	defaultProtocolVersion  = 6
 )
 
 var (

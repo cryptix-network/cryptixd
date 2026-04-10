@@ -17,12 +17,6 @@ var (
 	// connection detecting and disconnect logic since they intentionally
 	// do so for testing purposes.
 	allowSelfConnections bool
-
-	// minAcceptableProtocolVersion is the lowest protocol version that a
-	// connected peer may support.
-	minAcceptableProtocolVersion = uint32(5)
-
-	maxAcceptableProtocolVersion = uint32(5)
 )
 
 type receiveVersionFlow struct {
@@ -73,6 +67,11 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 		return nil, protocolerrors.Errorf(true, "wrong network")
 	}
 
+	minAcceptableProtocolVersion, err := minAcceptableProtocolVersionFor(flow.HandleHandshakeContext)
+	if err != nil {
+		return nil, err
+	}
+
 	// Notify and disconnect clients that have a protocol version that is
 	// too old.
 	//
@@ -102,8 +101,12 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 		return nil, protocolerrors.New(false, "incompatible subnetworks")
 	}
 
-	if flow.Config().ProtocolVersion > maxAcceptableProtocolVersion {
+	if flow.Config().ProtocolVersion > maxAcceptableProtocolVersion() {
 		return nil, errors.Errorf("%d is a non existing protocol version", flow.Config().ProtocolVersion)
+	}
+	if flow.Config().ProtocolVersion < minAcceptableProtocolVersion {
+		return nil, errors.Errorf("configured protocol version %d is obsolete (minimum required: %d)",
+			flow.Config().ProtocolVersion, minAcceptableProtocolVersion)
 	}
 
 	maxProtocolVersion := flow.Config().ProtocolVersion

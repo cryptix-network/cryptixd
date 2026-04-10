@@ -57,8 +57,16 @@ func (flow *sendVersionFlow) start() error {
 	// Version message.
 	localAddress := flow.AddressManager().BestLocalAddress(flow.peer.Connection().NetAddress())
 	subnetworkID := flow.Config().SubnetworkID
+	minAcceptableProtocolVersion, err := minAcceptableProtocolVersionFor(flow.HandleHandshakeContext)
+	if err != nil {
+		return err
+	}
 	if flow.Config().ProtocolVersion < minAcceptableProtocolVersion {
-		return errors.Errorf("configured protocol version %d is obsolete", flow.Config().ProtocolVersion)
+		return errors.Errorf("configured protocol version %d is obsolete (minimum required: %d)",
+			flow.Config().ProtocolVersion, minAcceptableProtocolVersion)
+	}
+	if flow.Config().ProtocolVersion > maxAcceptableProtocolVersion() {
+		return errors.Errorf("%d is a non existing protocol version", flow.Config().ProtocolVersion)
 	}
 	msg := appmessage.NewMsgVersion(localAddress, flow.NetAdapter().ID(),
 		flow.Config().ActiveNetParams.Name, subnetworkID, flow.Config().ProtocolVersion)
@@ -82,7 +90,7 @@ func (flow *sendVersionFlow) start() error {
 	// Advertise if inv messages for transactions are desired.
 	msg.DisableRelayTx = flow.Config().BlocksOnly
 
-	err := flow.outgoingRoute.Enqueue(msg)
+	err = flow.outgoingRoute.Enqueue(msg)
 	if err != nil {
 		return err
 	}

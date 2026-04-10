@@ -89,7 +89,8 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		var flows []*common.Flow
 		log.Infof("Registering p2p flows for peer %s for protocol version %d", peer, peer.ProtocolVersion())
 		switch peer.ProtocolVersion() {
-		case 5:
+		case 5, 6:
+			// Protocol version 6 keeps using the v5 flow set in this node implementation.
 			flows = v5.Register(m, router, errChan, &isStopping)
 		default:
 			panic(errors.Errorf("no way to handle protocol version %d", peer.ProtocolVersion()))
