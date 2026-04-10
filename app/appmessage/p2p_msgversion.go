@@ -58,6 +58,10 @@ type MsgVersion struct {
 
 	// The subnetwork of the generator of the version message. Should be nil in full nodes
 	SubnetworkID *externalapi.DomainSubnetworkID
+
+	// antiFraudHashes is a newest-first window of up to 3 anti-fraud root hashes (32 bytes each).
+	// Zero-hash entries are allowed only as trailing padding.
+	AntiFraudHashes [][32]byte
 }
 
 // HasService returns whether the specified service is supported by the peer

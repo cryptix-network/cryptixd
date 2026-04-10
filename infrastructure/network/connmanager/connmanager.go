@@ -46,6 +46,13 @@ type ConnectionManager struct {
 	externallyBannedIPs      map[string]struct{}
 	externallyBannedNodeIDs  map[string]struct{}
 	nextExternalBanlistFetch time.Time
+	externalSnapshotSeq      uint64
+	externalSnapshotRootHash [32]byte
+	hasExternalSnapshot      bool
+	antiFraudHashWindow      [3][32]byte
+	antiFraudCurrentSnapshot *appmessage.MsgAntiFraudSnapshotV1
+	antiFraudPeerFallback    bool
+	antiFraudPeerVotes       map[string]*externalBanlistSnapshot
 
 	resetLoopChan chan struct{}
 	loopTicker    *time.Ticker
@@ -63,6 +70,8 @@ func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *
 		activeIncoming:          map[string]struct{}{},
 		externallyBannedIPs:     map[string]struct{}{},
 		externallyBannedNodeIDs: map[string]struct{}{},
+		antiFraudPeerFallback:   true,
+		antiFraudPeerVotes:      map[string]*externalBanlistSnapshot{},
 		resetLoopChan:           make(chan struct{}),
 		loopTicker:              time.NewTicker(connectionsLoopInterval),
 	}
@@ -81,6 +90,8 @@ func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *
 			isPermanent: true,
 		}
 	}
+
+	c.tryLoadPersistedAntiFraudSnapshot()
 
 	return c, nil
 }

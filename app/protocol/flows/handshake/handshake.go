@@ -8,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/addressmanager"
+	"github.com/cryptix-network/cryptixd/infrastructure/network/connmanager"
 
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
@@ -24,6 +25,7 @@ type HandleHandshakeContext interface {
 	NetAdapter() *netadapter.NetAdapter
 	Domain() domain.Domain
 	AddressManager() *addressmanager.AddressManager
+	ConnectionManager() *connmanager.ConnectionManager
 	AddToPeers(peer *peerpkg.Peer) error
 	HandleError(err error, flowName string, isStopping *uint32, errChan chan<- error)
 }

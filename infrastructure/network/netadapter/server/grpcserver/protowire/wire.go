@@ -371,6 +371,20 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 			return nil, err
 		}
 		return payload, nil
+	case *appmessage.MsgRequestAntiFraudSnapshotV1:
+		payload := new(CryptixdMessage_RequestAntiFraudSnapshotV1)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgAntiFraudSnapshotV1:
+		payload := new(CryptixdMessage_AntiFraudSnapshotV1)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
 	default:
 		return nil, nil
 	}

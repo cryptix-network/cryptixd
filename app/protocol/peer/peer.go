@@ -23,6 +23,8 @@ type Peer struct {
 	protocolVersion          uint32 // negotiated protocol version
 	disableRelayTx           bool
 	subnetworkID             *externalapi.DomainSubnetworkID
+	antiFraudHashes          [][32]byte
+	antiFraudRestricted      bool
 
 	timeOffset        time.Duration
 	connectionStarted time.Time
@@ -107,8 +109,24 @@ func (p *Peer) UpdateFieldsFromMsgVersion(msg *appmessage.MsgVersion, maxProtoco
 
 	p.disableRelayTx = msg.DisableRelayTx
 	p.subnetworkID = msg.SubnetworkID
+	p.antiFraudHashes = append(p.antiFraudHashes[:0], msg.AntiFraudHashes...)
 
 	p.timeOffset = mstime.Since(msg.Timestamp)
+}
+
+// AntiFraudHashes returns the peer anti-fraud hash window advertised in Version.
+func (p *Peer) AntiFraudHashes() [][32]byte {
+	return append([][32]byte(nil), p.antiFraudHashes...)
+}
+
+// SetAntiFraudRestricted stores whether this peer is currently restricted by anti-fraud compatibility.
+func (p *Peer) SetAntiFraudRestricted(restricted bool) {
+	p.antiFraudRestricted = restricted
+}
+
+// AntiFraudRestricted returns whether this peer is currently in restricted anti-fraud mode.
+func (p *Peer) AntiFraudRestricted() bool {
+	return p.antiFraudRestricted
 }
 
 // SetPingPending sets the ping state of the peer to 'pending'

@@ -88,10 +88,27 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 
 		var flows []*common.Flow
 		log.Infof("Registering p2p flows for peer %s for protocol version %d", peer, peer.ProtocolVersion())
+		enforceAntiFraud := false
+		virtualDAAScore, err := m.context.Domain().Consensus().GetVirtualDAAScore()
+		if err != nil {
+			log.Warnf("Failed reading virtual DAA score for anti-fraud mode check: %s", err)
+		} else if virtualDAAScore >= m.context.Config().NetParams().PayloadHfActivationDAAScore {
+			enforceAntiFraud = true
+		}
+		antiFraudMode := connmanager.AntiFraudModeFull
+		if enforceAntiFraud {
+			antiFraudMode = m.context.ConnectionManager().AntiFraudModeForPeerHashes(peer.AntiFraudHashes())
+			peer.SetAntiFraudRestricted(antiFraudMode == connmanager.AntiFraudModeRestricted)
+		}
 		switch peer.ProtocolVersion() {
 		case 5, 6:
 			// Protocol version 6 keeps using the v5 flow set in this node implementation.
-			flows = v5.Register(m, router, errChan, &isStopping)
+			if enforceAntiFraud && antiFraudMode == connmanager.AntiFraudModeRestricted {
+				log.Infof("Peer %s has no valid anti-fraud hash overlap and will run in RESTRICTED_AF mode", peer)
+				flows = v5.RegisterRestricted(m, router, errChan, &isStopping)
+			} else {
+				flows = v5.Register(m, router, errChan, &isStopping)
+			}
 		default:
 			panic(errors.Errorf("no way to handle protocol version %d", peer.ProtocolVersion()))
 		}

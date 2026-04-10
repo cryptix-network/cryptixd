@@ -52,6 +52,8 @@ message CryptixdMessage {
     RequestAnticoneMessage requestAnticone = 55;
     RequestNextPruningPointAndItsAnticoneBlocksMessage requestNextPruningPointAndItsAnticoneBlocks = 56;
     StrongNodeAnnouncementMessage strongNodeAnnouncement = 60;
+    RequestAntiFraudSnapshotV1Message requestAntiFraudSnapshotV1 = 61;
+    AntiFraudSnapshotV1Message antiFraudSnapshotV1 = 62;
 
     GetCurrentNetworkRequestMessage getCurrentNetworkRequest = 1001;
     GetCurrentNetworkResponseMessage getCurrentNetworkResponse = 1002;

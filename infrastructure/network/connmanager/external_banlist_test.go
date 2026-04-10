@@ -2,6 +2,7 @@ package connmanager
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -22,8 +23,8 @@ func TestExternalBanlistCandidateURLs(t *testing.T) {
 	}{
 		{
 			name:     "https with http fallback",
-			rawURL:   "https://antifraud.cryptix-network.org/api/confirmed-cases/iplist",
-			expected: []string{"https://antifraud.cryptix-network.org/api/confirmed-cases/iplist", "http://antifraud.cryptix-network.org/api/confirmed-cases/iplist"},
+			rawURL:   "https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot",
+			expected: []string{"https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot", "http://antifraud.cryptix-network.org/api/v1/antifraud/snapshot"},
 		},
 		{
 			name:     "http only",
@@ -32,8 +33,8 @@ func TestExternalBanlistCandidateURLs(t *testing.T) {
 		},
 		{
 			name:     "without scheme",
-			rawURL:   "antifraud.cryptix-network.org/api/confirmed-cases/iplist",
-			expected: []string{"https://antifraud.cryptix-network.org/api/confirmed-cases/iplist", "http://antifraud.cryptix-network.org/api/confirmed-cases/iplist"},
+			rawURL:   "antifraud.cryptix-network.org/api/v1/antifraud/snapshot",
+			expected: []string{"https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot", "http://antifraud.cryptix-network.org/api/v1/antifraud/snapshot"},
 		},
 	}
 
@@ -50,46 +51,75 @@ func TestExternalBanlistCandidateURLs(t *testing.T) {
 	}
 }
 
-func TestDecodeExternalBanlistPayload(t *testing.T) {
-	rawJSON := []byte(`{
-		"status": "success",
-		"ips": ["127.0.0.1", "invalid-ip", "::ffff:127.0.0.1", "2001:db8::1", "127.0.0.1"],
-		"node_ids": [
-			"00112233445566778899aabbccddeeff",
-			"00112233445566778899AABBCCDDEEFF",
-			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
-			"this-is-not-a-node-id"
-		]
-	}`)
+func buildSignedSnapshotPayload(t *testing.T) []byte {
+	t.Helper()
 
-	ips, nodeIDs, err := decodeExternalBanlistPayload(rawJSON)
+	document := map[string]interface{}{
+		"status":                "success",
+		"schema_version":        antiFraudSchemaVersion,
+		"network":               0,
+		"snapshot_seq":          uint64(2),
+		"generated_at_ms":       uint64(1_700_000_000_100),
+		"signing_key_id":        0,
+		"banned_ips_count":      1,
+		"banned_ips":            []string{"127.0.0.1"},
+		"banned_node_ids_count": 1,
+		"banned_node_ids":       []string{"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
+		"signature":             "cbab47b2818ea9f780b6c99467c7659504cb7a6f7f896277896d4e2ce291296af547b27c9c03fda0825b81cb16039503da1b100dac6942f2a0d654422905cdab",
+		"root_hash":             "52e4851244a37828f957d69b7de3f0ee07bc60f913dc0987f612f77411a070c0",
+	}
+	rawJSON, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %s", err)
+	}
+	return rawJSON
+}
+
+func TestDecodeExternalBanlistPayload(t *testing.T) {
+	rawJSON := buildSignedSnapshotPayload(t)
+
+	snapshot, err := decodeExternalBanlistPayload(rawJSON, 0)
 	if err != nil {
 		t.Fatalf("decodeExternalBanlistPayload unexpectedly failed: %s", err)
 	}
 
-	if len(ips) != 2 {
-		t.Fatalf("unexpected IP count: got %d expected 2", len(ips))
+	if snapshot.SnapshotSeq != 2 {
+		t.Fatalf("unexpected snapshot seq: got %d expected 2", snapshot.SnapshotSeq)
 	}
-	if _, ok := ips["127.0.0.1"]; !ok {
+	if len(snapshot.IPs) != 1 {
+		t.Fatalf("unexpected IP count: got %d expected 1", len(snapshot.IPs))
+	}
+	if _, ok := snapshot.IPs["127.0.0.1"]; !ok {
 		t.Fatalf("expected IPv4 loopback IP to be present")
 	}
-	if _, ok := ips["2001:db8::1"]; !ok {
-		t.Fatalf("expected IPv6 IP to be present")
+	if len(snapshot.NodeIDs) != 1 {
+		t.Fatalf("unexpected node ID count: got %d expected 1", len(snapshot.NodeIDs))
+	}
+	if _, ok := snapshot.NodeIDs["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]; !ok {
+		t.Fatalf("expected node ID to be present")
+	}
+}
+
+func TestDecodeExternalBanlistPayloadRejectsBadSignature(t *testing.T) {
+	rawJSON := buildSignedSnapshotPayload(t)
+	var payload map[string]interface{}
+	if err := json.Unmarshal(rawJSON, &payload); err != nil {
+		t.Fatalf("json.Unmarshal failed: %s", err)
+	}
+	payload["signature"] = "00" + payload["signature"].(string)[2:]
+	brokenJSON, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %s", err)
 	}
 
-	if len(nodeIDs) != 2 {
-		t.Fatalf("unexpected node ID count: got %d expected 2", len(nodeIDs))
-	}
-	if _, ok := nodeIDs["00112233445566778899aabbccddeeff"]; !ok {
-		t.Fatalf("expected 32-char node ID to be present")
-	}
-	if _, ok := nodeIDs["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]; !ok {
-		t.Fatalf("expected 64-char node ID to be present")
+	_, err = decodeExternalBanlistPayload(brokenJSON, 0)
+	if err == nil {
+		t.Fatalf("expected invalid signature to fail")
 	}
 }
 
 func TestDecodeExternalBanlistPayloadStatusError(t *testing.T) {
-	_, _, err := decodeExternalBanlistPayload([]byte(`{"status":"error","ips":["127.0.0.1"]}`))
+	_, err := decodeExternalBanlistPayload([]byte(`{"status":"error","ips":["127.0.0.1"]}`), 0)
 	if err == nil {
 		t.Fatalf("expected non-success status to return an error")
 	}

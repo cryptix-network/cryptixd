@@ -38,7 +38,7 @@ const (
 	defaultBanDuration           = time.Hour * 24
 	defaultBanThreshold          = 100
 	defaultEnableExternalBanlist = true
-	defaultExternalBanlistURL    = "https://antifraud.cryptix-network.org/api/confirmed-cases/iplist"
+	defaultExternalBanlistURL    = "https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot"
 	//DefaultConnectTimeout is the default connection timeout when dialing
 	DefaultConnectTimeout = time.Second * 30
 	//DefaultMaxRPCClients is the default max number of RPC clients

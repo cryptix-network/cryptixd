@@ -1428,6 +1428,7 @@ type VersionMessage struct {
 	DisableRelayTx  bool                   `protobuf:"varint,8,opt,name=disableRelayTx,proto3" json:"disableRelayTx,omitempty"`
 	SubnetworkId    *SubnetworkId          `protobuf:"bytes,9,opt,name=subnetworkId,proto3" json:"subnetworkId,omitempty"`
 	Network         string                 `protobuf:"bytes,10,opt,name=network,proto3" json:"network,omitempty"`
+	AntiFraudHashes [][]byte               `protobuf:"bytes,11,rep,name=antiFraudHashes,proto3" json:"antiFraudHashes,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1525,6 +1526,149 @@ func (x *VersionMessage) GetNetwork() string {
 	return ""
 }
 
+func (x *VersionMessage) GetAntiFraudHashes() [][]byte {
+	if x != nil {
+		return x.AntiFraudHashes
+	}
+	return nil
+}
+
+type RequestAntiFraudSnapshotV1Message struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestAntiFraudSnapshotV1Message) Reset() {
+	*x = RequestAntiFraudSnapshotV1Message{}
+	mi := &file_p2p_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestAntiFraudSnapshotV1Message) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestAntiFraudSnapshotV1Message) ProtoMessage() {}
+
+func (x *RequestAntiFraudSnapshotV1Message) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestAntiFraudSnapshotV1Message.ProtoReflect.Descriptor instead.
+func (*RequestAntiFraudSnapshotV1Message) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{28}
+}
+
+type AntiFraudSnapshotV1Message struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
+	Network       uint32                 `protobuf:"varint,2,opt,name=network,proto3" json:"network,omitempty"`
+	SnapshotSeq   uint64                 `protobuf:"varint,3,opt,name=snapshotSeq,proto3" json:"snapshotSeq,omitempty"`
+	GeneratedAtMs uint64                 `protobuf:"varint,4,opt,name=generatedAtMs,proto3" json:"generatedAtMs,omitempty"`
+	SigningKeyId  uint32                 `protobuf:"varint,5,opt,name=signingKeyId,proto3" json:"signingKeyId,omitempty"`
+	BannedIps     [][]byte               `protobuf:"bytes,6,rep,name=bannedIps,proto3" json:"bannedIps,omitempty"`
+	BannedNodeIds [][]byte               `protobuf:"bytes,7,rep,name=bannedNodeIds,proto3" json:"bannedNodeIds,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,8,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AntiFraudSnapshotV1Message) Reset() {
+	*x = AntiFraudSnapshotV1Message{}
+	mi := &file_p2p_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AntiFraudSnapshotV1Message) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AntiFraudSnapshotV1Message) ProtoMessage() {}
+
+func (x *AntiFraudSnapshotV1Message) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AntiFraudSnapshotV1Message.ProtoReflect.Descriptor instead.
+func (*AntiFraudSnapshotV1Message) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *AntiFraudSnapshotV1Message) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *AntiFraudSnapshotV1Message) GetNetwork() uint32 {
+	if x != nil {
+		return x.Network
+	}
+	return 0
+}
+
+func (x *AntiFraudSnapshotV1Message) GetSnapshotSeq() uint64 {
+	if x != nil {
+		return x.SnapshotSeq
+	}
+	return 0
+}
+
+func (x *AntiFraudSnapshotV1Message) GetGeneratedAtMs() uint64 {
+	if x != nil {
+		return x.GeneratedAtMs
+	}
+	return 0
+}
+
+func (x *AntiFraudSnapshotV1Message) GetSigningKeyId() uint32 {
+	if x != nil {
+		return x.SigningKeyId
+	}
+	return 0
+}
+
+func (x *AntiFraudSnapshotV1Message) GetBannedIps() [][]byte {
+	if x != nil {
+		return x.BannedIps
+	}
+	return nil
+}
+
+func (x *AntiFraudSnapshotV1Message) GetBannedNodeIds() [][]byte {
+	if x != nil {
+		return x.BannedNodeIds
+	}
+	return nil
+}
+
+func (x *AntiFraudSnapshotV1Message) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
 type RejectMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Reason        string                 `protobuf:"bytes,1,opt,name=reason,proto3" json:"reason,omitempty"`
@@ -1534,7 +1678,7 @@ type RejectMessage struct {
 
 func (x *RejectMessage) Reset() {
 	*x = RejectMessage{}
-	mi := &file_p2p_proto_msgTypes[28]
+	mi := &file_p2p_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1546,7 +1690,7 @@ func (x *RejectMessage) String() string {
 func (*RejectMessage) ProtoMessage() {}
 
 func (x *RejectMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[28]
+	mi := &file_p2p_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1559,7 +1703,7 @@ func (x *RejectMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RejectMessage.ProtoReflect.Descriptor instead.
 func (*RejectMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{28}
+	return file_p2p_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *RejectMessage) GetReason() string {
@@ -1578,7 +1722,7 @@ type RequestPruningPointUTXOSetMessage struct {
 
 func (x *RequestPruningPointUTXOSetMessage) Reset() {
 	*x = RequestPruningPointUTXOSetMessage{}
-	mi := &file_p2p_proto_msgTypes[29]
+	mi := &file_p2p_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1590,7 +1734,7 @@ func (x *RequestPruningPointUTXOSetMessage) String() string {
 func (*RequestPruningPointUTXOSetMessage) ProtoMessage() {}
 
 func (x *RequestPruningPointUTXOSetMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[29]
+	mi := &file_p2p_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1603,7 +1747,7 @@ func (x *RequestPruningPointUTXOSetMessage) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use RequestPruningPointUTXOSetMessage.ProtoReflect.Descriptor instead.
 func (*RequestPruningPointUTXOSetMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{29}
+	return file_p2p_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *RequestPruningPointUTXOSetMessage) GetPruningPointHash() *Hash {
@@ -1622,7 +1766,7 @@ type PruningPointUtxoSetChunkMessage struct {
 
 func (x *PruningPointUtxoSetChunkMessage) Reset() {
 	*x = PruningPointUtxoSetChunkMessage{}
-	mi := &file_p2p_proto_msgTypes[30]
+	mi := &file_p2p_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1634,7 +1778,7 @@ func (x *PruningPointUtxoSetChunkMessage) String() string {
 func (*PruningPointUtxoSetChunkMessage) ProtoMessage() {}
 
 func (x *PruningPointUtxoSetChunkMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[30]
+	mi := &file_p2p_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1647,7 +1791,7 @@ func (x *PruningPointUtxoSetChunkMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PruningPointUtxoSetChunkMessage.ProtoReflect.Descriptor instead.
 func (*PruningPointUtxoSetChunkMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{30}
+	return file_p2p_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *PruningPointUtxoSetChunkMessage) GetOutpointAndUtxoEntryPairs() []*OutpointAndUtxoEntryPair {
@@ -1667,7 +1811,7 @@ type OutpointAndUtxoEntryPair struct {
 
 func (x *OutpointAndUtxoEntryPair) Reset() {
 	*x = OutpointAndUtxoEntryPair{}
-	mi := &file_p2p_proto_msgTypes[31]
+	mi := &file_p2p_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1679,7 +1823,7 @@ func (x *OutpointAndUtxoEntryPair) String() string {
 func (*OutpointAndUtxoEntryPair) ProtoMessage() {}
 
 func (x *OutpointAndUtxoEntryPair) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[31]
+	mi := &file_p2p_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1692,7 +1836,7 @@ func (x *OutpointAndUtxoEntryPair) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OutpointAndUtxoEntryPair.ProtoReflect.Descriptor instead.
 func (*OutpointAndUtxoEntryPair) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{31}
+	return file_p2p_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *OutpointAndUtxoEntryPair) GetOutpoint() *Outpoint {
@@ -1721,7 +1865,7 @@ type UtxoEntry struct {
 
 func (x *UtxoEntry) Reset() {
 	*x = UtxoEntry{}
-	mi := &file_p2p_proto_msgTypes[32]
+	mi := &file_p2p_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1733,7 +1877,7 @@ func (x *UtxoEntry) String() string {
 func (*UtxoEntry) ProtoMessage() {}
 
 func (x *UtxoEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[32]
+	mi := &file_p2p_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1746,7 +1890,7 @@ func (x *UtxoEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UtxoEntry.ProtoReflect.Descriptor instead.
 func (*UtxoEntry) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{32}
+	return file_p2p_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *UtxoEntry) GetAmount() uint64 {
@@ -1785,7 +1929,7 @@ type RequestNextPruningPointUtxoSetChunkMessage struct {
 
 func (x *RequestNextPruningPointUtxoSetChunkMessage) Reset() {
 	*x = RequestNextPruningPointUtxoSetChunkMessage{}
-	mi := &file_p2p_proto_msgTypes[33]
+	mi := &file_p2p_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1797,7 +1941,7 @@ func (x *RequestNextPruningPointUtxoSetChunkMessage) String() string {
 func (*RequestNextPruningPointUtxoSetChunkMessage) ProtoMessage() {}
 
 func (x *RequestNextPruningPointUtxoSetChunkMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[33]
+	mi := &file_p2p_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1810,7 +1954,7 @@ func (x *RequestNextPruningPointUtxoSetChunkMessage) ProtoReflect() protoreflect
 
 // Deprecated: Use RequestNextPruningPointUtxoSetChunkMessage.ProtoReflect.Descriptor instead.
 func (*RequestNextPruningPointUtxoSetChunkMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{33}
+	return file_p2p_proto_rawDescGZIP(), []int{35}
 }
 
 type DonePruningPointUtxoSetChunksMessage struct {
@@ -1821,7 +1965,7 @@ type DonePruningPointUtxoSetChunksMessage struct {
 
 func (x *DonePruningPointUtxoSetChunksMessage) Reset() {
 	*x = DonePruningPointUtxoSetChunksMessage{}
-	mi := &file_p2p_proto_msgTypes[34]
+	mi := &file_p2p_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1833,7 +1977,7 @@ func (x *DonePruningPointUtxoSetChunksMessage) String() string {
 func (*DonePruningPointUtxoSetChunksMessage) ProtoMessage() {}
 
 func (x *DonePruningPointUtxoSetChunksMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[34]
+	mi := &file_p2p_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1846,7 +1990,7 @@ func (x *DonePruningPointUtxoSetChunksMessage) ProtoReflect() protoreflect.Messa
 
 // Deprecated: Use DonePruningPointUtxoSetChunksMessage.ProtoReflect.Descriptor instead.
 func (*DonePruningPointUtxoSetChunksMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{34}
+	return file_p2p_proto_rawDescGZIP(), []int{36}
 }
 
 type RequestIBDBlocksMessage struct {
@@ -1858,7 +2002,7 @@ type RequestIBDBlocksMessage struct {
 
 func (x *RequestIBDBlocksMessage) Reset() {
 	*x = RequestIBDBlocksMessage{}
-	mi := &file_p2p_proto_msgTypes[35]
+	mi := &file_p2p_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1870,7 +2014,7 @@ func (x *RequestIBDBlocksMessage) String() string {
 func (*RequestIBDBlocksMessage) ProtoMessage() {}
 
 func (x *RequestIBDBlocksMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[35]
+	mi := &file_p2p_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1883,7 +2027,7 @@ func (x *RequestIBDBlocksMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestIBDBlocksMessage.ProtoReflect.Descriptor instead.
 func (*RequestIBDBlocksMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{35}
+	return file_p2p_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *RequestIBDBlocksMessage) GetHashes() []*Hash {
@@ -1901,7 +2045,7 @@ type UnexpectedPruningPointMessage struct {
 
 func (x *UnexpectedPruningPointMessage) Reset() {
 	*x = UnexpectedPruningPointMessage{}
-	mi := &file_p2p_proto_msgTypes[36]
+	mi := &file_p2p_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1913,7 +2057,7 @@ func (x *UnexpectedPruningPointMessage) String() string {
 func (*UnexpectedPruningPointMessage) ProtoMessage() {}
 
 func (x *UnexpectedPruningPointMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[36]
+	mi := &file_p2p_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1926,7 +2070,7 @@ func (x *UnexpectedPruningPointMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UnexpectedPruningPointMessage.ProtoReflect.Descriptor instead.
 func (*UnexpectedPruningPointMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{36}
+	return file_p2p_proto_rawDescGZIP(), []int{38}
 }
 
 type IbdBlockLocatorMessage struct {
@@ -1939,7 +2083,7 @@ type IbdBlockLocatorMessage struct {
 
 func (x *IbdBlockLocatorMessage) Reset() {
 	*x = IbdBlockLocatorMessage{}
-	mi := &file_p2p_proto_msgTypes[37]
+	mi := &file_p2p_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1951,7 +2095,7 @@ func (x *IbdBlockLocatorMessage) String() string {
 func (*IbdBlockLocatorMessage) ProtoMessage() {}
 
 func (x *IbdBlockLocatorMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[37]
+	mi := &file_p2p_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1964,7 +2108,7 @@ func (x *IbdBlockLocatorMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IbdBlockLocatorMessage.ProtoReflect.Descriptor instead.
 func (*IbdBlockLocatorMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{37}
+	return file_p2p_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *IbdBlockLocatorMessage) GetTargetHash() *Hash {
@@ -1991,7 +2135,7 @@ type RequestIBDChainBlockLocatorMessage struct {
 
 func (x *RequestIBDChainBlockLocatorMessage) Reset() {
 	*x = RequestIBDChainBlockLocatorMessage{}
-	mi := &file_p2p_proto_msgTypes[38]
+	mi := &file_p2p_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2003,7 +2147,7 @@ func (x *RequestIBDChainBlockLocatorMessage) String() string {
 func (*RequestIBDChainBlockLocatorMessage) ProtoMessage() {}
 
 func (x *RequestIBDChainBlockLocatorMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[38]
+	mi := &file_p2p_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2016,7 +2160,7 @@ func (x *RequestIBDChainBlockLocatorMessage) ProtoReflect() protoreflect.Message
 
 // Deprecated: Use RequestIBDChainBlockLocatorMessage.ProtoReflect.Descriptor instead.
 func (*RequestIBDChainBlockLocatorMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{38}
+	return file_p2p_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *RequestIBDChainBlockLocatorMessage) GetLowHash() *Hash {
@@ -2042,7 +2186,7 @@ type IbdChainBlockLocatorMessage struct {
 
 func (x *IbdChainBlockLocatorMessage) Reset() {
 	*x = IbdChainBlockLocatorMessage{}
-	mi := &file_p2p_proto_msgTypes[39]
+	mi := &file_p2p_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2054,7 +2198,7 @@ func (x *IbdChainBlockLocatorMessage) String() string {
 func (*IbdChainBlockLocatorMessage) ProtoMessage() {}
 
 func (x *IbdChainBlockLocatorMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[39]
+	mi := &file_p2p_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2067,7 +2211,7 @@ func (x *IbdChainBlockLocatorMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IbdChainBlockLocatorMessage.ProtoReflect.Descriptor instead.
 func (*IbdChainBlockLocatorMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{39}
+	return file_p2p_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *IbdChainBlockLocatorMessage) GetBlockLocatorHashes() []*Hash {
@@ -2087,7 +2231,7 @@ type RequestAnticoneMessage struct {
 
 func (x *RequestAnticoneMessage) Reset() {
 	*x = RequestAnticoneMessage{}
-	mi := &file_p2p_proto_msgTypes[40]
+	mi := &file_p2p_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2099,7 +2243,7 @@ func (x *RequestAnticoneMessage) String() string {
 func (*RequestAnticoneMessage) ProtoMessage() {}
 
 func (x *RequestAnticoneMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[40]
+	mi := &file_p2p_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2112,7 +2256,7 @@ func (x *RequestAnticoneMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestAnticoneMessage.ProtoReflect.Descriptor instead.
 func (*RequestAnticoneMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{40}
+	return file_p2p_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *RequestAnticoneMessage) GetBlockHash() *Hash {
@@ -2138,7 +2282,7 @@ type IbdBlockLocatorHighestHashMessage struct {
 
 func (x *IbdBlockLocatorHighestHashMessage) Reset() {
 	*x = IbdBlockLocatorHighestHashMessage{}
-	mi := &file_p2p_proto_msgTypes[41]
+	mi := &file_p2p_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2150,7 +2294,7 @@ func (x *IbdBlockLocatorHighestHashMessage) String() string {
 func (*IbdBlockLocatorHighestHashMessage) ProtoMessage() {}
 
 func (x *IbdBlockLocatorHighestHashMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[41]
+	mi := &file_p2p_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2163,7 +2307,7 @@ func (x *IbdBlockLocatorHighestHashMessage) ProtoReflect() protoreflect.Message 
 
 // Deprecated: Use IbdBlockLocatorHighestHashMessage.ProtoReflect.Descriptor instead.
 func (*IbdBlockLocatorHighestHashMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{41}
+	return file_p2p_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *IbdBlockLocatorHighestHashMessage) GetHighestHash() *Hash {
@@ -2181,7 +2325,7 @@ type IbdBlockLocatorHighestHashNotFoundMessage struct {
 
 func (x *IbdBlockLocatorHighestHashNotFoundMessage) Reset() {
 	*x = IbdBlockLocatorHighestHashNotFoundMessage{}
-	mi := &file_p2p_proto_msgTypes[42]
+	mi := &file_p2p_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2193,7 +2337,7 @@ func (x *IbdBlockLocatorHighestHashNotFoundMessage) String() string {
 func (*IbdBlockLocatorHighestHashNotFoundMessage) ProtoMessage() {}
 
 func (x *IbdBlockLocatorHighestHashNotFoundMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[42]
+	mi := &file_p2p_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2206,7 +2350,7 @@ func (x *IbdBlockLocatorHighestHashNotFoundMessage) ProtoReflect() protoreflect.
 
 // Deprecated: Use IbdBlockLocatorHighestHashNotFoundMessage.ProtoReflect.Descriptor instead.
 func (*IbdBlockLocatorHighestHashNotFoundMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{42}
+	return file_p2p_proto_rawDescGZIP(), []int{44}
 }
 
 type BlockHeadersMessage struct {
@@ -2218,7 +2362,7 @@ type BlockHeadersMessage struct {
 
 func (x *BlockHeadersMessage) Reset() {
 	*x = BlockHeadersMessage{}
-	mi := &file_p2p_proto_msgTypes[43]
+	mi := &file_p2p_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2230,7 +2374,7 @@ func (x *BlockHeadersMessage) String() string {
 func (*BlockHeadersMessage) ProtoMessage() {}
 
 func (x *BlockHeadersMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[43]
+	mi := &file_p2p_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2243,7 +2387,7 @@ func (x *BlockHeadersMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockHeadersMessage.ProtoReflect.Descriptor instead.
 func (*BlockHeadersMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{43}
+	return file_p2p_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *BlockHeadersMessage) GetBlockHeaders() []*BlockHeader {
@@ -2261,7 +2405,7 @@ type RequestPruningPointAndItsAnticoneMessage struct {
 
 func (x *RequestPruningPointAndItsAnticoneMessage) Reset() {
 	*x = RequestPruningPointAndItsAnticoneMessage{}
-	mi := &file_p2p_proto_msgTypes[44]
+	mi := &file_p2p_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2273,7 +2417,7 @@ func (x *RequestPruningPointAndItsAnticoneMessage) String() string {
 func (*RequestPruningPointAndItsAnticoneMessage) ProtoMessage() {}
 
 func (x *RequestPruningPointAndItsAnticoneMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[44]
+	mi := &file_p2p_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2286,7 +2430,7 @@ func (x *RequestPruningPointAndItsAnticoneMessage) ProtoReflect() protoreflect.M
 
 // Deprecated: Use RequestPruningPointAndItsAnticoneMessage.ProtoReflect.Descriptor instead.
 func (*RequestPruningPointAndItsAnticoneMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{44}
+	return file_p2p_proto_rawDescGZIP(), []int{46}
 }
 
 type RequestNextPruningPointAndItsAnticoneBlocksMessage struct {
@@ -2297,7 +2441,7 @@ type RequestNextPruningPointAndItsAnticoneBlocksMessage struct {
 
 func (x *RequestNextPruningPointAndItsAnticoneBlocksMessage) Reset() {
 	*x = RequestNextPruningPointAndItsAnticoneBlocksMessage{}
-	mi := &file_p2p_proto_msgTypes[45]
+	mi := &file_p2p_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2309,7 +2453,7 @@ func (x *RequestNextPruningPointAndItsAnticoneBlocksMessage) String() string {
 func (*RequestNextPruningPointAndItsAnticoneBlocksMessage) ProtoMessage() {}
 
 func (x *RequestNextPruningPointAndItsAnticoneBlocksMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[45]
+	mi := &file_p2p_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2322,7 +2466,7 @@ func (x *RequestNextPruningPointAndItsAnticoneBlocksMessage) ProtoReflect() prot
 
 // Deprecated: Use RequestNextPruningPointAndItsAnticoneBlocksMessage.ProtoReflect.Descriptor instead.
 func (*RequestNextPruningPointAndItsAnticoneBlocksMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{45}
+	return file_p2p_proto_rawDescGZIP(), []int{47}
 }
 
 type BlockWithTrustedDataMessage struct {
@@ -2337,7 +2481,7 @@ type BlockWithTrustedDataMessage struct {
 
 func (x *BlockWithTrustedDataMessage) Reset() {
 	*x = BlockWithTrustedDataMessage{}
-	mi := &file_p2p_proto_msgTypes[46]
+	mi := &file_p2p_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2349,7 +2493,7 @@ func (x *BlockWithTrustedDataMessage) String() string {
 func (*BlockWithTrustedDataMessage) ProtoMessage() {}
 
 func (x *BlockWithTrustedDataMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[46]
+	mi := &file_p2p_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2362,7 +2506,7 @@ func (x *BlockWithTrustedDataMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockWithTrustedDataMessage.ProtoReflect.Descriptor instead.
 func (*BlockWithTrustedDataMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{46}
+	return file_p2p_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *BlockWithTrustedDataMessage) GetBlock() *BlockMessage {
@@ -2403,7 +2547,7 @@ type DaaBlock struct {
 
 func (x *DaaBlock) Reset() {
 	*x = DaaBlock{}
-	mi := &file_p2p_proto_msgTypes[47]
+	mi := &file_p2p_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2415,7 +2559,7 @@ func (x *DaaBlock) String() string {
 func (*DaaBlock) ProtoMessage() {}
 
 func (x *DaaBlock) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[47]
+	mi := &file_p2p_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2428,7 +2572,7 @@ func (x *DaaBlock) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DaaBlock.ProtoReflect.Descriptor instead.
 func (*DaaBlock) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{47}
+	return file_p2p_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *DaaBlock) GetBlock() *BlockMessage {
@@ -2455,7 +2599,7 @@ type DaaBlockV4 struct {
 
 func (x *DaaBlockV4) Reset() {
 	*x = DaaBlockV4{}
-	mi := &file_p2p_proto_msgTypes[48]
+	mi := &file_p2p_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2467,7 +2611,7 @@ func (x *DaaBlockV4) String() string {
 func (*DaaBlockV4) ProtoMessage() {}
 
 func (x *DaaBlockV4) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[48]
+	mi := &file_p2p_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2480,7 +2624,7 @@ func (x *DaaBlockV4) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DaaBlockV4.ProtoReflect.Descriptor instead.
 func (*DaaBlockV4) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{48}
+	return file_p2p_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *DaaBlockV4) GetHeader() *BlockHeader {
@@ -2507,7 +2651,7 @@ type BlockGhostdagDataHashPair struct {
 
 func (x *BlockGhostdagDataHashPair) Reset() {
 	*x = BlockGhostdagDataHashPair{}
-	mi := &file_p2p_proto_msgTypes[49]
+	mi := &file_p2p_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2519,7 +2663,7 @@ func (x *BlockGhostdagDataHashPair) String() string {
 func (*BlockGhostdagDataHashPair) ProtoMessage() {}
 
 func (x *BlockGhostdagDataHashPair) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[49]
+	mi := &file_p2p_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2532,7 +2676,7 @@ func (x *BlockGhostdagDataHashPair) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockGhostdagDataHashPair.ProtoReflect.Descriptor instead.
 func (*BlockGhostdagDataHashPair) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{49}
+	return file_p2p_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *BlockGhostdagDataHashPair) GetHash() *Hash {
@@ -2563,7 +2707,7 @@ type GhostdagData struct {
 
 func (x *GhostdagData) Reset() {
 	*x = GhostdagData{}
-	mi := &file_p2p_proto_msgTypes[50]
+	mi := &file_p2p_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2575,7 +2719,7 @@ func (x *GhostdagData) String() string {
 func (*GhostdagData) ProtoMessage() {}
 
 func (x *GhostdagData) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[50]
+	mi := &file_p2p_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2588,7 +2732,7 @@ func (x *GhostdagData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GhostdagData.ProtoReflect.Descriptor instead.
 func (*GhostdagData) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{50}
+	return file_p2p_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *GhostdagData) GetBlueScore() uint64 {
@@ -2643,7 +2787,7 @@ type BluesAnticoneSizes struct {
 
 func (x *BluesAnticoneSizes) Reset() {
 	*x = BluesAnticoneSizes{}
-	mi := &file_p2p_proto_msgTypes[51]
+	mi := &file_p2p_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2655,7 +2799,7 @@ func (x *BluesAnticoneSizes) String() string {
 func (*BluesAnticoneSizes) ProtoMessage() {}
 
 func (x *BluesAnticoneSizes) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[51]
+	mi := &file_p2p_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2668,7 +2812,7 @@ func (x *BluesAnticoneSizes) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BluesAnticoneSizes.ProtoReflect.Descriptor instead.
 func (*BluesAnticoneSizes) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{51}
+	return file_p2p_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *BluesAnticoneSizes) GetBlueHash() *Hash {
@@ -2693,7 +2837,7 @@ type DoneBlocksWithTrustedDataMessage struct {
 
 func (x *DoneBlocksWithTrustedDataMessage) Reset() {
 	*x = DoneBlocksWithTrustedDataMessage{}
-	mi := &file_p2p_proto_msgTypes[52]
+	mi := &file_p2p_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2705,7 +2849,7 @@ func (x *DoneBlocksWithTrustedDataMessage) String() string {
 func (*DoneBlocksWithTrustedDataMessage) ProtoMessage() {}
 
 func (x *DoneBlocksWithTrustedDataMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[52]
+	mi := &file_p2p_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2718,7 +2862,7 @@ func (x *DoneBlocksWithTrustedDataMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DoneBlocksWithTrustedDataMessage.ProtoReflect.Descriptor instead.
 func (*DoneBlocksWithTrustedDataMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{52}
+	return file_p2p_proto_rawDescGZIP(), []int{54}
 }
 
 type PruningPointsMessage struct {
@@ -2730,7 +2874,7 @@ type PruningPointsMessage struct {
 
 func (x *PruningPointsMessage) Reset() {
 	*x = PruningPointsMessage{}
-	mi := &file_p2p_proto_msgTypes[53]
+	mi := &file_p2p_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2742,7 +2886,7 @@ func (x *PruningPointsMessage) String() string {
 func (*PruningPointsMessage) ProtoMessage() {}
 
 func (x *PruningPointsMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[53]
+	mi := &file_p2p_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2755,7 +2899,7 @@ func (x *PruningPointsMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PruningPointsMessage.ProtoReflect.Descriptor instead.
 func (*PruningPointsMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{53}
+	return file_p2p_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *PruningPointsMessage) GetHeaders() []*BlockHeader {
@@ -2773,7 +2917,7 @@ type RequestPruningPointProofMessage struct {
 
 func (x *RequestPruningPointProofMessage) Reset() {
 	*x = RequestPruningPointProofMessage{}
-	mi := &file_p2p_proto_msgTypes[54]
+	mi := &file_p2p_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2785,7 +2929,7 @@ func (x *RequestPruningPointProofMessage) String() string {
 func (*RequestPruningPointProofMessage) ProtoMessage() {}
 
 func (x *RequestPruningPointProofMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[54]
+	mi := &file_p2p_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2798,7 +2942,7 @@ func (x *RequestPruningPointProofMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestPruningPointProofMessage.ProtoReflect.Descriptor instead.
 func (*RequestPruningPointProofMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{54}
+	return file_p2p_proto_rawDescGZIP(), []int{56}
 }
 
 type PruningPointProofMessage struct {
@@ -2810,7 +2954,7 @@ type PruningPointProofMessage struct {
 
 func (x *PruningPointProofMessage) Reset() {
 	*x = PruningPointProofMessage{}
-	mi := &file_p2p_proto_msgTypes[55]
+	mi := &file_p2p_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2822,7 +2966,7 @@ func (x *PruningPointProofMessage) String() string {
 func (*PruningPointProofMessage) ProtoMessage() {}
 
 func (x *PruningPointProofMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[55]
+	mi := &file_p2p_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2835,7 +2979,7 @@ func (x *PruningPointProofMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PruningPointProofMessage.ProtoReflect.Descriptor instead.
 func (*PruningPointProofMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{55}
+	return file_p2p_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *PruningPointProofMessage) GetHeaders() []*PruningPointProofHeaderArray {
@@ -2854,7 +2998,7 @@ type PruningPointProofHeaderArray struct {
 
 func (x *PruningPointProofHeaderArray) Reset() {
 	*x = PruningPointProofHeaderArray{}
-	mi := &file_p2p_proto_msgTypes[56]
+	mi := &file_p2p_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2866,7 +3010,7 @@ func (x *PruningPointProofHeaderArray) String() string {
 func (*PruningPointProofHeaderArray) ProtoMessage() {}
 
 func (x *PruningPointProofHeaderArray) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[56]
+	mi := &file_p2p_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2879,7 +3023,7 @@ func (x *PruningPointProofHeaderArray) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PruningPointProofHeaderArray.ProtoReflect.Descriptor instead.
 func (*PruningPointProofHeaderArray) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{56}
+	return file_p2p_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *PruningPointProofHeaderArray) GetHeaders() []*BlockHeader {
@@ -2897,7 +3041,7 @@ type ReadyMessage struct {
 
 func (x *ReadyMessage) Reset() {
 	*x = ReadyMessage{}
-	mi := &file_p2p_proto_msgTypes[57]
+	mi := &file_p2p_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2909,7 +3053,7 @@ func (x *ReadyMessage) String() string {
 func (*ReadyMessage) ProtoMessage() {}
 
 func (x *ReadyMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[57]
+	mi := &file_p2p_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2922,7 +3066,7 @@ func (x *ReadyMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReadyMessage.ProtoReflect.Descriptor instead.
 func (*ReadyMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{57}
+	return file_p2p_proto_rawDescGZIP(), []int{59}
 }
 
 type BlockWithTrustedDataV4Message struct {
@@ -2936,7 +3080,7 @@ type BlockWithTrustedDataV4Message struct {
 
 func (x *BlockWithTrustedDataV4Message) Reset() {
 	*x = BlockWithTrustedDataV4Message{}
-	mi := &file_p2p_proto_msgTypes[58]
+	mi := &file_p2p_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2948,7 +3092,7 @@ func (x *BlockWithTrustedDataV4Message) String() string {
 func (*BlockWithTrustedDataV4Message) ProtoMessage() {}
 
 func (x *BlockWithTrustedDataV4Message) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[58]
+	mi := &file_p2p_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2961,7 +3105,7 @@ func (x *BlockWithTrustedDataV4Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockWithTrustedDataV4Message.ProtoReflect.Descriptor instead.
 func (*BlockWithTrustedDataV4Message) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{58}
+	return file_p2p_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *BlockWithTrustedDataV4Message) GetBlock() *BlockMessage {
@@ -2995,7 +3139,7 @@ type TrustedDataMessage struct {
 
 func (x *TrustedDataMessage) Reset() {
 	*x = TrustedDataMessage{}
-	mi := &file_p2p_proto_msgTypes[59]
+	mi := &file_p2p_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3007,7 +3151,7 @@ func (x *TrustedDataMessage) String() string {
 func (*TrustedDataMessage) ProtoMessage() {}
 
 func (x *TrustedDataMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[59]
+	mi := &file_p2p_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3020,7 +3164,7 @@ func (x *TrustedDataMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TrustedDataMessage.ProtoReflect.Descriptor instead.
 func (*TrustedDataMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{59}
+	return file_p2p_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *TrustedDataMessage) GetDaaWindow() []*DaaBlockV4 {
@@ -3057,7 +3201,7 @@ type StrongNodeAnnouncementMessage struct {
 
 func (x *StrongNodeAnnouncementMessage) Reset() {
 	*x = StrongNodeAnnouncementMessage{}
-	mi := &file_p2p_proto_msgTypes[60]
+	mi := &file_p2p_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3069,7 +3213,7 @@ func (x *StrongNodeAnnouncementMessage) String() string {
 func (*StrongNodeAnnouncementMessage) ProtoMessage() {}
 
 func (x *StrongNodeAnnouncementMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[60]
+	mi := &file_p2p_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3082,7 +3226,7 @@ func (x *StrongNodeAnnouncementMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StrongNodeAnnouncementMessage.ProtoReflect.Descriptor instead.
 func (*StrongNodeAnnouncementMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{60}
+	return file_p2p_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *StrongNodeAnnouncementMessage) GetSchemaVersion() uint32 {
@@ -3257,7 +3401,7 @@ const file_p2p_proto_rawDesc = "" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"#\n" +
 	"\vPongMessage\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"\x0f\n" +
-	"\rVerackMessage\"\xd2\x02\n" +
+	"\rVerackMessage\"\xfc\x02\n" +
 	"\x0eVersionMessage\x12(\n" +
 	"\x0fprotocolVersion\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x1a\n" +
 	"\bservices\x18\x02 \x01(\x04R\bservices\x12\x1c\n" +
@@ -3268,7 +3412,18 @@ const file_p2p_proto_rawDesc = "" +
 	"\x0edisableRelayTx\x18\b \x01(\bR\x0edisableRelayTx\x12;\n" +
 	"\fsubnetworkId\x18\t \x01(\v2\x17.protowire.SubnetworkIdR\fsubnetworkId\x12\x18\n" +
 	"\anetwork\x18\n" +
-	" \x01(\tR\anetwork\"'\n" +
+	" \x01(\tR\anetwork\x12(\n" +
+	"\x0fantiFraudHashes\x18\v \x03(\fR\x0fantiFraudHashes\"#\n" +
+	"!RequestAntiFraudSnapshotV1Message\"\xaa\x02\n" +
+	"\x1aAntiFraudSnapshotV1Message\x12$\n" +
+	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
+	"\anetwork\x18\x02 \x01(\rR\anetwork\x12 \n" +
+	"\vsnapshotSeq\x18\x03 \x01(\x04R\vsnapshotSeq\x12$\n" +
+	"\rgeneratedAtMs\x18\x04 \x01(\x04R\rgeneratedAtMs\x12\"\n" +
+	"\fsigningKeyId\x18\x05 \x01(\rR\fsigningKeyId\x12\x1c\n" +
+	"\tbannedIps\x18\x06 \x03(\fR\tbannedIps\x12$\n" +
+	"\rbannedNodeIds\x18\a \x03(\fR\rbannedNodeIds\x12\x1c\n" +
+	"\tsignature\x18\b \x01(\fR\tsignature\"'\n" +
 	"\rRejectMessage\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"`\n" +
 	"!RequestPruningPointUTXOSetMessage\x12;\n" +
@@ -3378,7 +3533,7 @@ func file_p2p_proto_rawDescGZIP() []byte {
 	return file_p2p_proto_rawDescData
 }
 
-var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 61)
+var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_p2p_proto_goTypes = []any{
 	(*RequestAddressesMessage)(nil),                            // 0: protowire.RequestAddressesMessage
 	(*AddressesMessage)(nil),                                   // 1: protowire.AddressesMessage
@@ -3408,39 +3563,41 @@ var file_p2p_proto_goTypes = []any{
 	(*PongMessage)(nil),                                        // 25: protowire.PongMessage
 	(*VerackMessage)(nil),                                      // 26: protowire.VerackMessage
 	(*VersionMessage)(nil),                                     // 27: protowire.VersionMessage
-	(*RejectMessage)(nil),                                      // 28: protowire.RejectMessage
-	(*RequestPruningPointUTXOSetMessage)(nil),                  // 29: protowire.RequestPruningPointUTXOSetMessage
-	(*PruningPointUtxoSetChunkMessage)(nil),                    // 30: protowire.PruningPointUtxoSetChunkMessage
-	(*OutpointAndUtxoEntryPair)(nil),                           // 31: protowire.OutpointAndUtxoEntryPair
-	(*UtxoEntry)(nil),                                          // 32: protowire.UtxoEntry
-	(*RequestNextPruningPointUtxoSetChunkMessage)(nil),         // 33: protowire.RequestNextPruningPointUtxoSetChunkMessage
-	(*DonePruningPointUtxoSetChunksMessage)(nil),               // 34: protowire.DonePruningPointUtxoSetChunksMessage
-	(*RequestIBDBlocksMessage)(nil),                            // 35: protowire.RequestIBDBlocksMessage
-	(*UnexpectedPruningPointMessage)(nil),                      // 36: protowire.UnexpectedPruningPointMessage
-	(*IbdBlockLocatorMessage)(nil),                             // 37: protowire.IbdBlockLocatorMessage
-	(*RequestIBDChainBlockLocatorMessage)(nil),                 // 38: protowire.RequestIBDChainBlockLocatorMessage
-	(*IbdChainBlockLocatorMessage)(nil),                        // 39: protowire.IbdChainBlockLocatorMessage
-	(*RequestAnticoneMessage)(nil),                             // 40: protowire.RequestAnticoneMessage
-	(*IbdBlockLocatorHighestHashMessage)(nil),                  // 41: protowire.IbdBlockLocatorHighestHashMessage
-	(*IbdBlockLocatorHighestHashNotFoundMessage)(nil),          // 42: protowire.IbdBlockLocatorHighestHashNotFoundMessage
-	(*BlockHeadersMessage)(nil),                                // 43: protowire.BlockHeadersMessage
-	(*RequestPruningPointAndItsAnticoneMessage)(nil),           // 44: protowire.RequestPruningPointAndItsAnticoneMessage
-	(*RequestNextPruningPointAndItsAnticoneBlocksMessage)(nil), // 45: protowire.RequestNextPruningPointAndItsAnticoneBlocksMessage
-	(*BlockWithTrustedDataMessage)(nil),                        // 46: protowire.BlockWithTrustedDataMessage
-	(*DaaBlock)(nil),                                           // 47: protowire.DaaBlock
-	(*DaaBlockV4)(nil),                                         // 48: protowire.DaaBlockV4
-	(*BlockGhostdagDataHashPair)(nil),                          // 49: protowire.BlockGhostdagDataHashPair
-	(*GhostdagData)(nil),                                       // 50: protowire.GhostdagData
-	(*BluesAnticoneSizes)(nil),                                 // 51: protowire.BluesAnticoneSizes
-	(*DoneBlocksWithTrustedDataMessage)(nil),                   // 52: protowire.DoneBlocksWithTrustedDataMessage
-	(*PruningPointsMessage)(nil),                               // 53: protowire.PruningPointsMessage
-	(*RequestPruningPointProofMessage)(nil),                    // 54: protowire.RequestPruningPointProofMessage
-	(*PruningPointProofMessage)(nil),                           // 55: protowire.PruningPointProofMessage
-	(*PruningPointProofHeaderArray)(nil),                       // 56: protowire.PruningPointProofHeaderArray
-	(*ReadyMessage)(nil),                                       // 57: protowire.ReadyMessage
-	(*BlockWithTrustedDataV4Message)(nil),                      // 58: protowire.BlockWithTrustedDataV4Message
-	(*TrustedDataMessage)(nil),                                 // 59: protowire.TrustedDataMessage
-	(*StrongNodeAnnouncementMessage)(nil),                      // 60: protowire.StrongNodeAnnouncementMessage
+	(*RequestAntiFraudSnapshotV1Message)(nil),                  // 28: protowire.RequestAntiFraudSnapshotV1Message
+	(*AntiFraudSnapshotV1Message)(nil),                         // 29: protowire.AntiFraudSnapshotV1Message
+	(*RejectMessage)(nil),                                      // 30: protowire.RejectMessage
+	(*RequestPruningPointUTXOSetMessage)(nil),                  // 31: protowire.RequestPruningPointUTXOSetMessage
+	(*PruningPointUtxoSetChunkMessage)(nil),                    // 32: protowire.PruningPointUtxoSetChunkMessage
+	(*OutpointAndUtxoEntryPair)(nil),                           // 33: protowire.OutpointAndUtxoEntryPair
+	(*UtxoEntry)(nil),                                          // 34: protowire.UtxoEntry
+	(*RequestNextPruningPointUtxoSetChunkMessage)(nil),         // 35: protowire.RequestNextPruningPointUtxoSetChunkMessage
+	(*DonePruningPointUtxoSetChunksMessage)(nil),               // 36: protowire.DonePruningPointUtxoSetChunksMessage
+	(*RequestIBDBlocksMessage)(nil),                            // 37: protowire.RequestIBDBlocksMessage
+	(*UnexpectedPruningPointMessage)(nil),                      // 38: protowire.UnexpectedPruningPointMessage
+	(*IbdBlockLocatorMessage)(nil),                             // 39: protowire.IbdBlockLocatorMessage
+	(*RequestIBDChainBlockLocatorMessage)(nil),                 // 40: protowire.RequestIBDChainBlockLocatorMessage
+	(*IbdChainBlockLocatorMessage)(nil),                        // 41: protowire.IbdChainBlockLocatorMessage
+	(*RequestAnticoneMessage)(nil),                             // 42: protowire.RequestAnticoneMessage
+	(*IbdBlockLocatorHighestHashMessage)(nil),                  // 43: protowire.IbdBlockLocatorHighestHashMessage
+	(*IbdBlockLocatorHighestHashNotFoundMessage)(nil),          // 44: protowire.IbdBlockLocatorHighestHashNotFoundMessage
+	(*BlockHeadersMessage)(nil),                                // 45: protowire.BlockHeadersMessage
+	(*RequestPruningPointAndItsAnticoneMessage)(nil),           // 46: protowire.RequestPruningPointAndItsAnticoneMessage
+	(*RequestNextPruningPointAndItsAnticoneBlocksMessage)(nil), // 47: protowire.RequestNextPruningPointAndItsAnticoneBlocksMessage
+	(*BlockWithTrustedDataMessage)(nil),                        // 48: protowire.BlockWithTrustedDataMessage
+	(*DaaBlock)(nil),                                           // 49: protowire.DaaBlock
+	(*DaaBlockV4)(nil),                                         // 50: protowire.DaaBlockV4
+	(*BlockGhostdagDataHashPair)(nil),                          // 51: protowire.BlockGhostdagDataHashPair
+	(*GhostdagData)(nil),                                       // 52: protowire.GhostdagData
+	(*BluesAnticoneSizes)(nil),                                 // 53: protowire.BluesAnticoneSizes
+	(*DoneBlocksWithTrustedDataMessage)(nil),                   // 54: protowire.DoneBlocksWithTrustedDataMessage
+	(*PruningPointsMessage)(nil),                               // 55: protowire.PruningPointsMessage
+	(*RequestPruningPointProofMessage)(nil),                    // 56: protowire.RequestPruningPointProofMessage
+	(*PruningPointProofMessage)(nil),                           // 57: protowire.PruningPointProofMessage
+	(*PruningPointProofHeaderArray)(nil),                       // 58: protowire.PruningPointProofHeaderArray
+	(*ReadyMessage)(nil),                                       // 59: protowire.ReadyMessage
+	(*BlockWithTrustedDataV4Message)(nil),                      // 60: protowire.BlockWithTrustedDataV4Message
+	(*TrustedDataMessage)(nil),                                 // 61: protowire.TrustedDataMessage
+	(*StrongNodeAnnouncementMessage)(nil),                      // 62: protowire.StrongNodeAnnouncementMessage
 }
 var file_p2p_proto_depIdxs = []int32{
 	3,  // 0: protowire.RequestAddressesMessage.subnetworkId:type_name -> protowire.SubnetworkId
@@ -3471,9 +3628,9 @@ var file_p2p_proto_depIdxs = []int32{
 	2,  // 25: protowire.VersionMessage.address:type_name -> protowire.NetAddress
 	3,  // 26: protowire.VersionMessage.subnetworkId:type_name -> protowire.SubnetworkId
 	13, // 27: protowire.RequestPruningPointUTXOSetMessage.pruningPointHash:type_name -> protowire.Hash
-	31, // 28: protowire.PruningPointUtxoSetChunkMessage.outpointAndUtxoEntryPairs:type_name -> protowire.OutpointAndUtxoEntryPair
+	33, // 28: protowire.PruningPointUtxoSetChunkMessage.outpointAndUtxoEntryPairs:type_name -> protowire.OutpointAndUtxoEntryPair
 	6,  // 29: protowire.OutpointAndUtxoEntryPair.outpoint:type_name -> protowire.Outpoint
-	32, // 30: protowire.OutpointAndUtxoEntryPair.utxoEntry:type_name -> protowire.UtxoEntry
+	34, // 30: protowire.OutpointAndUtxoEntryPair.utxoEntry:type_name -> protowire.UtxoEntry
 	8,  // 31: protowire.UtxoEntry.scriptPublicKey:type_name -> protowire.ScriptPublicKey
 	13, // 32: protowire.RequestIBDBlocksMessage.hashes:type_name -> protowire.Hash
 	13, // 33: protowire.IbdBlockLocatorMessage.targetHash:type_name -> protowire.Hash
@@ -3486,25 +3643,25 @@ var file_p2p_proto_depIdxs = []int32{
 	13, // 40: protowire.IbdBlockLocatorHighestHashMessage.highestHash:type_name -> protowire.Hash
 	11, // 41: protowire.BlockHeadersMessage.blockHeaders:type_name -> protowire.BlockHeader
 	10, // 42: protowire.BlockWithTrustedDataMessage.block:type_name -> protowire.BlockMessage
-	47, // 43: protowire.BlockWithTrustedDataMessage.daaWindow:type_name -> protowire.DaaBlock
-	49, // 44: protowire.BlockWithTrustedDataMessage.ghostdagData:type_name -> protowire.BlockGhostdagDataHashPair
+	49, // 43: protowire.BlockWithTrustedDataMessage.daaWindow:type_name -> protowire.DaaBlock
+	51, // 44: protowire.BlockWithTrustedDataMessage.ghostdagData:type_name -> protowire.BlockGhostdagDataHashPair
 	10, // 45: protowire.DaaBlock.block:type_name -> protowire.BlockMessage
-	50, // 46: protowire.DaaBlock.ghostdagData:type_name -> protowire.GhostdagData
+	52, // 46: protowire.DaaBlock.ghostdagData:type_name -> protowire.GhostdagData
 	11, // 47: protowire.DaaBlockV4.header:type_name -> protowire.BlockHeader
-	50, // 48: protowire.DaaBlockV4.ghostdagData:type_name -> protowire.GhostdagData
+	52, // 48: protowire.DaaBlockV4.ghostdagData:type_name -> protowire.GhostdagData
 	13, // 49: protowire.BlockGhostdagDataHashPair.hash:type_name -> protowire.Hash
-	50, // 50: protowire.BlockGhostdagDataHashPair.ghostdagData:type_name -> protowire.GhostdagData
+	52, // 50: protowire.BlockGhostdagDataHashPair.ghostdagData:type_name -> protowire.GhostdagData
 	13, // 51: protowire.GhostdagData.selectedParent:type_name -> protowire.Hash
 	13, // 52: protowire.GhostdagData.mergeSetBlues:type_name -> protowire.Hash
 	13, // 53: protowire.GhostdagData.mergeSetReds:type_name -> protowire.Hash
-	51, // 54: protowire.GhostdagData.bluesAnticoneSizes:type_name -> protowire.BluesAnticoneSizes
+	53, // 54: protowire.GhostdagData.bluesAnticoneSizes:type_name -> protowire.BluesAnticoneSizes
 	13, // 55: protowire.BluesAnticoneSizes.blueHash:type_name -> protowire.Hash
 	11, // 56: protowire.PruningPointsMessage.headers:type_name -> protowire.BlockHeader
-	56, // 57: protowire.PruningPointProofMessage.headers:type_name -> protowire.PruningPointProofHeaderArray
+	58, // 57: protowire.PruningPointProofMessage.headers:type_name -> protowire.PruningPointProofHeaderArray
 	11, // 58: protowire.PruningPointProofHeaderArray.headers:type_name -> protowire.BlockHeader
 	10, // 59: protowire.BlockWithTrustedDataV4Message.block:type_name -> protowire.BlockMessage
-	48, // 60: protowire.TrustedDataMessage.daaWindow:type_name -> protowire.DaaBlockV4
-	49, // 61: protowire.TrustedDataMessage.ghostdagData:type_name -> protowire.BlockGhostdagDataHashPair
+	50, // 60: protowire.TrustedDataMessage.daaWindow:type_name -> protowire.DaaBlockV4
+	51, // 61: protowire.TrustedDataMessage.ghostdagData:type_name -> protowire.BlockGhostdagDataHashPair
 	62, // [62:62] is the sub-list for method output_type
 	62, // [62:62] is the sub-list for method input_type
 	62, // [62:62] is the sub-list for extension type_name
@@ -3523,7 +3680,7 @@ func file_p2p_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_p2p_proto_rawDesc), len(file_p2p_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   61,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -44,6 +44,19 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		return nil, err
 	}
 
+	if len(x.AntiFraudHashes) > 3 {
+		return nil, errors.Errorf("VersionMessage.AntiFraudHashes count %d exceeds max 3", len(x.AntiFraudHashes))
+	}
+	antiFraudHashes := make([][32]byte, 0, len(x.AntiFraudHashes))
+	for _, raw := range x.AntiFraudHashes {
+		if len(raw) != 32 {
+			return nil, errors.Errorf("VersionMessage.AntiFraudHashes entry length %d is invalid (expected 32)", len(raw))
+		}
+		var hash [32]byte
+		copy(hash[:], raw)
+		antiFraudHashes = append(antiFraudHashes, hash)
+	}
+
 	return &appmessage.MsgVersion{
 		ProtocolVersion: x.ProtocolVersion,
 		Network:         x.Network,
@@ -54,6 +67,7 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		UserAgent:       x.UserAgent,
 		DisableRelayTx:  x.DisableRelayTx,
 		SubnetworkID:    subnetworkID,
+		AntiFraudHashes: antiFraudHashes,
 	}, nil
 }
 
@@ -74,6 +88,16 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		address = appMessageNetAddressToProto(msgVersion.Address)
 	}
 
+	if len(msgVersion.AntiFraudHashes) > 3 {
+		return errors.Errorf("MsgVersion.AntiFraudHashes count %d exceeds max 3", len(msgVersion.AntiFraudHashes))
+	}
+	antiFraudHashes := make([][]byte, 0, len(msgVersion.AntiFraudHashes))
+	for _, hash := range msgVersion.AntiFraudHashes {
+		entry := make([]byte, 32)
+		copy(entry, hash[:])
+		antiFraudHashes = append(antiFraudHashes, entry)
+	}
+
 	x.Version = &VersionMessage{
 		ProtocolVersion: msgVersion.ProtocolVersion,
 		Network:         msgVersion.Network,
@@ -84,6 +108,7 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		UserAgent:       msgVersion.UserAgent,
 		DisableRelayTx:  msgVersion.DisableRelayTx,
 		SubnetworkId:    domainSubnetworkIDToProto(msgVersion.SubnetworkID),
+		AntiFraudHashes: antiFraudHashes,
 	}
 	return nil
 }

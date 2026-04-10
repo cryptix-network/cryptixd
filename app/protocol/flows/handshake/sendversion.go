@@ -89,6 +89,7 @@ func (flow *sendVersionFlow) start() error {
 
 	// Advertise if inv messages for transactions are desired.
 	msg.DisableRelayTx = flow.Config().BlocksOnly
+	msg.AntiFraudHashes = flow.ConnectionManager().AntiFraudHashWindow()
 
 	err = flow.outgoingRoute.Enqueue(msg)
 	if err != nil {

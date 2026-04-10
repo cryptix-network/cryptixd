@@ -5,6 +5,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/flowcontext"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/addressexchange"
+	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/antifraud"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/blockrelay"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/ping"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/rejects"
@@ -32,8 +33,16 @@ func Register(m protocolManager, router *routerpkg.Router, errChan chan error, i
 	flows = append(flows, registerPingFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerTransactionRelayFlow(m, router, isStopping, errChan)...)
 	flows = append(flows, registerRejectsFlow(m, router, isStopping, errChan)...)
+	flows = append(flows, registerAntiFraudFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerStrongNodeFlows(m, router, isStopping, errChan)...)
 
+	return flows
+}
+
+// RegisterRestricted registers only RESTRICTED_AF-allowed flows.
+func RegisterRestricted(m protocolManager, router *routerpkg.Router, errChan chan error, isStopping *uint32) (flows []*common.Flow) {
+	flows = registerPingFlows(m, router, isStopping, errChan)
+	flows = append(flows, registerAntiFraudFlows(m, router, isStopping, errChan)...)
 	return flows
 }
 
@@ -218,6 +227,29 @@ func registerStrongNodeFlows(m protocolManager, router *routerpkg.Router, isStop
 			errChan,
 			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
 				return strongnodes.HandleStrongNodeAnnouncements(m.Context(), incomingRoute, peer)
+			},
+		),
+	}
+}
+
+func registerAntiFraudFlows(m protocolManager, router *routerpkg.Router, isStopping *uint32, errChan chan error) []*common.Flow {
+	outgoingRoute := router.OutgoingRoute()
+
+	return []*common.Flow{
+		m.RegisterFlow("HandleAntiFraudSnapshotRequests", router,
+			[]appmessage.MessageCommand{appmessage.CmdRequestAntiFraudSnapshotV1},
+			isStopping,
+			errChan,
+			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+				return antifraud.HandleSnapshotRequests(m.Context(), incomingRoute, outgoingRoute)
+			},
+		),
+		m.RegisterFlow("SyncAntiFraudSnapshots", router,
+			[]appmessage.MessageCommand{appmessage.CmdAntiFraudSnapshotV1},
+			isStopping,
+			errChan,
+			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+				return antifraud.SyncSnapshots(m.Context(), incomingRoute, outgoingRoute, peer)
 			},
 		),
 	}
