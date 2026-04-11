@@ -7,6 +7,8 @@ import "p2p.proto";
 import "rpc.proto";
 
 message CryptixdMessage {
+  uint32 response_id = 101;
+  uint32 request_id = 102;
   oneof payload {
     AddressesMessage addresses = 1;
     BlockMessage block = 2;
@@ -51,6 +53,9 @@ message CryptixdMessage {
     IbdChainBlockLocatorMessage ibdChainBlockLocator = 54;
     RequestAnticoneMessage requestAnticone = 55;
     RequestNextPruningPointAndItsAnticoneBlocksMessage requestNextPruningPointAndItsAnticoneBlocks = 56;
+    RequestFastIntentsMessage requestFastIntents = 57;
+    FastIntentMessage fastIntent = 58;
+    FastMicroblockMessage fastMicroblock = 59;
     RequestAntiFraudSnapshotV1Message requestAntiFraudSnapshotV1 = 60;
     AntiFraudSnapshotV1Message antiFraudSnapshotV1 = 61;
     BlockProducerClaimV1Message blockProducerClaimV1 = 62;

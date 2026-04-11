@@ -7,6 +7,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/addressexchange"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/antifraud"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/blockrelay"
+	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/hfa"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/ping"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/rejects"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/strongnodeclaims"
@@ -32,6 +33,7 @@ func Register(m protocolManager, router *routerpkg.Router, errChan chan error, i
 	flows = append(flows, registerBlockRelayFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerPingFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerTransactionRelayFlow(m, router, isStopping, errChan)...)
+	flows = append(flows, registerHFACompatibilityFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerRejectsFlow(m, router, isStopping, errChan)...)
 	flows = append(flows, registerAntiFraudFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerStrongNodeFlows(m, router, isStopping, errChan)...)
@@ -42,6 +44,7 @@ func Register(m protocolManager, router *routerpkg.Router, errChan chan error, i
 // RegisterRestricted registers only RESTRICTED_AF-allowed flows.
 func RegisterRestricted(m protocolManager, router *routerpkg.Router, errChan chan error, isStopping *uint32) (flows []*common.Flow) {
 	flows = registerPingFlows(m, router, isStopping, errChan)
+	flows = append(flows, registerHFACompatibilityFlows(m, router, isStopping, errChan)...)
 	flows = append(flows, registerAntiFraudFlows(m, router, isStopping, errChan)...)
 	return flows
 }
@@ -201,6 +204,22 @@ func registerTransactionRelayFlow(m protocolManager, router *routerpkg.Router, i
 			[]appmessage.MessageCommand{appmessage.CmdRequestTransactions}, isStopping, errChan,
 			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
 				return transactionrelay.HandleRequestedTransactions(m.Context(), incomingRoute, outgoingRoute)
+			},
+		),
+	}
+}
+
+func registerHFACompatibilityFlows(m protocolManager, router *routerpkg.Router, isStopping *uint32, errChan chan error) []*common.Flow {
+	return []*common.Flow{
+		m.RegisterFlowWithCapacity("IgnoreHFAPayloads", 4096, router,
+			[]appmessage.MessageCommand{
+				appmessage.CmdRequestFastIntents,
+				appmessage.CmdFastIntent,
+				appmessage.CmdFastMicroblock,
+			},
+			isStopping, errChan,
+			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+				return hfa.IgnoreMessages(incomingRoute)
 			},
 		),
 	}

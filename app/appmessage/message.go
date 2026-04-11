@@ -170,6 +170,9 @@ const (
 	CmdRequestAntiFraudSnapshotV1
 	CmdAntiFraudSnapshotV1
 	CmdBlockProducerClaimV1
+	CmdRequestFastIntents
+	CmdFastIntent
+	CmdFastMicroblock
 )
 
 // ProtocolMessageCommandToString maps all MessageCommands to their string representation
@@ -220,6 +223,9 @@ var ProtocolMessageCommandToString = map[MessageCommand]string{
 	CmdRequestAntiFraudSnapshotV1:                  "RequestAntiFraudSnapshotV1",
 	CmdAntiFraudSnapshotV1:                         "AntiFraudSnapshotV1",
 	CmdBlockProducerClaimV1:                        "BlockProducerClaimV1",
+	CmdRequestFastIntents:                          "RequestFastIntents",
+	CmdFastIntent:                                  "FastIntent",
+	CmdFastMicroblock:                              "FastMicroblock",
 }
 
 // RPCMessageCommandToString maps all MessageCommands to their string representation

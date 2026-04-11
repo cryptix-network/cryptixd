@@ -230,6 +230,7 @@ type TransactionMessage struct {
 	SubnetworkId  *SubnetworkId          `protobuf:"bytes,5,opt,name=subnetworkId,proto3" json:"subnetworkId,omitempty"`
 	Gas           uint64                 `protobuf:"varint,6,opt,name=gas,proto3" json:"gas,omitempty"`
 	Payload       []byte                 `protobuf:"bytes,8,opt,name=payload,proto3" json:"payload,omitempty"`
+	Mass          uint64                 `protobuf:"varint,9,opt,name=mass,proto3" json:"mass,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -311,6 +312,13 @@ func (x *TransactionMessage) GetPayload() []byte {
 		return x.Payload
 	}
 	return nil
+}
+
+func (x *TransactionMessage) GetMass() uint64 {
+	if x != nil {
+		return x.Mass
+	}
+	return 0
 }
 
 type TransactionInput struct {
@@ -3213,6 +3221,178 @@ func (x *TrustedDataMessage) GetGhostdagData() []*BlockGhostdagDataHashPair {
 	return nil
 }
 
+type RequestFastIntentsMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	IntentIds     []*Hash                `protobuf:"bytes,1,rep,name=intentIds,proto3" json:"intentIds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestFastIntentsMessage) Reset() {
+	*x = RequestFastIntentsMessage{}
+	mi := &file_p2p_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestFastIntentsMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestFastIntentsMessage) ProtoMessage() {}
+
+func (x *RequestFastIntentsMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestFastIntentsMessage.ProtoReflect.Descriptor instead.
+func (*RequestFastIntentsMessage) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *RequestFastIntentsMessage) GetIntentIds() []*Hash {
+	if x != nil {
+		return x.IntentIds
+	}
+	return nil
+}
+
+type FastIntentMessage struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	IntentId          *Hash                  `protobuf:"bytes,1,opt,name=intentId,proto3" json:"intentId,omitempty"`
+	BaseTransaction   *TransactionMessage    `protobuf:"bytes,2,opt,name=baseTransaction,proto3" json:"baseTransaction,omitempty"`
+	IntentNonce       uint64                 `protobuf:"varint,3,opt,name=intentNonce,proto3" json:"intentNonce,omitempty"`
+	ClientCreatedAtMs uint64                 `protobuf:"varint,4,opt,name=clientCreatedAtMs,proto3" json:"clientCreatedAtMs,omitempty"`
+	MaxFee            uint64                 `protobuf:"varint,5,opt,name=maxFee,proto3" json:"maxFee,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *FastIntentMessage) Reset() {
+	*x = FastIntentMessage{}
+	mi := &file_p2p_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FastIntentMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FastIntentMessage) ProtoMessage() {}
+
+func (x *FastIntentMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FastIntentMessage.ProtoReflect.Descriptor instead.
+func (*FastIntentMessage) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *FastIntentMessage) GetIntentId() *Hash {
+	if x != nil {
+		return x.IntentId
+	}
+	return nil
+}
+
+func (x *FastIntentMessage) GetBaseTransaction() *TransactionMessage {
+	if x != nil {
+		return x.BaseTransaction
+	}
+	return nil
+}
+
+func (x *FastIntentMessage) GetIntentNonce() uint64 {
+	if x != nil {
+		return x.IntentNonce
+	}
+	return 0
+}
+
+func (x *FastIntentMessage) GetClientCreatedAtMs() uint64 {
+	if x != nil {
+		return x.ClientCreatedAtMs
+	}
+	return 0
+}
+
+func (x *FastIntentMessage) GetMaxFee() uint64 {
+	if x != nil {
+		return x.MaxFee
+	}
+	return 0
+}
+
+type FastMicroblockMessage struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	MicroblockTimeMs uint64                 `protobuf:"varint,1,opt,name=microblockTimeMs,proto3" json:"microblockTimeMs,omitempty"`
+	IntentIds        []*Hash                `protobuf:"bytes,2,rep,name=intentIds,proto3" json:"intentIds,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *FastMicroblockMessage) Reset() {
+	*x = FastMicroblockMessage{}
+	mi := &file_p2p_proto_msgTypes[64]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *FastMicroblockMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*FastMicroblockMessage) ProtoMessage() {}
+
+func (x *FastMicroblockMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[64]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use FastMicroblockMessage.ProtoReflect.Descriptor instead.
+func (*FastMicroblockMessage) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{64}
+}
+
+func (x *FastMicroblockMessage) GetMicroblockTimeMs() uint64 {
+	if x != nil {
+		return x.MicroblockTimeMs
+	}
+	return 0
+}
+
+func (x *FastMicroblockMessage) GetIntentIds() []*Hash {
+	if x != nil {
+		return x.IntentIds
+	}
+	return nil
+}
+
 type BlockProducerClaimV1Message struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	SchemaVersion   uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
@@ -3226,7 +3406,7 @@ type BlockProducerClaimV1Message struct {
 
 func (x *BlockProducerClaimV1Message) Reset() {
 	*x = BlockProducerClaimV1Message{}
-	mi := &file_p2p_proto_msgTypes[62]
+	mi := &file_p2p_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3238,7 +3418,7 @@ func (x *BlockProducerClaimV1Message) String() string {
 func (*BlockProducerClaimV1Message) ProtoMessage() {}
 
 func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[62]
+	mi := &file_p2p_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3251,7 +3431,7 @@ func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockProducerClaimV1Message.ProtoReflect.Descriptor instead.
 func (*BlockProducerClaimV1Message) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{62}
+	return file_p2p_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *BlockProducerClaimV1Message) GetSchemaVersion() uint32 {
@@ -3305,7 +3485,7 @@ const file_p2p_proto_rawDesc = "" +
 	"\x02ip\x18\x03 \x01(\fR\x02ip\x12\x12\n" +
 	"\x04port\x18\x04 \x01(\rR\x04port\"$\n" +
 	"\fSubnetworkId\x12\x14\n" +
-	"\x05bytes\x18\x01 \x01(\fR\x05bytes\"\xa0\x02\n" +
+	"\x05bytes\x18\x01 \x01(\fR\x05bytes\"\xb4\x02\n" +
 	"\x12TransactionMessage\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\rR\aversion\x123\n" +
 	"\x06inputs\x18\x02 \x03(\v2\x1b.protowire.TransactionInputR\x06inputs\x126\n" +
@@ -3313,7 +3493,8 @@ const file_p2p_proto_rawDesc = "" +
 	"\blockTime\x18\x04 \x01(\x04R\blockTime\x12;\n" +
 	"\fsubnetworkId\x18\x05 \x01(\v2\x17.protowire.SubnetworkIdR\fsubnetworkId\x12\x10\n" +
 	"\x03gas\x18\x06 \x01(\x04R\x03gas\x12\x18\n" +
-	"\apayload\x18\b \x01(\fR\apayload\"\xb9\x01\n" +
+	"\apayload\x18\b \x01(\fR\apayload\x12\x12\n" +
+	"\x04mass\x18\t \x01(\x04R\x04mass\"\xb9\x01\n" +
 	"\x10TransactionInput\x12?\n" +
 	"\x10previousOutpoint\x18\x01 \x01(\v2\x13.protowire.OutpointR\x10previousOutpoint\x12(\n" +
 	"\x0fsignatureScript\x18\x02 \x01(\fR\x0fsignatureScript\x12\x1a\n" +
@@ -3487,7 +3668,18 @@ const file_p2p_proto_rawDesc = "" +
 	"\x13ghostdagDataIndices\x18\x03 \x03(\x04R\x13ghostdagDataIndices\"\x93\x01\n" +
 	"\x12TrustedDataMessage\x123\n" +
 	"\tdaaWindow\x18\x01 \x03(\v2\x15.protowire.DaaBlockV4R\tdaaWindow\x12H\n" +
-	"\fghostdagData\x18\x02 \x03(\v2$.protowire.BlockGhostdagDataHashPairR\fghostdagData\"\xc3\x01\n" +
+	"\fghostdagData\x18\x02 \x03(\v2$.protowire.BlockGhostdagDataHashPairR\fghostdagData\"J\n" +
+	"\x19RequestFastIntentsMessage\x12-\n" +
+	"\tintentIds\x18\x01 \x03(\v2\x0f.protowire.HashR\tintentIds\"\xf1\x01\n" +
+	"\x11FastIntentMessage\x12+\n" +
+	"\bintentId\x18\x01 \x01(\v2\x0f.protowire.HashR\bintentId\x12G\n" +
+	"\x0fbaseTransaction\x18\x02 \x01(\v2\x1d.protowire.TransactionMessageR\x0fbaseTransaction\x12 \n" +
+	"\vintentNonce\x18\x03 \x01(\x04R\vintentNonce\x12,\n" +
+	"\x11clientCreatedAtMs\x18\x04 \x01(\x04R\x11clientCreatedAtMs\x12\x16\n" +
+	"\x06maxFee\x18\x05 \x01(\x04R\x06maxFee\"r\n" +
+	"\x15FastMicroblockMessage\x12*\n" +
+	"\x10microblockTimeMs\x18\x01 \x01(\x04R\x10microblockTimeMs\x12-\n" +
+	"\tintentIds\x18\x02 \x03(\v2\x0f.protowire.HashR\tintentIds\"\xc3\x01\n" +
 	"\x1bBlockProducerClaimV1Message\x12$\n" +
 	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\rR\anetwork\x12\x1c\n" +
@@ -3507,7 +3699,7 @@ func file_p2p_proto_rawDescGZIP() []byte {
 	return file_p2p_proto_rawDescData
 }
 
-var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
+var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
 var file_p2p_proto_goTypes = []any{
 	(*RequestAddressesMessage)(nil),                            // 0: protowire.RequestAddressesMessage
 	(*AddressesMessage)(nil),                                   // 1: protowire.AddressesMessage
@@ -3571,7 +3763,10 @@ var file_p2p_proto_goTypes = []any{
 	(*ReadyMessage)(nil),                                       // 59: protowire.ReadyMessage
 	(*BlockWithTrustedDataV4Message)(nil),                      // 60: protowire.BlockWithTrustedDataV4Message
 	(*TrustedDataMessage)(nil),                                 // 61: protowire.TrustedDataMessage
-	(*BlockProducerClaimV1Message)(nil),                        // 62: protowire.BlockProducerClaimV1Message
+	(*RequestFastIntentsMessage)(nil),                          // 62: protowire.RequestFastIntentsMessage
+	(*FastIntentMessage)(nil),                                  // 63: protowire.FastIntentMessage
+	(*FastMicroblockMessage)(nil),                              // 64: protowire.FastMicroblockMessage
+	(*BlockProducerClaimV1Message)(nil),                        // 65: protowire.BlockProducerClaimV1Message
 }
 var file_p2p_proto_depIdxs = []int32{
 	3,  // 0: protowire.RequestAddressesMessage.subnetworkId:type_name -> protowire.SubnetworkId
@@ -3636,11 +3831,15 @@ var file_p2p_proto_depIdxs = []int32{
 	10, // 59: protowire.BlockWithTrustedDataV4Message.block:type_name -> protowire.BlockMessage
 	50, // 60: protowire.TrustedDataMessage.daaWindow:type_name -> protowire.DaaBlockV4
 	51, // 61: protowire.TrustedDataMessage.ghostdagData:type_name -> protowire.BlockGhostdagDataHashPair
-	62, // [62:62] is the sub-list for method output_type
-	62, // [62:62] is the sub-list for method input_type
-	62, // [62:62] is the sub-list for extension type_name
-	62, // [62:62] is the sub-list for extension extendee
-	0,  // [0:62] is the sub-list for field type_name
+	13, // 62: protowire.RequestFastIntentsMessage.intentIds:type_name -> protowire.Hash
+	13, // 63: protowire.FastIntentMessage.intentId:type_name -> protowire.Hash
+	4,  // 64: protowire.FastIntentMessage.baseTransaction:type_name -> protowire.TransactionMessage
+	13, // 65: protowire.FastMicroblockMessage.intentIds:type_name -> protowire.Hash
+	66, // [66:66] is the sub-list for method output_type
+	66, // [66:66] is the sub-list for method input_type
+	66, // [66:66] is the sub-list for extension type_name
+	66, // [66:66] is the sub-list for extension extendee
+	0,  // [0:66] is the sub-list for field type_name
 }
 
 func init() { file_p2p_proto_init() }
@@ -3655,7 +3854,7 @@ func file_p2p_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_p2p_proto_rawDesc), len(file_p2p_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   63,
+			NumMessages:   66,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

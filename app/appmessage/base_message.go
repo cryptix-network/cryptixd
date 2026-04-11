@@ -5,6 +5,8 @@ import "time"
 type baseMessage struct {
 	messageNumber uint64
 	receivedAt    time.Time
+	requestID     uint32
+	responseID    uint32
 }
 
 func (b *baseMessage) MessageNumber() uint64 {
@@ -21,4 +23,20 @@ func (b *baseMessage) ReceivedAt() time.Time {
 
 func (b *baseMessage) SetReceivedAt(receivedAt time.Time) {
 	b.receivedAt = receivedAt
+}
+
+func (b *baseMessage) RequestID() uint32 {
+	return b.requestID
+}
+
+func (b *baseMessage) SetRequestID(requestID uint32) {
+	b.requestID = requestID
+}
+
+func (b *baseMessage) ResponseID() uint32 {
+	return b.responseID
+}
+
+func (b *baseMessage) SetResponseID(responseID uint32) {
+	b.responseID = responseID
 }

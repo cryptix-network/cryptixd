@@ -58,6 +58,7 @@ func (x *TransactionMessage) toAppMessage() (appmessage.Message, error) {
 		SubnetworkID: *subnetworkID,
 		Gas:          x.Gas,
 		Payload:      x.Payload,
+		Mass:         x.Mass,
 	}, nil
 }
 
@@ -122,5 +123,6 @@ func (x *TransactionMessage) fromAppMessage(msgTx *appmessage.MsgTx) {
 		SubnetworkId: domainSubnetworkIDToProto(&msgTx.SubnetworkID),
 		Gas:          msgTx.Gas,
 		Payload:      msgTx.Payload,
+		Mass:         msgTx.Mass,
 	}
 }

@@ -30,6 +30,7 @@ message TransactionMessage{
   SubnetworkId subnetworkId = 5;
   uint64 gas = 6;
   bytes payload = 8;
+  uint64 mass = 9;
 }
 
 message TransactionInput{
@@ -306,6 +307,23 @@ message BlockWithTrustedDataV4Message {
 message TrustedDataMessage {
   repeated DaaBlockV4 daaWindow = 1;
   repeated BlockGhostdagDataHashPair ghostdagData = 2;
+}
+
+message RequestFastIntentsMessage {
+  repeated Hash intentIds = 1;
+}
+
+message FastIntentMessage {
+  Hash intentId = 1;
+  TransactionMessage baseTransaction = 2;
+  uint64 intentNonce = 3;
+  uint64 clientCreatedAtMs = 4;
+  uint64 maxFee = 5;
+}
+
+message FastMicroblockMessage {
+  uint64 microblockTimeMs = 1;
+  repeated Hash intentIds = 2;
 }
 
 message BlockProducerClaimV1Message {

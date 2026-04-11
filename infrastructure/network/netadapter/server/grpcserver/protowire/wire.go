@@ -11,6 +11,13 @@ type converter interface {
 	toAppMessage() (appmessage.Message, error)
 }
 
+type messageEnvelope interface {
+	RequestID() uint32
+	SetRequestID(uint32)
+	ResponseID() uint32
+	SetResponseID(uint32)
+}
+
 // ErrUnknownMessagePayload is returned when a message payload type is unknown to this node version.
 var ErrUnknownMessagePayload = stdErrors.New("received unknown message payload")
 
@@ -27,6 +34,10 @@ func (x *CryptixdMessage) ToAppMessage() (appmessage.Message, error) {
 	if err != nil {
 		return nil, err
 	}
+	if envelope, ok := appMessage.(messageEnvelope); ok {
+		envelope.SetRequestID(x.RequestId)
+		envelope.SetResponseID(x.ResponseId)
+	}
 	return appMessage, nil
 }
 
@@ -36,9 +47,14 @@ func FromAppMessage(message appmessage.Message) (*CryptixdMessage, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &CryptixdMessage{
+	cryptixdMessage := &CryptixdMessage{
 		Payload: payload,
-	}, nil
+	}
+	if envelope, ok := message.(messageEnvelope); ok {
+		cryptixdMessage.RequestId = envelope.RequestID()
+		cryptixdMessage.ResponseId = envelope.ResponseID()
+	}
+	return cryptixdMessage, nil
 }
 
 func toPayload(message appmessage.Message) (isCryptixdMessage_Payload, error) {
@@ -359,6 +375,27 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 		return payload, nil
 	case *appmessage.MsgRequestAnticone:
 		payload := new(CryptixdMessage_RequestAnticone)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgRequestFastIntents:
+		payload := new(CryptixdMessage_RequestFastIntents)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgFastIntent:
+		payload := new(CryptixdMessage_FastIntent)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgFastMicroblock:
+		payload := new(CryptixdMessage_FastMicroblock)
 		err := payload.fromAppMessage(message)
 		if err != nil {
 			return nil, err

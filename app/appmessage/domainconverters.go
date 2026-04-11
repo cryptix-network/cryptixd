@@ -97,6 +97,7 @@ func DomainTransactionToMsgTx(domainTransaction *externalapi.DomainTransaction) 
 		SubnetworkID: domainTransaction.SubnetworkID,
 		Gas:          domainTransaction.Gas,
 		Payload:      domainTransaction.Payload,
+		Mass:         domainTransaction.Mass,
 	}
 }
 
@@ -147,6 +148,7 @@ func MsgTxToDomainTransaction(msgTx *MsgTx) *externalapi.DomainTransaction {
 		SubnetworkID: msgTx.SubnetworkID,
 		Gas:          msgTx.Gas,
 		Payload:      payload,
+		Mass:         msgTx.Mass,
 	}
 }
 
