@@ -1,6 +1,8 @@
 package rpchandlers
 
 import (
+	"encoding/hex"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/rpc/rpccontext"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
@@ -12,6 +14,10 @@ func HandleGetConnectedPeerInfo(context *rpccontext.Context, _ *router.Router, _
 	ibdPeer := context.ProtocolManager.IBDPeer()
 	infos := make([]*appmessage.GetConnectedPeerInfoMessage, 0, len(peers))
 	for _, peer := range peers {
+		unifiedNodeID := ""
+		if id := peer.UnifiedNodeID(); id != nil {
+			unifiedNodeID = hex.EncodeToString(id[:])
+		}
 		info := &appmessage.GetConnectedPeerInfoMessage{
 			ID:                        peer.ID().String(),
 			Address:                   peer.Address(),
@@ -22,6 +28,7 @@ func HandleGetConnectedPeerInfo(context *rpccontext.Context, _ *router.Router, _
 			AdvertisedProtocolVersion: peer.AdvertisedProtocolVersion(),
 			TimeConnected:             peer.TimeConnected().Milliseconds(),
 			IsIBDPeer:                 peer == ibdPeer,
+			UnifiedNodeID:             unifiedNodeID,
 		}
 		infos = append(infos, info)
 	}

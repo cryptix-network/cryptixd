@@ -11,6 +11,7 @@ import (
 // SendAddressesContext is the interface for the context needed for the SendAddresses flow.
 type SendAddressesContext interface {
 	AddressManager() *addressmanager.AddressManager
+	IsPayloadHfActive() bool
 }
 
 // SendAddresses sends addresses to a peer that requests it.
@@ -21,7 +22,12 @@ func SendAddresses(context SendAddressesContext, incomingRoute *router.Route, ou
 			return err
 		}
 
-		addresses := context.AddressManager().Addresses()
+		var addresses []*appmessage.NetAddress
+		if context.IsPayloadHfActive() {
+			addresses = context.AddressManager().VerifiedAddresses()
+		} else {
+			addresses = context.AddressManager().Addresses()
+		}
 		msgAddresses := appmessage.NewMsgAddresses(shuffleAddresses(addresses))
 
 		err = outgoingRoute.Enqueue(msgAddresses)

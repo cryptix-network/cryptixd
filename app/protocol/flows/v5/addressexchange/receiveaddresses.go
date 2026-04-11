@@ -12,11 +12,17 @@ import (
 // ReceiveAddressesContext is the interface for the context needed for the ReceiveAddresses flow.
 type ReceiveAddressesContext interface {
 	AddressManager() *addressmanager.AddressManager
+	IsPayloadHfActive() bool
 }
+
+const maxUniqueAddressesAccepted = 1024
 
 // ReceiveAddresses asks a peer for more addresses if needed.
 func ReceiveAddresses(context ReceiveAddressesContext, incomingRoute *router.Route, outgoingRoute *router.Route,
 	peer *peerpkg.Peer) error {
+	if context.IsPayloadHfActive() && peer.UnifiedNodeID() == nil {
+		return protocolerrors.Errorf(true, "received addresses from peer without verified unified node ID after hardfork")
+	}
 
 	subnetworkID := peer.SubnetworkID()
 	msgGetAddresses := appmessage.NewMsgRequestAddresses(false, subnetworkID)
@@ -34,6 +40,23 @@ func ReceiveAddresses(context ReceiveAddressesContext, incomingRoute *router.Rou
 	if len(msgAddresses.AddressList) > addressmanager.GetAddressesMax {
 		return protocolerrors.Errorf(true, "address count exceeded %d", addressmanager.GetAddressesMax)
 	}
-
-	return context.AddressManager().AddAddresses(msgAddresses.AddressList...)
+	unique := make(map[string]*appmessage.NetAddress, len(msgAddresses.AddressList))
+	for _, addr := range msgAddresses.AddressList {
+		if addr == nil {
+			continue
+		}
+		key := addr.TCPAddress().String()
+		if _, exists := unique[key]; exists {
+			continue
+		}
+		unique[key] = addr
+		if len(unique) > maxUniqueAddressesAccepted {
+			return protocolerrors.Errorf(true, "unique address count exceeded %d", maxUniqueAddressesAccepted)
+		}
+	}
+	deduped := make([]*appmessage.NetAddress, 0, len(unique))
+	for _, addr := range unique {
+		deduped = append(deduped, addr)
+	}
+	return context.AddressManager().AddAddresses(deduped...)
 }

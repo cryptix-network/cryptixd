@@ -37,6 +37,7 @@ func (x *CryptixdMessage_GetConnectedPeerInfoResponse) fromAppMessage(message *a
 			AdvertisedProtocolVersion: info.AdvertisedProtocolVersion,
 			TimeConnected:             info.TimeConnected,
 			IsIbdPeer:                 info.IsIBDPeer,
+			UnifiedNodeId:             info.UnifiedNodeID,
 		}
 	}
 	x.GetConnectedPeerInfoResponse = &GetConnectedPeerInfoResponseMessage{
@@ -86,7 +87,8 @@ func (x *GetConnectedPeerInfoMessage) toAppMessage() (*appmessage.GetConnectedPe
 		TimeOffset:                x.TimeOffset,
 		UserAgent:                 x.UserAgent,
 		AdvertisedProtocolVersion: x.AdvertisedProtocolVersion,
-		TimeConnected:             x.TimeOffset,
+		TimeConnected:             x.TimeConnected,
 		IsIBDPeer:                 x.IsIbdPeer,
+		UnifiedNodeID:             x.UnifiedNodeId,
 	}, nil
 }

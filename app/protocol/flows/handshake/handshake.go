@@ -91,7 +91,7 @@ func HandleHandshake(context HandleHandshakeContext, netConnection *netadapter.N
 	}
 
 	if peerAddress != nil {
-		err := context.AddressManager().AddAddresses(peerAddress)
+		err := context.AddressManager().AddAddressesVerified(peerAddress)
 		if err != nil {
 			return nil, err
 		}

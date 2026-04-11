@@ -47,4 +47,5 @@ type GetConnectedPeerInfoMessage struct {
 	AdvertisedProtocolVersion uint32
 	TimeConnected             int64
 	IsIBDPeer                 bool
+	UnifiedNodeID             string
 }

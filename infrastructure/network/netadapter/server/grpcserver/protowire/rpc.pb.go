@@ -2120,7 +2120,9 @@ type GetConnectedPeerInfoMessage struct {
 	// The timestamp of when this peer connected to this cryptixd
 	TimeConnected int64 `protobuf:"varint,10,opt,name=timeConnected,proto3" json:"timeConnected,omitempty"`
 	// Whether this peer is the IBD peer (if IBD is running)
-	IsIbdPeer     bool `protobuf:"varint,11,opt,name=isIbdPeer,proto3" json:"isIbdPeer,omitempty"`
+	IsIbdPeer bool `protobuf:"varint,11,opt,name=isIbdPeer,proto3" json:"isIbdPeer,omitempty"`
+	// Unified node identity advertised during handshake (hex-encoded BLAKE3-256 over x-only pubkey).
+	UnifiedNodeId string `protobuf:"bytes,12,opt,name=unifiedNodeId,proto3" json:"unifiedNodeId,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2216,6 +2218,13 @@ func (x *GetConnectedPeerInfoMessage) GetIsIbdPeer() bool {
 		return x.IsIbdPeer
 	}
 	return false
+}
+
+func (x *GetConnectedPeerInfoMessage) GetUnifiedNodeId() string {
+	if x != nil {
+		return x.UnifiedNodeId
+	}
+	return ""
 }
 
 // AddPeerRequestMessage adds a peer to cryptixd's outgoing connection list.
@@ -7931,7 +7940,7 @@ const file_rpc_proto_rawDesc = "" +
 	"\"GetConnectedPeerInfoRequestMessage\"\x8f\x01\n" +
 	"#GetConnectedPeerInfoResponseMessage\x12<\n" +
 	"\x05infos\x18\x01 \x03(\v2&.protowire.GetConnectedPeerInfoMessageR\x05infos\x12*\n" +
-	"\x05error\x18\xe8\a \x01(\v2\x13.protowire.RPCErrorR\x05error\"\xd3\x02\n" +
+	"\x05error\x18\xe8\a \x01(\v2\x13.protowire.RPCErrorR\x05error\"\xf9\x02\n" +
 	"\x1bGetConnectedPeerInfoMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12*\n" +
@@ -7946,7 +7955,8 @@ const file_rpc_proto_rawDesc = "" +
 	"\x19advertisedProtocolVersion\x18\t \x01(\rR\x19advertisedProtocolVersion\x12$\n" +
 	"\rtimeConnected\x18\n" +
 	" \x01(\x03R\rtimeConnected\x12\x1c\n" +
-	"\tisIbdPeer\x18\v \x01(\bR\tisIbdPeer\"S\n" +
+	"\tisIbdPeer\x18\v \x01(\bR\tisIbdPeer\x12$\n" +
+	"\runifiedNodeId\x18\f \x01(\tR\runifiedNodeId\"S\n" +
 	"\x15AddPeerRequestMessage\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12 \n" +
 	"\visPermanent\x18\x02 \x01(\bR\visPermanent\"D\n" +

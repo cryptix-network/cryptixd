@@ -144,6 +144,17 @@ func (as *addressStore) getAllNotBannedNetAddresses() []*appmessage.NetAddress {
 	return addresses
 }
 
+func (as *addressStore) getAllVerifiedNotBannedNetAddresses() []*appmessage.NetAddress {
+	addresses := make([]*appmessage.NetAddress, 0, len(as.notBannedAddresses))
+	for _, address := range as.notBannedAddresses {
+		if !address.verified {
+			continue
+		}
+		addresses = append(addresses, address.netAddress)
+	}
+	return addresses
+}
+
 func (as *addressStore) getAllNotBannedNetAddressesWithout(ignoredAddresses []*appmessage.NetAddress) []*address {
 	ignoredKeys := netAddressesKeys(ignoredAddresses)
 
@@ -240,13 +251,16 @@ func (as *addressStore) deserializeAddressKey(serializedKey []byte) addressKey {
 }
 
 func (as *addressStore) serializeAddress(address *address) []byte {
-	serializedSize := 16 + 2 + 8 + 8 // ipv6 + port + timestamp + connectionFailedCount
+	serializedSize := 16 + 2 + 8 + 8 + 1 // ipv6 + port + timestamp + connectionFailedCount + verified
 	serializedNetAddress := make([]byte, serializedSize)
 
 	copy(serializedNetAddress[:], address.netAddress.IP.To16()[:])
 	binary.LittleEndian.PutUint16(serializedNetAddress[16:], address.netAddress.Port)
 	binary.LittleEndian.PutUint64(serializedNetAddress[18:], uint64(address.netAddress.Timestamp.UnixMilliseconds()))
 	binary.LittleEndian.PutUint64(serializedNetAddress[26:], uint64(address.connectionFailedCount))
+	if address.verified {
+		serializedNetAddress[34] = 1
+	}
 
 	return serializedNetAddress
 }
@@ -258,6 +272,7 @@ func (as *addressStore) deserializeAddress(serializedAddress []byte) *address {
 	port := binary.LittleEndian.Uint16(serializedAddress[16:])
 	timestamp := mstime.UnixMilliseconds(int64(binary.LittleEndian.Uint64(serializedAddress[18:])))
 	connectionFailedCount := binary.LittleEndian.Uint64(serializedAddress[26:])
+	verified := len(serializedAddress) >= 35 && serializedAddress[34] == 1
 
 	return &address{
 		netAddress: &appmessage.NetAddress{
@@ -266,5 +281,6 @@ func (as *addressStore) deserializeAddress(serializedAddress []byte) *address {
 			Timestamp: timestamp,
 		},
 		connectionFailedCount: connectionFailedCount,
+		verified:              verified,
 	}
 }

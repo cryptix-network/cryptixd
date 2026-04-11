@@ -19,6 +19,20 @@ func (f fakeReceiveAddressesContext) AddressManager() *addressmanager.AddressMan
 	return nil
 }
 
+func (f fakeReceiveAddressesContext) IsPayloadHfActive() bool {
+	return false
+}
+
+type fakeReceiveAddressesHFContext struct{}
+
+func (f fakeReceiveAddressesHFContext) AddressManager() *addressmanager.AddressManager {
+	return nil
+}
+
+func (f fakeReceiveAddressesHFContext) IsPayloadHfActive() bool {
+	return true
+}
+
 func TestReceiveAddressesErrors(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		incomingRoute := router.NewRoute("incoming")
@@ -48,4 +62,13 @@ func TestReceiveAddressesErrors(t *testing.T) {
 			t.Fatalf("timed out after %s", time.Second)
 		}
 	})
+}
+
+func TestReceiveAddressesRejectsMissingUnifiedNodeIDAfterHF(t *testing.T) {
+	incomingRoute := router.NewRoute("incoming")
+	outgoingRoute := router.NewRoute("outgoing")
+	peer := peerpkg.New(nil)
+
+	err := addressexchange.ReceiveAddresses(fakeReceiveAddressesHFContext{}, incomingRoute, outgoingRoute, peer)
+	checkFlowError(t, err, true, true, "without verified unified node ID after hardfork")
 }

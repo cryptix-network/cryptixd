@@ -34,6 +34,7 @@ type addressKey struct {
 type address struct {
 	netAddress            *appmessage.NetAddress
 	connectionFailedCount uint64
+	verified              bool
 }
 
 type ipv6 [net.IPv6len]byte
@@ -83,14 +84,22 @@ func New(cfg *Config, database database.Database) (*AddressManager, error) {
 	}, nil
 }
 
-func (am *AddressManager) addAddressNoLock(netAddress *appmessage.NetAddress) error {
+func (am *AddressManager) addAddressNoLock(netAddress *appmessage.NetAddress, verified bool) error {
 	if !IsRoutable(netAddress, am.cfg.AcceptUnroutable) {
 		return nil
 	}
 
 	key := netAddressKey(netAddress)
-	// We mark `connectionFailedCount` as 0 only after first success
-	address := &address{netAddress: netAddress, connectionFailedCount: 1}
+	if existing, ok := am.store.getNotBanned(key); ok {
+		if verified && !existing.verified {
+			existing.verified = true
+			return am.store.updateNotBanned(key, existing)
+		}
+		return nil
+	}
+	// We mark `connectionFailedCount` as 0 only after first success.
+	// Addresses learned from gossip are unverified until a successful handshake.
+	address := &address{netAddress: netAddress, connectionFailedCount: 1, verified: verified}
 	err := am.store.add(key, address)
 	if err != nil {
 		return err
@@ -126,7 +135,7 @@ func (am *AddressManager) AddAddress(address *appmessage.NetAddress) error {
 	am.mutex.Lock()
 	defer am.mutex.Unlock()
 
-	return am.addAddressNoLock(address)
+	return am.addAddressNoLock(address, false)
 }
 
 // AddAddresses adds addresses to the address manager
@@ -135,7 +144,29 @@ func (am *AddressManager) AddAddresses(addresses ...*appmessage.NetAddress) erro
 	defer am.mutex.Unlock()
 
 	for _, address := range addresses {
-		err := am.addAddressNoLock(address)
+		err := am.addAddressNoLock(address, false)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// AddAddressVerified adds a verified address to the address manager.
+func (am *AddressManager) AddAddressVerified(address *appmessage.NetAddress) error {
+	am.mutex.Lock()
+	defer am.mutex.Unlock()
+
+	return am.addAddressNoLock(address, true)
+}
+
+// AddAddressesVerified adds verified addresses to the address manager.
+func (am *AddressManager) AddAddressesVerified(addresses ...*appmessage.NetAddress) error {
+	am.mutex.Lock()
+	defer am.mutex.Unlock()
+
+	for _, address := range addresses {
+		err := am.addAddressNoLock(address, true)
 		if err != nil {
 			return err
 		}
@@ -184,6 +215,7 @@ func (am *AddressManager) MarkConnectionSuccess(address *appmessage.NetAddress) 
 		return errors.Errorf("address %s is not registered with the address manager", address.TCPAddress())
 	}
 	entry.connectionFailedCount = 0
+	entry.verified = true
 	return am.store.updateNotBanned(key, entry)
 }
 
@@ -193,6 +225,14 @@ func (am *AddressManager) Addresses() []*appmessage.NetAddress {
 	defer am.mutex.Unlock()
 
 	return am.store.getAllNotBannedNetAddresses()
+}
+
+// VerifiedAddresses returns only addresses that were verified by a successful handshake.
+func (am *AddressManager) VerifiedAddresses() []*appmessage.NetAddress {
+	am.mutex.Lock()
+	defer am.mutex.Unlock()
+
+	return am.store.getAllVerifiedNotBannedNetAddresses()
 }
 
 // BannedAddresses returns all banned addresses

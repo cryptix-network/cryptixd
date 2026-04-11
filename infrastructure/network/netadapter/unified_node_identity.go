@@ -24,8 +24,8 @@ const (
 	unifiedNodeIDHexLength           = 64
 	nodePoWDomainTag                 = "cryptix-node-id-pow-v1"
 	nodeAuthDomainTag                = "cryptix-node-id-auth-v1"
-	mainnetNodePoWDifficulty         = 20
-	nonMainnetNodePoWDifficulty      = 18
+	mainnetNodePoWDifficulty         = 24
+	nonMainnetNodePoWDifficulty      = 22
 )
 
 type UnifiedNodeIdentity struct {
@@ -57,11 +57,34 @@ func loadOrCreateUnifiedNodeIdentity(appDir string, networkName string) (*Unifie
 
 	identityFile := filepath.Join(identityDir, unifiedNodeIdentityFilename)
 	if identity, err := loadUnifiedNodeIdentity(identityFile, networkCode); err == nil {
+		difficulty, _ := nodePoWDifficulty(networkCode)
+		log.Infof(
+			"Unified node identity loaded from disk (path: %s, pubkey_xonly: %s, node_id: %s, pow_nonce: %d, difficulty: %d)",
+			identityFile,
+			hex.EncodeToString(identity.PubKeyXOnly[:]),
+			hex.EncodeToString(identity.NodeID[:]),
+			identity.PowNonce,
+			difficulty,
+		)
 		return identity, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		quarantinePath := identityFile + fmt.Sprintf(".corrupt-%d", time.Now().UnixMilli())
+		log.Warnf(
+			"Unified node identity file invalid/corrupt (path: %s, reason: %s), quarantining to %s and regenerating",
+			identityFile,
+			err,
+			quarantinePath,
+		)
 		_ = os.Rename(identityFile, quarantinePath)
 	}
+	difficulty, _ := nodePoWDifficulty(networkCode)
+	log.Infof(
+		"Unified node identity generation started (path: %s, network: %s, network_code: %d, difficulty: %d)",
+		identityFile,
+		networkName,
+		networkCode,
+		difficulty,
+	)
 
 	return createAndPersistUnifiedNodeIdentity(identityFile, networkCode)
 }
@@ -155,11 +178,29 @@ func loadUnifiedNodeIdentity(identityFile string, networkCode uint8) (*UnifiedNo
 		powNonce = *disk.PowNonce
 	}
 	if !isValidNodePoWNonce(networkCode, storedPub, powNonce) {
+		difficulty, _ := nodePoWDifficulty(networkCode)
+		log.Infof(
+			"Unified node identity PoW is missing/invalid; re-mining (path: %s, pubkey_xonly: %s, old_pow_nonce: %d, difficulty: %d)",
+			identityFile,
+			hex.EncodeToString(storedPub[:]),
+			powNonce,
+			difficulty,
+		)
+		startedAt := time.Now()
 		powNonce = mineNodePoWNonce(networkCode, storedPub)
 		disk.PowNonce = &powNonce
 		if err := persistUnifiedNodeIdentity(identityFile, &disk); err != nil {
 			return nil, err
 		}
+		log.Infof(
+			"Unified node identity PoW re-mined (path: %s, pubkey_xonly: %s, node_id: %s, pow_nonce: %d, difficulty: %d, elapsed_ms: %d)",
+			identityFile,
+			hex.EncodeToString(storedPub[:]),
+			hex.EncodeToString(nodeID[:]),
+			powNonce,
+			difficulty,
+			time.Since(startedAt).Milliseconds(),
+		)
 	}
 
 	return &UnifiedNodeIdentity{
@@ -171,6 +212,10 @@ func loadUnifiedNodeIdentity(identityFile string, networkCode uint8) (*UnifiedNo
 }
 
 func createAndPersistUnifiedNodeIdentity(identityFile string, networkCode uint8) (*UnifiedNodeIdentity, error) {
+	difficulty, ok := nodePoWDifficulty(networkCode)
+	if !ok {
+		return nil, errors.Errorf("unsupported network code %d", networkCode)
+	}
 	keyPair, err := secp256k1.GenerateSchnorrKeyPair()
 	if err != nil {
 		return nil, err
@@ -190,6 +235,7 @@ func createAndPersistUnifiedNodeIdentity(identityFile string, networkCode uint8)
 	var pubKeyXOnly [32]byte
 	copy(pubKeyXOnly[:], pubSerialized[:])
 	nodeID := computeUnifiedNodeID(pubKeyXOnly)
+	startedAt := time.Now()
 	powNonce := mineNodePoWNonce(networkCode, pubKeyXOnly)
 
 	disk := &unifiedNodeIdentityDisk{
@@ -203,6 +249,15 @@ func createAndPersistUnifiedNodeIdentity(identityFile string, networkCode uint8)
 	if err := persistUnifiedNodeIdentity(identityFile, disk); err != nil {
 		return nil, err
 	}
+	log.Infof(
+		"Unified node identity generation finished (path: %s, pubkey_xonly: %s, node_id: %s, pow_nonce: %d, difficulty: %d, elapsed_ms: %d)",
+		identityFile,
+		hex.EncodeToString(pubKeyXOnly[:]),
+		hex.EncodeToString(nodeID[:]),
+		powNonce,
+		difficulty,
+		time.Since(startedAt).Milliseconds(),
+	)
 
 	return &UnifiedNodeIdentity{
 		PrivateKey:  privateKey,
