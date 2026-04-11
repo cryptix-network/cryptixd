@@ -1794,16 +1794,15 @@ type CryptixdMessage_RequestNextPruningPointAndItsAnticoneBlocks struct {
 }
 
 type CryptixdMessage_RequestAntiFraudSnapshotV1 struct {
-	// 60 was StrongNodeAnnouncementMessage (legacy benchmark path, removed).
-	RequestAntiFraudSnapshotV1 *RequestAntiFraudSnapshotV1Message `protobuf:"bytes,61,opt,name=requestAntiFraudSnapshotV1,proto3,oneof"`
+	RequestAntiFraudSnapshotV1 *RequestAntiFraudSnapshotV1Message `protobuf:"bytes,60,opt,name=requestAntiFraudSnapshotV1,proto3,oneof"`
 }
 
 type CryptixdMessage_AntiFraudSnapshotV1 struct {
-	AntiFraudSnapshotV1 *AntiFraudSnapshotV1Message `protobuf:"bytes,62,opt,name=antiFraudSnapshotV1,proto3,oneof"`
+	AntiFraudSnapshotV1 *AntiFraudSnapshotV1Message `protobuf:"bytes,61,opt,name=antiFraudSnapshotV1,proto3,oneof"`
 }
 
 type CryptixdMessage_BlockProducerClaimV1 struct {
-	BlockProducerClaimV1 *BlockProducerClaimV1Message `protobuf:"bytes,63,opt,name=blockProducerClaimV1,proto3,oneof"`
+	BlockProducerClaimV1 *BlockProducerClaimV1Message `protobuf:"bytes,62,opt,name=blockProducerClaimV1,proto3,oneof"`
 }
 
 type CryptixdMessage_GetCurrentNetworkRequest struct {
@@ -2606,9 +2605,9 @@ const file_messages_proto_rawDesc = "" +
 	"\x14ibdChainBlockLocator\x186 \x01(\v2&.protowire.IbdChainBlockLocatorMessageH\x00R\x14ibdChainBlockLocator\x12M\n" +
 	"\x0frequestAnticone\x187 \x01(\v2!.protowire.RequestAnticoneMessageH\x00R\x0frequestAnticone\x12\xa1\x01\n" +
 	"+requestNextPruningPointAndItsAnticoneBlocks\x188 \x01(\v2=.protowire.RequestNextPruningPointAndItsAnticoneBlocksMessageH\x00R+requestNextPruningPointAndItsAnticoneBlocks\x12n\n" +
-	"\x1arequestAntiFraudSnapshotV1\x18= \x01(\v2,.protowire.RequestAntiFraudSnapshotV1MessageH\x00R\x1arequestAntiFraudSnapshotV1\x12Y\n" +
-	"\x13antiFraudSnapshotV1\x18> \x01(\v2%.protowire.AntiFraudSnapshotV1MessageH\x00R\x13antiFraudSnapshotV1\x12\\\n" +
-	"\x14blockProducerClaimV1\x18? \x01(\v2&.protowire.BlockProducerClaimV1MessageH\x00R\x14blockProducerClaimV1\x12i\n" +
+	"\x1arequestAntiFraudSnapshotV1\x18< \x01(\v2,.protowire.RequestAntiFraudSnapshotV1MessageH\x00R\x1arequestAntiFraudSnapshotV1\x12Y\n" +
+	"\x13antiFraudSnapshotV1\x18= \x01(\v2%.protowire.AntiFraudSnapshotV1MessageH\x00R\x13antiFraudSnapshotV1\x12\\\n" +
+	"\x14blockProducerClaimV1\x18> \x01(\v2&.protowire.BlockProducerClaimV1MessageH\x00R\x14blockProducerClaimV1\x12i\n" +
 	"\x18getCurrentNetworkRequest\x18\xe9\a \x01(\v2*.protowire.GetCurrentNetworkRequestMessageH\x00R\x18getCurrentNetworkRequest\x12l\n" +
 	"\x19getCurrentNetworkResponse\x18\xea\a \x01(\v2+.protowire.GetCurrentNetworkResponseMessageH\x00R\x19getCurrentNetworkResponse\x12W\n" +
 	"\x12submitBlockRequest\x18\xeb\a \x01(\v2$.protowire.SubmitBlockRequestMessageH\x00R\x12submitBlockRequest\x12Z\n" +
