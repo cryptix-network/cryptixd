@@ -55,7 +55,7 @@ type ConnectionManager struct {
 	antiFraudHashWindow         [3][32]byte
 	antiFraudCurrentSnapshot    *appmessage.MsgAntiFraudSnapshotV1
 	antiFraudPeerFallback       bool
-	antiFraudPeerVotes          map[string]*externalBanlistSnapshot
+	antiFraudPeerVotes          map[string]*peerAntiFraudVote
 
 	resetLoopChan chan struct{}
 	loopTicker    *time.Ticker
@@ -75,7 +75,7 @@ func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *
 		externallyBannedNodeIDs:     map[string]struct{}{},
 		locallyBannedUnifiedNodeIDs: map[string]struct{}{},
 		antiFraudPeerFallback:       true,
-		antiFraudPeerVotes:          map[string]*externalBanlistSnapshot{},
+		antiFraudPeerVotes:          map[string]*peerAntiFraudVote{},
 		resetLoopChan:               make(chan struct{}),
 		loopTicker:                  time.NewTicker(connectionsLoopInterval),
 	}

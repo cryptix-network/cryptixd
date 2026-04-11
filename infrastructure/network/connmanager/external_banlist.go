@@ -31,6 +31,8 @@ const (
 	externalBanlistMaxIPs          = 4096
 	externalBanlistMaxNodeIDs      = 4096
 	externalBanlistMaxEntryLength  = 256
+	externalBanlistPeerVoteMaxAge  = 2 * time.Minute
+	externalBanlistPeerVoteMaxSize = 512
 	antiFraudSchemaVersion         = 1
 	antiFraudDomainSep             = "cryptix-antifraud-snapshot-v1"
 	antiFraudSignatureHexLength    = 128
@@ -68,6 +70,11 @@ type normalizedAntiFraudSnapshot struct {
 	nodeIDEntries [][32]byte
 	signature     [64]byte
 	rootHash      [32]byte
+}
+
+type peerAntiFraudVote struct {
+	snapshot   *externalBanlistSnapshot
+	receivedAt time.Time
 }
 
 func (c *ConnectionManager) externalBanlistEnabled() bool {
@@ -833,13 +840,21 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 	}
 	result := &IngestPeerAntiFraudSnapshotResult{Applied: false, RootHash: snapshot.RootHash}
 
+	now := time.Now()
 	c.externalBanlistLock.Lock()
-	c.antiFraudPeerVotes[peerID] = snapshot
+	c.antiFraudPeerVotes[peerID] = &peerAntiFraudVote{
+		snapshot:   snapshot,
+		receivedAt: now,
+	}
+	pruneAntiFraudPeerVotes(c.antiFraudPeerVotes, now)
 	var highestSeq uint64
 	hasHighest := false
 	for _, vote := range c.antiFraudPeerVotes {
-		if !hasHighest || vote.SnapshotSeq > highestSeq {
-			highestSeq = vote.SnapshotSeq
+		if vote == nil || vote.snapshot == nil {
+			continue
+		}
+		if !hasHighest || vote.snapshot.SnapshotSeq > highestSeq {
+			highestSeq = vote.snapshot.SnapshotSeq
 			hasHighest = true
 		}
 	}
@@ -850,9 +865,16 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 
 	candidates := make([]*externalBanlistSnapshot, 0, len(c.antiFraudPeerVotes))
 	for _, vote := range c.antiFraudPeerVotes {
-		if vote.SnapshotSeq == highestSeq {
-			candidates = append(candidates, vote)
+		if vote == nil || vote.snapshot == nil {
+			continue
 		}
+		if vote.snapshot.SnapshotSeq == highestSeq {
+			candidates = append(candidates, vote.snapshot)
+		}
+	}
+	if len(candidates) == 0 {
+		c.externalBanlistLock.Unlock()
+		return result, nil
 	}
 	votesByHash := map[[32]byte]int{}
 	snapshotByHash := map[[32]byte]*externalBanlistSnapshot{}
@@ -880,6 +902,44 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 	c.externalBanlistLock.Unlock()
 	result.Applied = applied
 	return result, err
+}
+
+func pruneAntiFraudPeerVotes(votes map[string]*peerAntiFraudVote, now time.Time) {
+	if len(votes) == 0 {
+		return
+	}
+
+	for peerID, vote := range votes {
+		if vote == nil || vote.snapshot == nil || now.Sub(vote.receivedAt) > externalBanlistPeerVoteMaxAge {
+			delete(votes, peerID)
+		}
+	}
+	if len(votes) <= externalBanlistPeerVoteMaxSize {
+		return
+	}
+
+	type voteEntry struct {
+		peerID     string
+		receivedAt time.Time
+	}
+	ordered := make([]voteEntry, 0, len(votes))
+	for peerID, vote := range votes {
+		ordered = append(ordered, voteEntry{
+			peerID:     peerID,
+			receivedAt: vote.receivedAt,
+		})
+	}
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].receivedAt.Equal(ordered[j].receivedAt) {
+			return ordered[i].peerID < ordered[j].peerID
+		}
+		return ordered[i].receivedAt.Before(ordered[j].receivedAt)
+	})
+
+	overflow := len(votes) - externalBanlistPeerVoteMaxSize
+	for i := 0; i < overflow; i++ {
+		delete(votes, ordered[i].peerID)
+	}
 }
 
 func (c *ConnectionManager) AdvancePeerAntiFraudHashWindow(current [][32]byte, newHash [32]byte) [][32]byte {

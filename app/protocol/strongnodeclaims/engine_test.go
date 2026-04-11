@@ -57,6 +57,60 @@ func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 	}
 }
 
+func TestApplyChainPathUpdateRemovesClaimStateForRemovedBlocks(t *testing.T) {
+	tempDir := t.TempDir()
+	engine := New(true, "cryptix-mainnet", tempDir)
+
+	const (
+		privKeyHex   = "9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2"
+		blockHashHex = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	)
+	claim := mustBuildSignedClaim(t, 0, privKeyHex, blockHashHex)
+	blockHash, err := externalapi.NewDomainHashFromByteSlice(claim.BlockHash)
+	if err != nil {
+		t.Fatalf("invalid block hash in claim: %s", err)
+	}
+
+	outcome := engine.IngestClaim(claim, true, true)
+	if outcome.Status != IngestAccepted || outcome.Pending {
+		t.Fatalf("expected accepted known claim, got %+v", outcome)
+	}
+
+	engine.ApplyChainPathUpdate(
+		&externalapi.SelectedChainPath{Added: []*externalapi.DomainHash{blockHash}},
+		blockHash,
+		true,
+	)
+	engine.ApplyChainPathUpdate(
+		&externalapi.SelectedChainPath{Removed: []*externalapi.DomainHash{blockHash}},
+		blockHash,
+		true,
+	)
+
+	key := *blockHash.ByteArray()
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+
+	if _, ok := engine.state.WindowSet[key]; ok {
+		t.Fatalf("expected removed block to be absent from window set")
+	}
+	if _, ok := engine.state.RetentionSet[key]; ok {
+		t.Fatalf("expected removed block to be absent from retention set")
+	}
+	if _, ok := engine.state.RecentClaimsByBlock[key]; ok {
+		t.Fatalf("expected removed block to be absent from recent claims map")
+	}
+	if _, ok := engine.state.WinningClaimByBlock[key]; ok {
+		t.Fatalf("expected removed block to be absent from winning claims map")
+	}
+	if _, ok := engine.state.PendingUnknownClaims[key]; ok {
+		t.Fatalf("expected removed block to be absent from pending claims map")
+	}
+	if len(engine.state.ScoreByNodeID) != 0 {
+		t.Fatalf("expected no scores after removing the only claimed block, got %d", len(engine.state.ScoreByNodeID))
+	}
+}
+
 func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex string) *appmessage.MsgBlockProducerClaimV1 {
 	t.Helper()
 	var privKey [32]byte

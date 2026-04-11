@@ -2,7 +2,9 @@ package connmanager
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 )
 
 func TestExternalBanlistCandidateURLs(t *testing.T) {
@@ -112,5 +114,58 @@ func TestDecodeExternalBanlistPayloadStatusError(t *testing.T) {
 	_, err := decodeExternalBanlistPayload([]byte(`{"status":"error","ips":["127.0.0.1"]}`), 0)
 	if err == nil {
 		t.Fatalf("expected non-success status to return an error")
+	}
+}
+
+func TestPruneAntiFraudPeerVotesRemovesExpiredAndInvalidEntries(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	votes := map[string]*peerAntiFraudVote{
+		"fresh": {
+			snapshot:   &externalBanlistSnapshot{SnapshotSeq: 10},
+			receivedAt: now.Add(-time.Second),
+		},
+		"expired": {
+			snapshot:   &externalBanlistSnapshot{SnapshotSeq: 9},
+			receivedAt: now.Add(-externalBanlistPeerVoteMaxAge - time.Second),
+		},
+		"nil-vote": nil,
+		"nil-snap": {
+			snapshot:   nil,
+			receivedAt: now,
+		},
+	}
+
+	pruneAntiFraudPeerVotes(votes, now)
+
+	if len(votes) != 1 {
+		t.Fatalf("expected exactly one peer vote after pruning, got %d", len(votes))
+	}
+	if _, ok := votes["fresh"]; !ok {
+		t.Fatalf("expected fresh vote to remain after pruning")
+	}
+}
+
+func TestPruneAntiFraudPeerVotesCapsSizeToNewestEntries(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	votes := make(map[string]*peerAntiFraudVote, externalBanlistPeerVoteMaxSize+10)
+	for i := 0; i < externalBanlistPeerVoteMaxSize+10; i++ {
+		peerID := fmt.Sprintf("peer-%04d", i)
+		votes[peerID] = &peerAntiFraudVote{
+			snapshot:   &externalBanlistSnapshot{SnapshotSeq: uint64(i)},
+			receivedAt: now.Add(-time.Duration(i) * time.Millisecond),
+		}
+	}
+
+	pruneAntiFraudPeerVotes(votes, now)
+
+	if len(votes) != externalBanlistPeerVoteMaxSize {
+		t.Fatalf("expected pruned size %d, got %d", externalBanlistPeerVoteMaxSize, len(votes))
+	}
+	if _, ok := votes["peer-0000"]; !ok {
+		t.Fatalf("expected newest vote peer-0000 to remain after pruning")
+	}
+	oldestID := fmt.Sprintf("peer-%04d", externalBanlistPeerVoteMaxSize+9)
+	if _, ok := votes[oldestID]; ok {
+		t.Fatalf("expected oldest vote %s to be evicted", oldestID)
 	}
 }

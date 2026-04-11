@@ -218,6 +218,9 @@ func (e *Engine) ApplyChainPathUpdate(path *externalapi.SelectedChainPath, newSi
 			e.state.RetentionHashes = removeHashFromList(e.state.RetentionHashes, key)
 			changed = true
 		}
+		if purgeClaimStateForBlock(e.state, key) {
+			changed = true
+		}
 	}
 
 	for _, added := range path.Added {
@@ -258,9 +261,7 @@ func (e *Engine) ApplyChainPathUpdate(path *externalapi.SelectedChainPath, newSi
 		evicted := e.state.RetentionHashes[0]
 		e.state.RetentionHashes = e.state.RetentionHashes[1:]
 		delete(e.state.RetentionSet, evicted)
-		delete(e.state.RecentClaimsByBlock, evicted)
-		delete(e.state.WinningClaimByBlock, evicted)
-		delete(e.state.PendingUnknownClaims, evicted)
+		purgeClaimStateForBlock(e.state, evicted)
 		changed = true
 	}
 
@@ -575,6 +576,23 @@ func removeHashFromList(list [][32]byte, target [32]byte) [][32]byte {
 		}
 	}
 	return list
+}
+
+func purgeClaimStateForBlock(state *engineState, blockHash [32]byte) bool {
+	changed := false
+	if _, ok := state.RecentClaimsByBlock[blockHash]; ok {
+		delete(state.RecentClaimsByBlock, blockHash)
+		changed = true
+	}
+	if _, ok := state.WinningClaimByBlock[blockHash]; ok {
+		delete(state.WinningClaimByBlock, blockHash)
+		changed = true
+	}
+	if _, ok := state.PendingUnknownClaims[blockHash]; ok {
+		delete(state.PendingUnknownClaims, blockHash)
+		changed = true
+	}
+	return changed
 }
 
 func loadState(claimsDir string, state *engineState) error {
