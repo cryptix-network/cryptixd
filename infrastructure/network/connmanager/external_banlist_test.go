@@ -1,10 +1,8 @@
 package connmanager
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"testing"
-
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
 )
@@ -116,31 +114,5 @@ func TestDecodeExternalBanlistPayloadStatusError(t *testing.T) {
 	_, err := decodeExternalBanlistPayload([]byte(`{"status":"error","ips":["127.0.0.1"]}`), 0)
 	if err == nil {
 		t.Fatalf("expected non-success status to return an error")
-	}
-}
-
-func TestIsNodeIDBanned(t *testing.T) {
-	serializedID, err := hex.DecodeString("00112233445566778899aabbccddeeff")
-	if err != nil {
-		t.Fatalf("hex.DecodeString failed: %s", err)
-	}
-	peerID, err := id.FromBytes(serializedID)
-	if err != nil {
-		t.Fatalf("id.FromBytes failed: %s", err)
-	}
-
-	cm := &ConnectionManager{
-		cfg: &config.Config{
-			Flags: &config.Flags{
-				EnableExternalBanlist: true,
-			},
-		},
-		externallyBannedNodeIDs: map[string]struct{}{
-			peerID.String(): {},
-		},
-	}
-
-	if !cm.IsNodeIDBanned(peerID) {
-		t.Fatalf("expected peer ID to be banned")
 	}
 }

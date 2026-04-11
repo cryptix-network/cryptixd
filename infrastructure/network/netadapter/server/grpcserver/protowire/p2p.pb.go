@@ -3213,138 +3213,6 @@ func (x *TrustedDataMessage) GetGhostdagData() []*BlockGhostdagDataHashPair {
 	return nil
 }
 
-type StrongNodeAnnouncementMessage struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	SchemaVersion  uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
-	Network        string                 `protobuf:"bytes,2,opt,name=network,proto3" json:"network,omitempty"`
-	StaticIdRaw    []byte                 `protobuf:"bytes,3,opt,name=staticIdRaw,proto3" json:"staticIdRaw,omitempty"`
-	PubkeyXonly    []byte                 `protobuf:"bytes,4,opt,name=pubkeyXonly,proto3" json:"pubkeyXonly,omitempty"`
-	SeqNo          uint64                 `protobuf:"varint,5,opt,name=seqNo,proto3" json:"seqNo,omitempty"`
-	WindowStartMs  uint64                 `protobuf:"varint,6,opt,name=windowStartMs,proto3" json:"windowStartMs,omitempty"`
-	WindowEndMs    uint64                 `protobuf:"varint,7,opt,name=windowEndMs,proto3" json:"windowEndMs,omitempty"`
-	FoundBlocks10M uint32                 `protobuf:"varint,8,opt,name=foundBlocks10m,proto3" json:"foundBlocks10m,omitempty"`
-	TotalBlocks10M uint32                 `protobuf:"varint,9,opt,name=totalBlocks10m,proto3" json:"totalBlocks10m,omitempty"`
-	SentAtMs       uint64                 `protobuf:"varint,10,opt,name=sentAtMs,proto3" json:"sentAtMs,omitempty"`
-	ClaimedIp      []byte                 `protobuf:"bytes,11,opt,name=claimedIp,proto3" json:"claimedIp,omitempty"`
-	Signature      []byte                 `protobuf:"bytes,12,opt,name=signature,proto3" json:"signature,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
-}
-
-func (x *StrongNodeAnnouncementMessage) Reset() {
-	*x = StrongNodeAnnouncementMessage{}
-	mi := &file_p2p_proto_msgTypes[62]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *StrongNodeAnnouncementMessage) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*StrongNodeAnnouncementMessage) ProtoMessage() {}
-
-func (x *StrongNodeAnnouncementMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[62]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use StrongNodeAnnouncementMessage.ProtoReflect.Descriptor instead.
-func (*StrongNodeAnnouncementMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{62}
-}
-
-func (x *StrongNodeAnnouncementMessage) GetSchemaVersion() uint32 {
-	if x != nil {
-		return x.SchemaVersion
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetNetwork() string {
-	if x != nil {
-		return x.Network
-	}
-	return ""
-}
-
-func (x *StrongNodeAnnouncementMessage) GetStaticIdRaw() []byte {
-	if x != nil {
-		return x.StaticIdRaw
-	}
-	return nil
-}
-
-func (x *StrongNodeAnnouncementMessage) GetPubkeyXonly() []byte {
-	if x != nil {
-		return x.PubkeyXonly
-	}
-	return nil
-}
-
-func (x *StrongNodeAnnouncementMessage) GetSeqNo() uint64 {
-	if x != nil {
-		return x.SeqNo
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetWindowStartMs() uint64 {
-	if x != nil {
-		return x.WindowStartMs
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetWindowEndMs() uint64 {
-	if x != nil {
-		return x.WindowEndMs
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetFoundBlocks10M() uint32 {
-	if x != nil {
-		return x.FoundBlocks10M
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetTotalBlocks10M() uint32 {
-	if x != nil {
-		return x.TotalBlocks10M
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetSentAtMs() uint64 {
-	if x != nil {
-		return x.SentAtMs
-	}
-	return 0
-}
-
-func (x *StrongNodeAnnouncementMessage) GetClaimedIp() []byte {
-	if x != nil {
-		return x.ClaimedIp
-	}
-	return nil
-}
-
-func (x *StrongNodeAnnouncementMessage) GetSignature() []byte {
-	if x != nil {
-		return x.Signature
-	}
-	return nil
-}
-
 type BlockProducerClaimV1Message struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	SchemaVersion   uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
@@ -3358,7 +3226,7 @@ type BlockProducerClaimV1Message struct {
 
 func (x *BlockProducerClaimV1Message) Reset() {
 	*x = BlockProducerClaimV1Message{}
-	mi := &file_p2p_proto_msgTypes[63]
+	mi := &file_p2p_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3370,7 +3238,7 @@ func (x *BlockProducerClaimV1Message) String() string {
 func (*BlockProducerClaimV1Message) ProtoMessage() {}
 
 func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[63]
+	mi := &file_p2p_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3383,7 +3251,7 @@ func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockProducerClaimV1Message.ProtoReflect.Descriptor instead.
 func (*BlockProducerClaimV1Message) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{63}
+	return file_p2p_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *BlockProducerClaimV1Message) GetSchemaVersion() uint32 {
@@ -3619,21 +3487,7 @@ const file_p2p_proto_rawDesc = "" +
 	"\x13ghostdagDataIndices\x18\x03 \x03(\x04R\x13ghostdagDataIndices\"\x93\x01\n" +
 	"\x12TrustedDataMessage\x123\n" +
 	"\tdaaWindow\x18\x01 \x03(\v2\x15.protowire.DaaBlockV4R\tdaaWindow\x12H\n" +
-	"\fghostdagData\x18\x02 \x03(\v2$.protowire.BlockGhostdagDataHashPairR\fghostdagData\"\xa9\x03\n" +
-	"\x1dStrongNodeAnnouncementMessage\x12$\n" +
-	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
-	"\anetwork\x18\x02 \x01(\tR\anetwork\x12 \n" +
-	"\vstaticIdRaw\x18\x03 \x01(\fR\vstaticIdRaw\x12 \n" +
-	"\vpubkeyXonly\x18\x04 \x01(\fR\vpubkeyXonly\x12\x14\n" +
-	"\x05seqNo\x18\x05 \x01(\x04R\x05seqNo\x12$\n" +
-	"\rwindowStartMs\x18\x06 \x01(\x04R\rwindowStartMs\x12 \n" +
-	"\vwindowEndMs\x18\a \x01(\x04R\vwindowEndMs\x12&\n" +
-	"\x0efoundBlocks10m\x18\b \x01(\rR\x0efoundBlocks10m\x12&\n" +
-	"\x0etotalBlocks10m\x18\t \x01(\rR\x0etotalBlocks10m\x12\x1a\n" +
-	"\bsentAtMs\x18\n" +
-	" \x01(\x04R\bsentAtMs\x12\x1c\n" +
-	"\tclaimedIp\x18\v \x01(\fR\tclaimedIp\x12\x1c\n" +
-	"\tsignature\x18\f \x01(\fR\tsignature\"\xc3\x01\n" +
+	"\fghostdagData\x18\x02 \x03(\v2$.protowire.BlockGhostdagDataHashPairR\fghostdagData\"\xc3\x01\n" +
 	"\x1bBlockProducerClaimV1Message\x12$\n" +
 	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\rR\anetwork\x12\x1c\n" +
@@ -3653,7 +3507,7 @@ func file_p2p_proto_rawDescGZIP() []byte {
 	return file_p2p_proto_rawDescData
 }
 
-var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
+var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
 var file_p2p_proto_goTypes = []any{
 	(*RequestAddressesMessage)(nil),                            // 0: protowire.RequestAddressesMessage
 	(*AddressesMessage)(nil),                                   // 1: protowire.AddressesMessage
@@ -3717,8 +3571,7 @@ var file_p2p_proto_goTypes = []any{
 	(*ReadyMessage)(nil),                                       // 59: protowire.ReadyMessage
 	(*BlockWithTrustedDataV4Message)(nil),                      // 60: protowire.BlockWithTrustedDataV4Message
 	(*TrustedDataMessage)(nil),                                 // 61: protowire.TrustedDataMessage
-	(*StrongNodeAnnouncementMessage)(nil),                      // 62: protowire.StrongNodeAnnouncementMessage
-	(*BlockProducerClaimV1Message)(nil),                        // 63: protowire.BlockProducerClaimV1Message
+	(*BlockProducerClaimV1Message)(nil),                        // 62: protowire.BlockProducerClaimV1Message
 }
 var file_p2p_proto_depIdxs = []int32{
 	3,  // 0: protowire.RequestAddressesMessage.subnetworkId:type_name -> protowire.SubnetworkId
@@ -3802,7 +3655,7 @@ func file_p2p_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_p2p_proto_rawDesc), len(file_p2p_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   64,
+			NumMessages:   63,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

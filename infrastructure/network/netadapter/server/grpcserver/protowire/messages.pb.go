@@ -68,7 +68,6 @@ type CryptixdMessage struct {
 	//	*CryptixdMessage_IbdChainBlockLocator
 	//	*CryptixdMessage_RequestAnticone
 	//	*CryptixdMessage_RequestNextPruningPointAndItsAnticoneBlocks
-	//	*CryptixdMessage_StrongNodeAnnouncement
 	//	*CryptixdMessage_RequestAntiFraudSnapshotV1
 	//	*CryptixdMessage_AntiFraudSnapshotV1
 	//	*CryptixdMessage_BlockProducerClaimV1
@@ -605,15 +604,6 @@ func (x *CryptixdMessage) GetRequestNextPruningPointAndItsAnticoneBlocks() *Requ
 	if x != nil {
 		if x, ok := x.Payload.(*CryptixdMessage_RequestNextPruningPointAndItsAnticoneBlocks); ok {
 			return x.RequestNextPruningPointAndItsAnticoneBlocks
-		}
-	}
-	return nil
-}
-
-func (x *CryptixdMessage) GetStrongNodeAnnouncement() *StrongNodeAnnouncementMessage {
-	if x != nil {
-		if x, ok := x.Payload.(*CryptixdMessage_StrongNodeAnnouncement); ok {
-			return x.StrongNodeAnnouncement
 		}
 	}
 	return nil
@@ -1803,11 +1793,8 @@ type CryptixdMessage_RequestNextPruningPointAndItsAnticoneBlocks struct {
 	RequestNextPruningPointAndItsAnticoneBlocks *RequestNextPruningPointAndItsAnticoneBlocksMessage `protobuf:"bytes,56,opt,name=requestNextPruningPointAndItsAnticoneBlocks,proto3,oneof"`
 }
 
-type CryptixdMessage_StrongNodeAnnouncement struct {
-	StrongNodeAnnouncement *StrongNodeAnnouncementMessage `protobuf:"bytes,60,opt,name=strongNodeAnnouncement,proto3,oneof"`
-}
-
 type CryptixdMessage_RequestAntiFraudSnapshotV1 struct {
+	// 60 was StrongNodeAnnouncementMessage (legacy benchmark path, removed).
 	RequestAntiFraudSnapshotV1 *RequestAntiFraudSnapshotV1Message `protobuf:"bytes,61,opt,name=requestAntiFraudSnapshotV1,proto3,oneof"`
 }
 
@@ -2341,8 +2328,6 @@ func (*CryptixdMessage_RequestAnticone) isCryptixdMessage_Payload() {}
 
 func (*CryptixdMessage_RequestNextPruningPointAndItsAnticoneBlocks) isCryptixdMessage_Payload() {}
 
-func (*CryptixdMessage_StrongNodeAnnouncement) isCryptixdMessage_Payload() {}
-
 func (*CryptixdMessage_RequestAntiFraudSnapshotV1) isCryptixdMessage_Payload() {}
 
 func (*CryptixdMessage_AntiFraudSnapshotV1) isCryptixdMessage_Payload() {}
@@ -2575,7 +2560,7 @@ var File_messages_proto protoreflect.FileDescriptor
 
 const file_messages_proto_rawDesc = "" +
 	"\n" +
-	"\x0emessages.proto\x12\tprotowire\x1a\tp2p.proto\x1a\trpc.proto\"\x8f\x83\x01\n" +
+	"\x0emessages.proto\x12\tprotowire\x1a\tp2p.proto\x1a\trpc.proto\"\xab\x82\x01\n" +
 	"\x0fCryptixdMessage\x12;\n" +
 	"\taddresses\x18\x01 \x01(\v2\x1b.protowire.AddressesMessageH\x00R\taddresses\x12/\n" +
 	"\x05block\x18\x02 \x01(\v2\x17.protowire.BlockMessageH\x00R\x05block\x12A\n" +
@@ -2620,8 +2605,7 @@ const file_messages_proto_rawDesc = "" +
 	"\x1brequestIBDChainBlockLocator\x185 \x01(\v2-.protowire.RequestIBDChainBlockLocatorMessageH\x00R\x1brequestIBDChainBlockLocator\x12\\\n" +
 	"\x14ibdChainBlockLocator\x186 \x01(\v2&.protowire.IbdChainBlockLocatorMessageH\x00R\x14ibdChainBlockLocator\x12M\n" +
 	"\x0frequestAnticone\x187 \x01(\v2!.protowire.RequestAnticoneMessageH\x00R\x0frequestAnticone\x12\xa1\x01\n" +
-	"+requestNextPruningPointAndItsAnticoneBlocks\x188 \x01(\v2=.protowire.RequestNextPruningPointAndItsAnticoneBlocksMessageH\x00R+requestNextPruningPointAndItsAnticoneBlocks\x12b\n" +
-	"\x16strongNodeAnnouncement\x18< \x01(\v2(.protowire.StrongNodeAnnouncementMessageH\x00R\x16strongNodeAnnouncement\x12n\n" +
+	"+requestNextPruningPointAndItsAnticoneBlocks\x188 \x01(\v2=.protowire.RequestNextPruningPointAndItsAnticoneBlocksMessageH\x00R+requestNextPruningPointAndItsAnticoneBlocks\x12n\n" +
 	"\x1arequestAntiFraudSnapshotV1\x18= \x01(\v2,.protowire.RequestAntiFraudSnapshotV1MessageH\x00R\x1arequestAntiFraudSnapshotV1\x12Y\n" +
 	"\x13antiFraudSnapshotV1\x18> \x01(\v2%.protowire.AntiFraudSnapshotV1MessageH\x00R\x13antiFraudSnapshotV1\x12\\\n" +
 	"\x14blockProducerClaimV1\x18? \x01(\v2&.protowire.BlockProducerClaimV1MessageH\x00R\x14blockProducerClaimV1\x12i\n" +
@@ -2799,119 +2783,118 @@ var file_messages_proto_goTypes = []any{
 	(*IbdChainBlockLocatorMessage)(nil),                                // 40: protowire.IbdChainBlockLocatorMessage
 	(*RequestAnticoneMessage)(nil),                                     // 41: protowire.RequestAnticoneMessage
 	(*RequestNextPruningPointAndItsAnticoneBlocksMessage)(nil),         // 42: protowire.RequestNextPruningPointAndItsAnticoneBlocksMessage
-	(*StrongNodeAnnouncementMessage)(nil),                              // 43: protowire.StrongNodeAnnouncementMessage
-	(*RequestAntiFraudSnapshotV1Message)(nil),                          // 44: protowire.RequestAntiFraudSnapshotV1Message
-	(*AntiFraudSnapshotV1Message)(nil),                                 // 45: protowire.AntiFraudSnapshotV1Message
-	(*BlockProducerClaimV1Message)(nil),                                // 46: protowire.BlockProducerClaimV1Message
-	(*GetCurrentNetworkRequestMessage)(nil),                            // 47: protowire.GetCurrentNetworkRequestMessage
-	(*GetCurrentNetworkResponseMessage)(nil),                           // 48: protowire.GetCurrentNetworkResponseMessage
-	(*SubmitBlockRequestMessage)(nil),                                  // 49: protowire.SubmitBlockRequestMessage
-	(*SubmitBlockResponseMessage)(nil),                                 // 50: protowire.SubmitBlockResponseMessage
-	(*GetBlockTemplateRequestMessage)(nil),                             // 51: protowire.GetBlockTemplateRequestMessage
-	(*GetBlockTemplateResponseMessage)(nil),                            // 52: protowire.GetBlockTemplateResponseMessage
-	(*NotifyBlockAddedRequestMessage)(nil),                             // 53: protowire.NotifyBlockAddedRequestMessage
-	(*NotifyBlockAddedResponseMessage)(nil),                            // 54: protowire.NotifyBlockAddedResponseMessage
-	(*BlockAddedNotificationMessage)(nil),                              // 55: protowire.BlockAddedNotificationMessage
-	(*GetPeerAddressesRequestMessage)(nil),                             // 56: protowire.GetPeerAddressesRequestMessage
-	(*GetPeerAddressesResponseMessage)(nil),                            // 57: protowire.GetPeerAddressesResponseMessage
-	(*GetSelectedTipHashRequestMessage)(nil),                           // 58: protowire.GetSelectedTipHashRequestMessage
-	(*GetSelectedTipHashResponseMessage)(nil),                          // 59: protowire.GetSelectedTipHashResponseMessage
-	(*GetMempoolEntryRequestMessage)(nil),                              // 60: protowire.GetMempoolEntryRequestMessage
-	(*GetMempoolEntryResponseMessage)(nil),                             // 61: protowire.GetMempoolEntryResponseMessage
-	(*GetConnectedPeerInfoRequestMessage)(nil),                         // 62: protowire.GetConnectedPeerInfoRequestMessage
-	(*GetConnectedPeerInfoResponseMessage)(nil),                        // 63: protowire.GetConnectedPeerInfoResponseMessage
-	(*AddPeerRequestMessage)(nil),                                      // 64: protowire.AddPeerRequestMessage
-	(*AddPeerResponseMessage)(nil),                                     // 65: protowire.AddPeerResponseMessage
-	(*SubmitTransactionRequestMessage)(nil),                            // 66: protowire.SubmitTransactionRequestMessage
-	(*SubmitTransactionResponseMessage)(nil),                           // 67: protowire.SubmitTransactionResponseMessage
-	(*NotifyVirtualSelectedParentChainChangedRequestMessage)(nil),      // 68: protowire.NotifyVirtualSelectedParentChainChangedRequestMessage
-	(*NotifyVirtualSelectedParentChainChangedResponseMessage)(nil),     // 69: protowire.NotifyVirtualSelectedParentChainChangedResponseMessage
-	(*VirtualSelectedParentChainChangedNotificationMessage)(nil),       // 70: protowire.VirtualSelectedParentChainChangedNotificationMessage
-	(*GetBlockRequestMessage)(nil),                                     // 71: protowire.GetBlockRequestMessage
-	(*GetBlockResponseMessage)(nil),                                    // 72: protowire.GetBlockResponseMessage
-	(*GetSubnetworkRequestMessage)(nil),                                // 73: protowire.GetSubnetworkRequestMessage
-	(*GetSubnetworkResponseMessage)(nil),                               // 74: protowire.GetSubnetworkResponseMessage
-	(*GetVirtualSelectedParentChainFromBlockRequestMessage)(nil),       // 75: protowire.GetVirtualSelectedParentChainFromBlockRequestMessage
-	(*GetVirtualSelectedParentChainFromBlockResponseMessage)(nil),      // 76: protowire.GetVirtualSelectedParentChainFromBlockResponseMessage
-	(*GetBlocksRequestMessage)(nil),                                    // 77: protowire.GetBlocksRequestMessage
-	(*GetBlocksResponseMessage)(nil),                                   // 78: protowire.GetBlocksResponseMessage
-	(*GetBlockCountRequestMessage)(nil),                                // 79: protowire.GetBlockCountRequestMessage
-	(*GetBlockCountResponseMessage)(nil),                               // 80: protowire.GetBlockCountResponseMessage
-	(*GetBlockDagInfoRequestMessage)(nil),                              // 81: protowire.GetBlockDagInfoRequestMessage
-	(*GetBlockDagInfoResponseMessage)(nil),                             // 82: protowire.GetBlockDagInfoResponseMessage
-	(*ResolveFinalityConflictRequestMessage)(nil),                      // 83: protowire.ResolveFinalityConflictRequestMessage
-	(*ResolveFinalityConflictResponseMessage)(nil),                     // 84: protowire.ResolveFinalityConflictResponseMessage
-	(*NotifyFinalityConflictsRequestMessage)(nil),                      // 85: protowire.NotifyFinalityConflictsRequestMessage
-	(*NotifyFinalityConflictsResponseMessage)(nil),                     // 86: protowire.NotifyFinalityConflictsResponseMessage
-	(*FinalityConflictNotificationMessage)(nil),                        // 87: protowire.FinalityConflictNotificationMessage
-	(*FinalityConflictResolvedNotificationMessage)(nil),                // 88: protowire.FinalityConflictResolvedNotificationMessage
-	(*GetMempoolEntriesRequestMessage)(nil),                            // 89: protowire.GetMempoolEntriesRequestMessage
-	(*GetMempoolEntriesResponseMessage)(nil),                           // 90: protowire.GetMempoolEntriesResponseMessage
-	(*ShutDownRequestMessage)(nil),                                     // 91: protowire.ShutDownRequestMessage
-	(*ShutDownResponseMessage)(nil),                                    // 92: protowire.ShutDownResponseMessage
-	(*GetHeadersRequestMessage)(nil),                                   // 93: protowire.GetHeadersRequestMessage
-	(*GetHeadersResponseMessage)(nil),                                  // 94: protowire.GetHeadersResponseMessage
-	(*NotifyUtxosChangedRequestMessage)(nil),                           // 95: protowire.NotifyUtxosChangedRequestMessage
-	(*NotifyUtxosChangedResponseMessage)(nil),                          // 96: protowire.NotifyUtxosChangedResponseMessage
-	(*UtxosChangedNotificationMessage)(nil),                            // 97: protowire.UtxosChangedNotificationMessage
-	(*GetUtxosByAddressesRequestMessage)(nil),                          // 98: protowire.GetUtxosByAddressesRequestMessage
-	(*GetUtxosByAddressesResponseMessage)(nil),                         // 99: protowire.GetUtxosByAddressesResponseMessage
-	(*GetVirtualSelectedParentBlueScoreRequestMessage)(nil),            // 100: protowire.GetVirtualSelectedParentBlueScoreRequestMessage
-	(*GetVirtualSelectedParentBlueScoreResponseMessage)(nil),           // 101: protowire.GetVirtualSelectedParentBlueScoreResponseMessage
-	(*NotifyVirtualSelectedParentBlueScoreChangedRequestMessage)(nil),  // 102: protowire.NotifyVirtualSelectedParentBlueScoreChangedRequestMessage
-	(*NotifyVirtualSelectedParentBlueScoreChangedResponseMessage)(nil), // 103: protowire.NotifyVirtualSelectedParentBlueScoreChangedResponseMessage
-	(*VirtualSelectedParentBlueScoreChangedNotificationMessage)(nil),   // 104: protowire.VirtualSelectedParentBlueScoreChangedNotificationMessage
-	(*BanRequestMessage)(nil),                                          // 105: protowire.BanRequestMessage
-	(*BanResponseMessage)(nil),                                         // 106: protowire.BanResponseMessage
-	(*UnbanRequestMessage)(nil),                                        // 107: protowire.UnbanRequestMessage
-	(*UnbanResponseMessage)(nil),                                       // 108: protowire.UnbanResponseMessage
-	(*GetInfoRequestMessage)(nil),                                      // 109: protowire.GetInfoRequestMessage
-	(*GetInfoResponseMessage)(nil),                                     // 110: protowire.GetInfoResponseMessage
-	(*StopNotifyingUtxosChangedRequestMessage)(nil),                    // 111: protowire.StopNotifyingUtxosChangedRequestMessage
-	(*StopNotifyingUtxosChangedResponseMessage)(nil),                   // 112: protowire.StopNotifyingUtxosChangedResponseMessage
-	(*NotifyPruningPointUTXOSetOverrideRequestMessage)(nil),            // 113: protowire.NotifyPruningPointUTXOSetOverrideRequestMessage
-	(*NotifyPruningPointUTXOSetOverrideResponseMessage)(nil),           // 114: protowire.NotifyPruningPointUTXOSetOverrideResponseMessage
-	(*PruningPointUTXOSetOverrideNotificationMessage)(nil),             // 115: protowire.PruningPointUTXOSetOverrideNotificationMessage
-	(*StopNotifyingPruningPointUTXOSetOverrideRequestMessage)(nil),     // 116: protowire.StopNotifyingPruningPointUTXOSetOverrideRequestMessage
-	(*StopNotifyingPruningPointUTXOSetOverrideResponseMessage)(nil),    // 117: protowire.StopNotifyingPruningPointUTXOSetOverrideResponseMessage
-	(*EstimateNetworkHashesPerSecondRequestMessage)(nil),               // 118: protowire.EstimateNetworkHashesPerSecondRequestMessage
-	(*EstimateNetworkHashesPerSecondResponseMessage)(nil),              // 119: protowire.EstimateNetworkHashesPerSecondResponseMessage
-	(*NotifyVirtualDaaScoreChangedRequestMessage)(nil),                 // 120: protowire.NotifyVirtualDaaScoreChangedRequestMessage
-	(*NotifyVirtualDaaScoreChangedResponseMessage)(nil),                // 121: protowire.NotifyVirtualDaaScoreChangedResponseMessage
-	(*VirtualDaaScoreChangedNotificationMessage)(nil),                  // 122: protowire.VirtualDaaScoreChangedNotificationMessage
-	(*GetBalanceByAddressRequestMessage)(nil),                          // 123: protowire.GetBalanceByAddressRequestMessage
-	(*GetBalanceByAddressResponseMessage)(nil),                         // 124: protowire.GetBalanceByAddressResponseMessage
-	(*GetBalancesByAddressesRequestMessage)(nil),                       // 125: protowire.GetBalancesByAddressesRequestMessage
-	(*GetBalancesByAddressesResponseMessage)(nil),                      // 126: protowire.GetBalancesByAddressesResponseMessage
-	(*NotifyNewBlockTemplateRequestMessage)(nil),                       // 127: protowire.NotifyNewBlockTemplateRequestMessage
-	(*NotifyNewBlockTemplateResponseMessage)(nil),                      // 128: protowire.NotifyNewBlockTemplateResponseMessage
-	(*NewBlockTemplateNotificationMessage)(nil),                        // 129: protowire.NewBlockTemplateNotificationMessage
-	(*GetMempoolEntriesByAddressesRequestMessage)(nil),                 // 130: protowire.GetMempoolEntriesByAddressesRequestMessage
-	(*GetMempoolEntriesByAddressesResponseMessage)(nil),                // 131: protowire.GetMempoolEntriesByAddressesResponseMessage
-	(*GetCoinSupplyRequestMessage)(nil),                                // 132: protowire.GetCoinSupplyRequestMessage
-	(*GetCoinSupplyResponseMessage)(nil),                               // 133: protowire.GetCoinSupplyResponseMessage
-	(*PingRequestMessage)(nil),                                         // 134: protowire.PingRequestMessage
-	(*GetMetricsRequestMessage)(nil),                                   // 135: protowire.GetMetricsRequestMessage
-	(*GetServerInfoRequestMessage)(nil),                                // 136: protowire.GetServerInfoRequestMessage
-	(*GetSyncStatusRequestMessage)(nil),                                // 137: protowire.GetSyncStatusRequestMessage
-	(*GetDaaScoreTimestampEstimateRequestMessage)(nil),                 // 138: protowire.GetDaaScoreTimestampEstimateRequestMessage
-	(*SubmitTransactionReplacementRequestMessage)(nil),                 // 139: protowire.SubmitTransactionReplacementRequestMessage
-	(*GetConnectionsRequestMessage)(nil),                               // 140: protowire.GetConnectionsRequestMessage
-	(*GetSystemInfoRequestMessage)(nil),                                // 141: protowire.GetSystemInfoRequestMessage
-	(*GetFeeEstimateRequestMessage)(nil),                               // 142: protowire.GetFeeEstimateRequestMessage
-	(*GetFeeEstimateExperimentalRequestMessage)(nil),                   // 143: protowire.GetFeeEstimateExperimentalRequestMessage
-	(*GetCurrentBlockColorRequestMessage)(nil),                         // 144: protowire.GetCurrentBlockColorRequestMessage
-	(*PingResponseMessage)(nil),                                        // 145: protowire.PingResponseMessage
-	(*GetMetricsResponseMessage)(nil),                                  // 146: protowire.GetMetricsResponseMessage
-	(*GetServerInfoResponseMessage)(nil),                               // 147: protowire.GetServerInfoResponseMessage
-	(*GetSyncStatusResponseMessage)(nil),                               // 148: protowire.GetSyncStatusResponseMessage
-	(*GetDaaScoreTimestampEstimateResponseMessage)(nil),                // 149: protowire.GetDaaScoreTimestampEstimateResponseMessage
-	(*SubmitTransactionReplacementResponseMessage)(nil),                // 150: protowire.SubmitTransactionReplacementResponseMessage
-	(*GetConnectionsResponseMessage)(nil),                              // 151: protowire.GetConnectionsResponseMessage
-	(*GetSystemInfoResponseMessage)(nil),                               // 152: protowire.GetSystemInfoResponseMessage
-	(*GetFeeEstimateResponseMessage)(nil),                              // 153: protowire.GetFeeEstimateResponseMessage
-	(*GetFeeEstimateExperimentalResponseMessage)(nil),                  // 154: protowire.GetFeeEstimateExperimentalResponseMessage
-	(*GetCurrentBlockColorResponseMessage)(nil),                        // 155: protowire.GetCurrentBlockColorResponseMessage
+	(*RequestAntiFraudSnapshotV1Message)(nil),                          // 43: protowire.RequestAntiFraudSnapshotV1Message
+	(*AntiFraudSnapshotV1Message)(nil),                                 // 44: protowire.AntiFraudSnapshotV1Message
+	(*BlockProducerClaimV1Message)(nil),                                // 45: protowire.BlockProducerClaimV1Message
+	(*GetCurrentNetworkRequestMessage)(nil),                            // 46: protowire.GetCurrentNetworkRequestMessage
+	(*GetCurrentNetworkResponseMessage)(nil),                           // 47: protowire.GetCurrentNetworkResponseMessage
+	(*SubmitBlockRequestMessage)(nil),                                  // 48: protowire.SubmitBlockRequestMessage
+	(*SubmitBlockResponseMessage)(nil),                                 // 49: protowire.SubmitBlockResponseMessage
+	(*GetBlockTemplateRequestMessage)(nil),                             // 50: protowire.GetBlockTemplateRequestMessage
+	(*GetBlockTemplateResponseMessage)(nil),                            // 51: protowire.GetBlockTemplateResponseMessage
+	(*NotifyBlockAddedRequestMessage)(nil),                             // 52: protowire.NotifyBlockAddedRequestMessage
+	(*NotifyBlockAddedResponseMessage)(nil),                            // 53: protowire.NotifyBlockAddedResponseMessage
+	(*BlockAddedNotificationMessage)(nil),                              // 54: protowire.BlockAddedNotificationMessage
+	(*GetPeerAddressesRequestMessage)(nil),                             // 55: protowire.GetPeerAddressesRequestMessage
+	(*GetPeerAddressesResponseMessage)(nil),                            // 56: protowire.GetPeerAddressesResponseMessage
+	(*GetSelectedTipHashRequestMessage)(nil),                           // 57: protowire.GetSelectedTipHashRequestMessage
+	(*GetSelectedTipHashResponseMessage)(nil),                          // 58: protowire.GetSelectedTipHashResponseMessage
+	(*GetMempoolEntryRequestMessage)(nil),                              // 59: protowire.GetMempoolEntryRequestMessage
+	(*GetMempoolEntryResponseMessage)(nil),                             // 60: protowire.GetMempoolEntryResponseMessage
+	(*GetConnectedPeerInfoRequestMessage)(nil),                         // 61: protowire.GetConnectedPeerInfoRequestMessage
+	(*GetConnectedPeerInfoResponseMessage)(nil),                        // 62: protowire.GetConnectedPeerInfoResponseMessage
+	(*AddPeerRequestMessage)(nil),                                      // 63: protowire.AddPeerRequestMessage
+	(*AddPeerResponseMessage)(nil),                                     // 64: protowire.AddPeerResponseMessage
+	(*SubmitTransactionRequestMessage)(nil),                            // 65: protowire.SubmitTransactionRequestMessage
+	(*SubmitTransactionResponseMessage)(nil),                           // 66: protowire.SubmitTransactionResponseMessage
+	(*NotifyVirtualSelectedParentChainChangedRequestMessage)(nil),      // 67: protowire.NotifyVirtualSelectedParentChainChangedRequestMessage
+	(*NotifyVirtualSelectedParentChainChangedResponseMessage)(nil),     // 68: protowire.NotifyVirtualSelectedParentChainChangedResponseMessage
+	(*VirtualSelectedParentChainChangedNotificationMessage)(nil),       // 69: protowire.VirtualSelectedParentChainChangedNotificationMessage
+	(*GetBlockRequestMessage)(nil),                                     // 70: protowire.GetBlockRequestMessage
+	(*GetBlockResponseMessage)(nil),                                    // 71: protowire.GetBlockResponseMessage
+	(*GetSubnetworkRequestMessage)(nil),                                // 72: protowire.GetSubnetworkRequestMessage
+	(*GetSubnetworkResponseMessage)(nil),                               // 73: protowire.GetSubnetworkResponseMessage
+	(*GetVirtualSelectedParentChainFromBlockRequestMessage)(nil),       // 74: protowire.GetVirtualSelectedParentChainFromBlockRequestMessage
+	(*GetVirtualSelectedParentChainFromBlockResponseMessage)(nil),      // 75: protowire.GetVirtualSelectedParentChainFromBlockResponseMessage
+	(*GetBlocksRequestMessage)(nil),                                    // 76: protowire.GetBlocksRequestMessage
+	(*GetBlocksResponseMessage)(nil),                                   // 77: protowire.GetBlocksResponseMessage
+	(*GetBlockCountRequestMessage)(nil),                                // 78: protowire.GetBlockCountRequestMessage
+	(*GetBlockCountResponseMessage)(nil),                               // 79: protowire.GetBlockCountResponseMessage
+	(*GetBlockDagInfoRequestMessage)(nil),                              // 80: protowire.GetBlockDagInfoRequestMessage
+	(*GetBlockDagInfoResponseMessage)(nil),                             // 81: protowire.GetBlockDagInfoResponseMessage
+	(*ResolveFinalityConflictRequestMessage)(nil),                      // 82: protowire.ResolveFinalityConflictRequestMessage
+	(*ResolveFinalityConflictResponseMessage)(nil),                     // 83: protowire.ResolveFinalityConflictResponseMessage
+	(*NotifyFinalityConflictsRequestMessage)(nil),                      // 84: protowire.NotifyFinalityConflictsRequestMessage
+	(*NotifyFinalityConflictsResponseMessage)(nil),                     // 85: protowire.NotifyFinalityConflictsResponseMessage
+	(*FinalityConflictNotificationMessage)(nil),                        // 86: protowire.FinalityConflictNotificationMessage
+	(*FinalityConflictResolvedNotificationMessage)(nil),                // 87: protowire.FinalityConflictResolvedNotificationMessage
+	(*GetMempoolEntriesRequestMessage)(nil),                            // 88: protowire.GetMempoolEntriesRequestMessage
+	(*GetMempoolEntriesResponseMessage)(nil),                           // 89: protowire.GetMempoolEntriesResponseMessage
+	(*ShutDownRequestMessage)(nil),                                     // 90: protowire.ShutDownRequestMessage
+	(*ShutDownResponseMessage)(nil),                                    // 91: protowire.ShutDownResponseMessage
+	(*GetHeadersRequestMessage)(nil),                                   // 92: protowire.GetHeadersRequestMessage
+	(*GetHeadersResponseMessage)(nil),                                  // 93: protowire.GetHeadersResponseMessage
+	(*NotifyUtxosChangedRequestMessage)(nil),                           // 94: protowire.NotifyUtxosChangedRequestMessage
+	(*NotifyUtxosChangedResponseMessage)(nil),                          // 95: protowire.NotifyUtxosChangedResponseMessage
+	(*UtxosChangedNotificationMessage)(nil),                            // 96: protowire.UtxosChangedNotificationMessage
+	(*GetUtxosByAddressesRequestMessage)(nil),                          // 97: protowire.GetUtxosByAddressesRequestMessage
+	(*GetUtxosByAddressesResponseMessage)(nil),                         // 98: protowire.GetUtxosByAddressesResponseMessage
+	(*GetVirtualSelectedParentBlueScoreRequestMessage)(nil),            // 99: protowire.GetVirtualSelectedParentBlueScoreRequestMessage
+	(*GetVirtualSelectedParentBlueScoreResponseMessage)(nil),           // 100: protowire.GetVirtualSelectedParentBlueScoreResponseMessage
+	(*NotifyVirtualSelectedParentBlueScoreChangedRequestMessage)(nil),  // 101: protowire.NotifyVirtualSelectedParentBlueScoreChangedRequestMessage
+	(*NotifyVirtualSelectedParentBlueScoreChangedResponseMessage)(nil), // 102: protowire.NotifyVirtualSelectedParentBlueScoreChangedResponseMessage
+	(*VirtualSelectedParentBlueScoreChangedNotificationMessage)(nil),   // 103: protowire.VirtualSelectedParentBlueScoreChangedNotificationMessage
+	(*BanRequestMessage)(nil),                                          // 104: protowire.BanRequestMessage
+	(*BanResponseMessage)(nil),                                         // 105: protowire.BanResponseMessage
+	(*UnbanRequestMessage)(nil),                                        // 106: protowire.UnbanRequestMessage
+	(*UnbanResponseMessage)(nil),                                       // 107: protowire.UnbanResponseMessage
+	(*GetInfoRequestMessage)(nil),                                      // 108: protowire.GetInfoRequestMessage
+	(*GetInfoResponseMessage)(nil),                                     // 109: protowire.GetInfoResponseMessage
+	(*StopNotifyingUtxosChangedRequestMessage)(nil),                    // 110: protowire.StopNotifyingUtxosChangedRequestMessage
+	(*StopNotifyingUtxosChangedResponseMessage)(nil),                   // 111: protowire.StopNotifyingUtxosChangedResponseMessage
+	(*NotifyPruningPointUTXOSetOverrideRequestMessage)(nil),            // 112: protowire.NotifyPruningPointUTXOSetOverrideRequestMessage
+	(*NotifyPruningPointUTXOSetOverrideResponseMessage)(nil),           // 113: protowire.NotifyPruningPointUTXOSetOverrideResponseMessage
+	(*PruningPointUTXOSetOverrideNotificationMessage)(nil),             // 114: protowire.PruningPointUTXOSetOverrideNotificationMessage
+	(*StopNotifyingPruningPointUTXOSetOverrideRequestMessage)(nil),     // 115: protowire.StopNotifyingPruningPointUTXOSetOverrideRequestMessage
+	(*StopNotifyingPruningPointUTXOSetOverrideResponseMessage)(nil),    // 116: protowire.StopNotifyingPruningPointUTXOSetOverrideResponseMessage
+	(*EstimateNetworkHashesPerSecondRequestMessage)(nil),               // 117: protowire.EstimateNetworkHashesPerSecondRequestMessage
+	(*EstimateNetworkHashesPerSecondResponseMessage)(nil),              // 118: protowire.EstimateNetworkHashesPerSecondResponseMessage
+	(*NotifyVirtualDaaScoreChangedRequestMessage)(nil),                 // 119: protowire.NotifyVirtualDaaScoreChangedRequestMessage
+	(*NotifyVirtualDaaScoreChangedResponseMessage)(nil),                // 120: protowire.NotifyVirtualDaaScoreChangedResponseMessage
+	(*VirtualDaaScoreChangedNotificationMessage)(nil),                  // 121: protowire.VirtualDaaScoreChangedNotificationMessage
+	(*GetBalanceByAddressRequestMessage)(nil),                          // 122: protowire.GetBalanceByAddressRequestMessage
+	(*GetBalanceByAddressResponseMessage)(nil),                         // 123: protowire.GetBalanceByAddressResponseMessage
+	(*GetBalancesByAddressesRequestMessage)(nil),                       // 124: protowire.GetBalancesByAddressesRequestMessage
+	(*GetBalancesByAddressesResponseMessage)(nil),                      // 125: protowire.GetBalancesByAddressesResponseMessage
+	(*NotifyNewBlockTemplateRequestMessage)(nil),                       // 126: protowire.NotifyNewBlockTemplateRequestMessage
+	(*NotifyNewBlockTemplateResponseMessage)(nil),                      // 127: protowire.NotifyNewBlockTemplateResponseMessage
+	(*NewBlockTemplateNotificationMessage)(nil),                        // 128: protowire.NewBlockTemplateNotificationMessage
+	(*GetMempoolEntriesByAddressesRequestMessage)(nil),                 // 129: protowire.GetMempoolEntriesByAddressesRequestMessage
+	(*GetMempoolEntriesByAddressesResponseMessage)(nil),                // 130: protowire.GetMempoolEntriesByAddressesResponseMessage
+	(*GetCoinSupplyRequestMessage)(nil),                                // 131: protowire.GetCoinSupplyRequestMessage
+	(*GetCoinSupplyResponseMessage)(nil),                               // 132: protowire.GetCoinSupplyResponseMessage
+	(*PingRequestMessage)(nil),                                         // 133: protowire.PingRequestMessage
+	(*GetMetricsRequestMessage)(nil),                                   // 134: protowire.GetMetricsRequestMessage
+	(*GetServerInfoRequestMessage)(nil),                                // 135: protowire.GetServerInfoRequestMessage
+	(*GetSyncStatusRequestMessage)(nil),                                // 136: protowire.GetSyncStatusRequestMessage
+	(*GetDaaScoreTimestampEstimateRequestMessage)(nil),                 // 137: protowire.GetDaaScoreTimestampEstimateRequestMessage
+	(*SubmitTransactionReplacementRequestMessage)(nil),                 // 138: protowire.SubmitTransactionReplacementRequestMessage
+	(*GetConnectionsRequestMessage)(nil),                               // 139: protowire.GetConnectionsRequestMessage
+	(*GetSystemInfoRequestMessage)(nil),                                // 140: protowire.GetSystemInfoRequestMessage
+	(*GetFeeEstimateRequestMessage)(nil),                               // 141: protowire.GetFeeEstimateRequestMessage
+	(*GetFeeEstimateExperimentalRequestMessage)(nil),                   // 142: protowire.GetFeeEstimateExperimentalRequestMessage
+	(*GetCurrentBlockColorRequestMessage)(nil),                         // 143: protowire.GetCurrentBlockColorRequestMessage
+	(*PingResponseMessage)(nil),                                        // 144: protowire.PingResponseMessage
+	(*GetMetricsResponseMessage)(nil),                                  // 145: protowire.GetMetricsResponseMessage
+	(*GetServerInfoResponseMessage)(nil),                               // 146: protowire.GetServerInfoResponseMessage
+	(*GetSyncStatusResponseMessage)(nil),                               // 147: protowire.GetSyncStatusResponseMessage
+	(*GetDaaScoreTimestampEstimateResponseMessage)(nil),                // 148: protowire.GetDaaScoreTimestampEstimateResponseMessage
+	(*SubmitTransactionReplacementResponseMessage)(nil),                // 149: protowire.SubmitTransactionReplacementResponseMessage
+	(*GetConnectionsResponseMessage)(nil),                              // 150: protowire.GetConnectionsResponseMessage
+	(*GetSystemInfoResponseMessage)(nil),                               // 151: protowire.GetSystemInfoResponseMessage
+	(*GetFeeEstimateResponseMessage)(nil),                              // 152: protowire.GetFeeEstimateResponseMessage
+	(*GetFeeEstimateExperimentalResponseMessage)(nil),                  // 153: protowire.GetFeeEstimateExperimentalResponseMessage
+	(*GetCurrentBlockColorResponseMessage)(nil),                        // 154: protowire.GetCurrentBlockColorResponseMessage
 }
 var file_messages_proto_depIdxs = []int32{
 	1,   // 0: protowire.CryptixdMessage.addresses:type_name -> protowire.AddressesMessage
@@ -2957,128 +2940,127 @@ var file_messages_proto_depIdxs = []int32{
 	40,  // 40: protowire.CryptixdMessage.ibdChainBlockLocator:type_name -> protowire.IbdChainBlockLocatorMessage
 	41,  // 41: protowire.CryptixdMessage.requestAnticone:type_name -> protowire.RequestAnticoneMessage
 	42,  // 42: protowire.CryptixdMessage.requestNextPruningPointAndItsAnticoneBlocks:type_name -> protowire.RequestNextPruningPointAndItsAnticoneBlocksMessage
-	43,  // 43: protowire.CryptixdMessage.strongNodeAnnouncement:type_name -> protowire.StrongNodeAnnouncementMessage
-	44,  // 44: protowire.CryptixdMessage.requestAntiFraudSnapshotV1:type_name -> protowire.RequestAntiFraudSnapshotV1Message
-	45,  // 45: protowire.CryptixdMessage.antiFraudSnapshotV1:type_name -> protowire.AntiFraudSnapshotV1Message
-	46,  // 46: protowire.CryptixdMessage.blockProducerClaimV1:type_name -> protowire.BlockProducerClaimV1Message
-	47,  // 47: protowire.CryptixdMessage.getCurrentNetworkRequest:type_name -> protowire.GetCurrentNetworkRequestMessage
-	48,  // 48: protowire.CryptixdMessage.getCurrentNetworkResponse:type_name -> protowire.GetCurrentNetworkResponseMessage
-	49,  // 49: protowire.CryptixdMessage.submitBlockRequest:type_name -> protowire.SubmitBlockRequestMessage
-	50,  // 50: protowire.CryptixdMessage.submitBlockResponse:type_name -> protowire.SubmitBlockResponseMessage
-	51,  // 51: protowire.CryptixdMessage.getBlockTemplateRequest:type_name -> protowire.GetBlockTemplateRequestMessage
-	52,  // 52: protowire.CryptixdMessage.getBlockTemplateResponse:type_name -> protowire.GetBlockTemplateResponseMessage
-	53,  // 53: protowire.CryptixdMessage.notifyBlockAddedRequest:type_name -> protowire.NotifyBlockAddedRequestMessage
-	54,  // 54: protowire.CryptixdMessage.notifyBlockAddedResponse:type_name -> protowire.NotifyBlockAddedResponseMessage
-	55,  // 55: protowire.CryptixdMessage.blockAddedNotification:type_name -> protowire.BlockAddedNotificationMessage
-	56,  // 56: protowire.CryptixdMessage.getPeerAddressesRequest:type_name -> protowire.GetPeerAddressesRequestMessage
-	57,  // 57: protowire.CryptixdMessage.getPeerAddressesResponse:type_name -> protowire.GetPeerAddressesResponseMessage
-	58,  // 58: protowire.CryptixdMessage.getSelectedTipHashRequest:type_name -> protowire.GetSelectedTipHashRequestMessage
-	59,  // 59: protowire.CryptixdMessage.getSelectedTipHashResponse:type_name -> protowire.GetSelectedTipHashResponseMessage
-	60,  // 60: protowire.CryptixdMessage.getMempoolEntryRequest:type_name -> protowire.GetMempoolEntryRequestMessage
-	61,  // 61: protowire.CryptixdMessage.getMempoolEntryResponse:type_name -> protowire.GetMempoolEntryResponseMessage
-	62,  // 62: protowire.CryptixdMessage.getConnectedPeerInfoRequest:type_name -> protowire.GetConnectedPeerInfoRequestMessage
-	63,  // 63: protowire.CryptixdMessage.getConnectedPeerInfoResponse:type_name -> protowire.GetConnectedPeerInfoResponseMessage
-	64,  // 64: protowire.CryptixdMessage.addPeerRequest:type_name -> protowire.AddPeerRequestMessage
-	65,  // 65: protowire.CryptixdMessage.addPeerResponse:type_name -> protowire.AddPeerResponseMessage
-	66,  // 66: protowire.CryptixdMessage.submitTransactionRequest:type_name -> protowire.SubmitTransactionRequestMessage
-	67,  // 67: protowire.CryptixdMessage.submitTransactionResponse:type_name -> protowire.SubmitTransactionResponseMessage
-	68,  // 68: protowire.CryptixdMessage.notifyVirtualSelectedParentChainChangedRequest:type_name -> protowire.NotifyVirtualSelectedParentChainChangedRequestMessage
-	69,  // 69: protowire.CryptixdMessage.notifyVirtualSelectedParentChainChangedResponse:type_name -> protowire.NotifyVirtualSelectedParentChainChangedResponseMessage
-	70,  // 70: protowire.CryptixdMessage.virtualSelectedParentChainChangedNotification:type_name -> protowire.VirtualSelectedParentChainChangedNotificationMessage
-	71,  // 71: protowire.CryptixdMessage.getBlockRequest:type_name -> protowire.GetBlockRequestMessage
-	72,  // 72: protowire.CryptixdMessage.getBlockResponse:type_name -> protowire.GetBlockResponseMessage
-	73,  // 73: protowire.CryptixdMessage.getSubnetworkRequest:type_name -> protowire.GetSubnetworkRequestMessage
-	74,  // 74: protowire.CryptixdMessage.getSubnetworkResponse:type_name -> protowire.GetSubnetworkResponseMessage
-	75,  // 75: protowire.CryptixdMessage.getVirtualSelectedParentChainFromBlockRequest:type_name -> protowire.GetVirtualSelectedParentChainFromBlockRequestMessage
-	76,  // 76: protowire.CryptixdMessage.getVirtualSelectedParentChainFromBlockResponse:type_name -> protowire.GetVirtualSelectedParentChainFromBlockResponseMessage
-	77,  // 77: protowire.CryptixdMessage.getBlocksRequest:type_name -> protowire.GetBlocksRequestMessage
-	78,  // 78: protowire.CryptixdMessage.getBlocksResponse:type_name -> protowire.GetBlocksResponseMessage
-	79,  // 79: protowire.CryptixdMessage.getBlockCountRequest:type_name -> protowire.GetBlockCountRequestMessage
-	80,  // 80: protowire.CryptixdMessage.getBlockCountResponse:type_name -> protowire.GetBlockCountResponseMessage
-	81,  // 81: protowire.CryptixdMessage.getBlockDagInfoRequest:type_name -> protowire.GetBlockDagInfoRequestMessage
-	82,  // 82: protowire.CryptixdMessage.getBlockDagInfoResponse:type_name -> protowire.GetBlockDagInfoResponseMessage
-	83,  // 83: protowire.CryptixdMessage.resolveFinalityConflictRequest:type_name -> protowire.ResolveFinalityConflictRequestMessage
-	84,  // 84: protowire.CryptixdMessage.resolveFinalityConflictResponse:type_name -> protowire.ResolveFinalityConflictResponseMessage
-	85,  // 85: protowire.CryptixdMessage.notifyFinalityConflictsRequest:type_name -> protowire.NotifyFinalityConflictsRequestMessage
-	86,  // 86: protowire.CryptixdMessage.notifyFinalityConflictsResponse:type_name -> protowire.NotifyFinalityConflictsResponseMessage
-	87,  // 87: protowire.CryptixdMessage.finalityConflictNotification:type_name -> protowire.FinalityConflictNotificationMessage
-	88,  // 88: protowire.CryptixdMessage.finalityConflictResolvedNotification:type_name -> protowire.FinalityConflictResolvedNotificationMessage
-	89,  // 89: protowire.CryptixdMessage.getMempoolEntriesRequest:type_name -> protowire.GetMempoolEntriesRequestMessage
-	90,  // 90: protowire.CryptixdMessage.getMempoolEntriesResponse:type_name -> protowire.GetMempoolEntriesResponseMessage
-	91,  // 91: protowire.CryptixdMessage.shutDownRequest:type_name -> protowire.ShutDownRequestMessage
-	92,  // 92: protowire.CryptixdMessage.shutDownResponse:type_name -> protowire.ShutDownResponseMessage
-	93,  // 93: protowire.CryptixdMessage.getHeadersRequest:type_name -> protowire.GetHeadersRequestMessage
-	94,  // 94: protowire.CryptixdMessage.getHeadersResponse:type_name -> protowire.GetHeadersResponseMessage
-	95,  // 95: protowire.CryptixdMessage.notifyUtxosChangedRequest:type_name -> protowire.NotifyUtxosChangedRequestMessage
-	96,  // 96: protowire.CryptixdMessage.notifyUtxosChangedResponse:type_name -> protowire.NotifyUtxosChangedResponseMessage
-	97,  // 97: protowire.CryptixdMessage.utxosChangedNotification:type_name -> protowire.UtxosChangedNotificationMessage
-	98,  // 98: protowire.CryptixdMessage.getUtxosByAddressesRequest:type_name -> protowire.GetUtxosByAddressesRequestMessage
-	99,  // 99: protowire.CryptixdMessage.getUtxosByAddressesResponse:type_name -> protowire.GetUtxosByAddressesResponseMessage
-	100, // 100: protowire.CryptixdMessage.getVirtualSelectedParentBlueScoreRequest:type_name -> protowire.GetVirtualSelectedParentBlueScoreRequestMessage
-	101, // 101: protowire.CryptixdMessage.getVirtualSelectedParentBlueScoreResponse:type_name -> protowire.GetVirtualSelectedParentBlueScoreResponseMessage
-	102, // 102: protowire.CryptixdMessage.notifyVirtualSelectedParentBlueScoreChangedRequest:type_name -> protowire.NotifyVirtualSelectedParentBlueScoreChangedRequestMessage
-	103, // 103: protowire.CryptixdMessage.notifyVirtualSelectedParentBlueScoreChangedResponse:type_name -> protowire.NotifyVirtualSelectedParentBlueScoreChangedResponseMessage
-	104, // 104: protowire.CryptixdMessage.virtualSelectedParentBlueScoreChangedNotification:type_name -> protowire.VirtualSelectedParentBlueScoreChangedNotificationMessage
-	105, // 105: protowire.CryptixdMessage.banRequest:type_name -> protowire.BanRequestMessage
-	106, // 106: protowire.CryptixdMessage.banResponse:type_name -> protowire.BanResponseMessage
-	107, // 107: protowire.CryptixdMessage.unbanRequest:type_name -> protowire.UnbanRequestMessage
-	108, // 108: protowire.CryptixdMessage.unbanResponse:type_name -> protowire.UnbanResponseMessage
-	109, // 109: protowire.CryptixdMessage.getInfoRequest:type_name -> protowire.GetInfoRequestMessage
-	110, // 110: protowire.CryptixdMessage.getInfoResponse:type_name -> protowire.GetInfoResponseMessage
-	111, // 111: protowire.CryptixdMessage.stopNotifyingUtxosChangedRequest:type_name -> protowire.StopNotifyingUtxosChangedRequestMessage
-	112, // 112: protowire.CryptixdMessage.stopNotifyingUtxosChangedResponse:type_name -> protowire.StopNotifyingUtxosChangedResponseMessage
-	113, // 113: protowire.CryptixdMessage.notifyPruningPointUTXOSetOverrideRequest:type_name -> protowire.NotifyPruningPointUTXOSetOverrideRequestMessage
-	114, // 114: protowire.CryptixdMessage.notifyPruningPointUTXOSetOverrideResponse:type_name -> protowire.NotifyPruningPointUTXOSetOverrideResponseMessage
-	115, // 115: protowire.CryptixdMessage.pruningPointUTXOSetOverrideNotification:type_name -> protowire.PruningPointUTXOSetOverrideNotificationMessage
-	116, // 116: protowire.CryptixdMessage.stopNotifyingPruningPointUTXOSetOverrideRequest:type_name -> protowire.StopNotifyingPruningPointUTXOSetOverrideRequestMessage
-	117, // 117: protowire.CryptixdMessage.stopNotifyingPruningPointUTXOSetOverrideResponse:type_name -> protowire.StopNotifyingPruningPointUTXOSetOverrideResponseMessage
-	118, // 118: protowire.CryptixdMessage.estimateNetworkHashesPerSecondRequest:type_name -> protowire.EstimateNetworkHashesPerSecondRequestMessage
-	119, // 119: protowire.CryptixdMessage.estimateNetworkHashesPerSecondResponse:type_name -> protowire.EstimateNetworkHashesPerSecondResponseMessage
-	120, // 120: protowire.CryptixdMessage.notifyVirtualDaaScoreChangedRequest:type_name -> protowire.NotifyVirtualDaaScoreChangedRequestMessage
-	121, // 121: protowire.CryptixdMessage.notifyVirtualDaaScoreChangedResponse:type_name -> protowire.NotifyVirtualDaaScoreChangedResponseMessage
-	122, // 122: protowire.CryptixdMessage.virtualDaaScoreChangedNotification:type_name -> protowire.VirtualDaaScoreChangedNotificationMessage
-	123, // 123: protowire.CryptixdMessage.getBalanceByAddressRequest:type_name -> protowire.GetBalanceByAddressRequestMessage
-	124, // 124: protowire.CryptixdMessage.getBalanceByAddressResponse:type_name -> protowire.GetBalanceByAddressResponseMessage
-	125, // 125: protowire.CryptixdMessage.getBalancesByAddressesRequest:type_name -> protowire.GetBalancesByAddressesRequestMessage
-	126, // 126: protowire.CryptixdMessage.getBalancesByAddressesResponse:type_name -> protowire.GetBalancesByAddressesResponseMessage
-	127, // 127: protowire.CryptixdMessage.notifyNewBlockTemplateRequest:type_name -> protowire.NotifyNewBlockTemplateRequestMessage
-	128, // 128: protowire.CryptixdMessage.notifyNewBlockTemplateResponse:type_name -> protowire.NotifyNewBlockTemplateResponseMessage
-	129, // 129: protowire.CryptixdMessage.newBlockTemplateNotification:type_name -> protowire.NewBlockTemplateNotificationMessage
-	130, // 130: protowire.CryptixdMessage.getMempoolEntriesByAddressesRequest:type_name -> protowire.GetMempoolEntriesByAddressesRequestMessage
-	131, // 131: protowire.CryptixdMessage.getMempoolEntriesByAddressesResponse:type_name -> protowire.GetMempoolEntriesByAddressesResponseMessage
-	132, // 132: protowire.CryptixdMessage.getCoinSupplyRequest:type_name -> protowire.GetCoinSupplyRequestMessage
-	133, // 133: protowire.CryptixdMessage.getCoinSupplyResponse:type_name -> protowire.GetCoinSupplyResponseMessage
-	134, // 134: protowire.CryptixdMessage.pingRequest:type_name -> protowire.PingRequestMessage
-	135, // 135: protowire.CryptixdMessage.getMetricsRequest:type_name -> protowire.GetMetricsRequestMessage
-	136, // 136: protowire.CryptixdMessage.getServerInfoRequest:type_name -> protowire.GetServerInfoRequestMessage
-	137, // 137: protowire.CryptixdMessage.getSyncStatusRequest:type_name -> protowire.GetSyncStatusRequestMessage
-	138, // 138: protowire.CryptixdMessage.getDaaScoreTimestampEstimateRequest:type_name -> protowire.GetDaaScoreTimestampEstimateRequestMessage
-	139, // 139: protowire.CryptixdMessage.submitTransactionReplacementRequest:type_name -> protowire.SubmitTransactionReplacementRequestMessage
-	140, // 140: protowire.CryptixdMessage.getConnectionsRequest:type_name -> protowire.GetConnectionsRequestMessage
-	141, // 141: protowire.CryptixdMessage.getSystemInfoRequest:type_name -> protowire.GetSystemInfoRequestMessage
-	142, // 142: protowire.CryptixdMessage.getFeeEstimateRequest:type_name -> protowire.GetFeeEstimateRequestMessage
-	143, // 143: protowire.CryptixdMessage.getFeeEstimateExperimentalRequest:type_name -> protowire.GetFeeEstimateExperimentalRequestMessage
-	144, // 144: protowire.CryptixdMessage.getCurrentBlockColorRequest:type_name -> protowire.GetCurrentBlockColorRequestMessage
-	145, // 145: protowire.CryptixdMessage.pingResponse:type_name -> protowire.PingResponseMessage
-	146, // 146: protowire.CryptixdMessage.getMetricsResponse:type_name -> protowire.GetMetricsResponseMessage
-	147, // 147: protowire.CryptixdMessage.getServerInfoResponse:type_name -> protowire.GetServerInfoResponseMessage
-	148, // 148: protowire.CryptixdMessage.getSyncStatusResponse:type_name -> protowire.GetSyncStatusResponseMessage
-	149, // 149: protowire.CryptixdMessage.getDaaScoreTimestampEstimateResponse:type_name -> protowire.GetDaaScoreTimestampEstimateResponseMessage
-	150, // 150: protowire.CryptixdMessage.submitTransactionReplacementResponse:type_name -> protowire.SubmitTransactionReplacementResponseMessage
-	151, // 151: protowire.CryptixdMessage.getConnectionsResponse:type_name -> protowire.GetConnectionsResponseMessage
-	152, // 152: protowire.CryptixdMessage.getSystemInfoResponse:type_name -> protowire.GetSystemInfoResponseMessage
-	153, // 153: protowire.CryptixdMessage.getFeeEstimateResponse:type_name -> protowire.GetFeeEstimateResponseMessage
-	154, // 154: protowire.CryptixdMessage.getFeeEstimateExperimentalResponse:type_name -> protowire.GetFeeEstimateExperimentalResponseMessage
-	155, // 155: protowire.CryptixdMessage.getCurrentBlockColorResponse:type_name -> protowire.GetCurrentBlockColorResponseMessage
-	0,   // 156: protowire.P2P.MessageStream:input_type -> protowire.CryptixdMessage
-	0,   // 157: protowire.RPC.MessageStream:input_type -> protowire.CryptixdMessage
-	0,   // 158: protowire.P2P.MessageStream:output_type -> protowire.CryptixdMessage
-	0,   // 159: protowire.RPC.MessageStream:output_type -> protowire.CryptixdMessage
-	158, // [158:160] is the sub-list for method output_type
-	156, // [156:158] is the sub-list for method input_type
-	156, // [156:156] is the sub-list for extension type_name
-	156, // [156:156] is the sub-list for extension extendee
-	0,   // [0:156] is the sub-list for field type_name
+	43,  // 43: protowire.CryptixdMessage.requestAntiFraudSnapshotV1:type_name -> protowire.RequestAntiFraudSnapshotV1Message
+	44,  // 44: protowire.CryptixdMessage.antiFraudSnapshotV1:type_name -> protowire.AntiFraudSnapshotV1Message
+	45,  // 45: protowire.CryptixdMessage.blockProducerClaimV1:type_name -> protowire.BlockProducerClaimV1Message
+	46,  // 46: protowire.CryptixdMessage.getCurrentNetworkRequest:type_name -> protowire.GetCurrentNetworkRequestMessage
+	47,  // 47: protowire.CryptixdMessage.getCurrentNetworkResponse:type_name -> protowire.GetCurrentNetworkResponseMessage
+	48,  // 48: protowire.CryptixdMessage.submitBlockRequest:type_name -> protowire.SubmitBlockRequestMessage
+	49,  // 49: protowire.CryptixdMessage.submitBlockResponse:type_name -> protowire.SubmitBlockResponseMessage
+	50,  // 50: protowire.CryptixdMessage.getBlockTemplateRequest:type_name -> protowire.GetBlockTemplateRequestMessage
+	51,  // 51: protowire.CryptixdMessage.getBlockTemplateResponse:type_name -> protowire.GetBlockTemplateResponseMessage
+	52,  // 52: protowire.CryptixdMessage.notifyBlockAddedRequest:type_name -> protowire.NotifyBlockAddedRequestMessage
+	53,  // 53: protowire.CryptixdMessage.notifyBlockAddedResponse:type_name -> protowire.NotifyBlockAddedResponseMessage
+	54,  // 54: protowire.CryptixdMessage.blockAddedNotification:type_name -> protowire.BlockAddedNotificationMessage
+	55,  // 55: protowire.CryptixdMessage.getPeerAddressesRequest:type_name -> protowire.GetPeerAddressesRequestMessage
+	56,  // 56: protowire.CryptixdMessage.getPeerAddressesResponse:type_name -> protowire.GetPeerAddressesResponseMessage
+	57,  // 57: protowire.CryptixdMessage.getSelectedTipHashRequest:type_name -> protowire.GetSelectedTipHashRequestMessage
+	58,  // 58: protowire.CryptixdMessage.getSelectedTipHashResponse:type_name -> protowire.GetSelectedTipHashResponseMessage
+	59,  // 59: protowire.CryptixdMessage.getMempoolEntryRequest:type_name -> protowire.GetMempoolEntryRequestMessage
+	60,  // 60: protowire.CryptixdMessage.getMempoolEntryResponse:type_name -> protowire.GetMempoolEntryResponseMessage
+	61,  // 61: protowire.CryptixdMessage.getConnectedPeerInfoRequest:type_name -> protowire.GetConnectedPeerInfoRequestMessage
+	62,  // 62: protowire.CryptixdMessage.getConnectedPeerInfoResponse:type_name -> protowire.GetConnectedPeerInfoResponseMessage
+	63,  // 63: protowire.CryptixdMessage.addPeerRequest:type_name -> protowire.AddPeerRequestMessage
+	64,  // 64: protowire.CryptixdMessage.addPeerResponse:type_name -> protowire.AddPeerResponseMessage
+	65,  // 65: protowire.CryptixdMessage.submitTransactionRequest:type_name -> protowire.SubmitTransactionRequestMessage
+	66,  // 66: protowire.CryptixdMessage.submitTransactionResponse:type_name -> protowire.SubmitTransactionResponseMessage
+	67,  // 67: protowire.CryptixdMessage.notifyVirtualSelectedParentChainChangedRequest:type_name -> protowire.NotifyVirtualSelectedParentChainChangedRequestMessage
+	68,  // 68: protowire.CryptixdMessage.notifyVirtualSelectedParentChainChangedResponse:type_name -> protowire.NotifyVirtualSelectedParentChainChangedResponseMessage
+	69,  // 69: protowire.CryptixdMessage.virtualSelectedParentChainChangedNotification:type_name -> protowire.VirtualSelectedParentChainChangedNotificationMessage
+	70,  // 70: protowire.CryptixdMessage.getBlockRequest:type_name -> protowire.GetBlockRequestMessage
+	71,  // 71: protowire.CryptixdMessage.getBlockResponse:type_name -> protowire.GetBlockResponseMessage
+	72,  // 72: protowire.CryptixdMessage.getSubnetworkRequest:type_name -> protowire.GetSubnetworkRequestMessage
+	73,  // 73: protowire.CryptixdMessage.getSubnetworkResponse:type_name -> protowire.GetSubnetworkResponseMessage
+	74,  // 74: protowire.CryptixdMessage.getVirtualSelectedParentChainFromBlockRequest:type_name -> protowire.GetVirtualSelectedParentChainFromBlockRequestMessage
+	75,  // 75: protowire.CryptixdMessage.getVirtualSelectedParentChainFromBlockResponse:type_name -> protowire.GetVirtualSelectedParentChainFromBlockResponseMessage
+	76,  // 76: protowire.CryptixdMessage.getBlocksRequest:type_name -> protowire.GetBlocksRequestMessage
+	77,  // 77: protowire.CryptixdMessage.getBlocksResponse:type_name -> protowire.GetBlocksResponseMessage
+	78,  // 78: protowire.CryptixdMessage.getBlockCountRequest:type_name -> protowire.GetBlockCountRequestMessage
+	79,  // 79: protowire.CryptixdMessage.getBlockCountResponse:type_name -> protowire.GetBlockCountResponseMessage
+	80,  // 80: protowire.CryptixdMessage.getBlockDagInfoRequest:type_name -> protowire.GetBlockDagInfoRequestMessage
+	81,  // 81: protowire.CryptixdMessage.getBlockDagInfoResponse:type_name -> protowire.GetBlockDagInfoResponseMessage
+	82,  // 82: protowire.CryptixdMessage.resolveFinalityConflictRequest:type_name -> protowire.ResolveFinalityConflictRequestMessage
+	83,  // 83: protowire.CryptixdMessage.resolveFinalityConflictResponse:type_name -> protowire.ResolveFinalityConflictResponseMessage
+	84,  // 84: protowire.CryptixdMessage.notifyFinalityConflictsRequest:type_name -> protowire.NotifyFinalityConflictsRequestMessage
+	85,  // 85: protowire.CryptixdMessage.notifyFinalityConflictsResponse:type_name -> protowire.NotifyFinalityConflictsResponseMessage
+	86,  // 86: protowire.CryptixdMessage.finalityConflictNotification:type_name -> protowire.FinalityConflictNotificationMessage
+	87,  // 87: protowire.CryptixdMessage.finalityConflictResolvedNotification:type_name -> protowire.FinalityConflictResolvedNotificationMessage
+	88,  // 88: protowire.CryptixdMessage.getMempoolEntriesRequest:type_name -> protowire.GetMempoolEntriesRequestMessage
+	89,  // 89: protowire.CryptixdMessage.getMempoolEntriesResponse:type_name -> protowire.GetMempoolEntriesResponseMessage
+	90,  // 90: protowire.CryptixdMessage.shutDownRequest:type_name -> protowire.ShutDownRequestMessage
+	91,  // 91: protowire.CryptixdMessage.shutDownResponse:type_name -> protowire.ShutDownResponseMessage
+	92,  // 92: protowire.CryptixdMessage.getHeadersRequest:type_name -> protowire.GetHeadersRequestMessage
+	93,  // 93: protowire.CryptixdMessage.getHeadersResponse:type_name -> protowire.GetHeadersResponseMessage
+	94,  // 94: protowire.CryptixdMessage.notifyUtxosChangedRequest:type_name -> protowire.NotifyUtxosChangedRequestMessage
+	95,  // 95: protowire.CryptixdMessage.notifyUtxosChangedResponse:type_name -> protowire.NotifyUtxosChangedResponseMessage
+	96,  // 96: protowire.CryptixdMessage.utxosChangedNotification:type_name -> protowire.UtxosChangedNotificationMessage
+	97,  // 97: protowire.CryptixdMessage.getUtxosByAddressesRequest:type_name -> protowire.GetUtxosByAddressesRequestMessage
+	98,  // 98: protowire.CryptixdMessage.getUtxosByAddressesResponse:type_name -> protowire.GetUtxosByAddressesResponseMessage
+	99,  // 99: protowire.CryptixdMessage.getVirtualSelectedParentBlueScoreRequest:type_name -> protowire.GetVirtualSelectedParentBlueScoreRequestMessage
+	100, // 100: protowire.CryptixdMessage.getVirtualSelectedParentBlueScoreResponse:type_name -> protowire.GetVirtualSelectedParentBlueScoreResponseMessage
+	101, // 101: protowire.CryptixdMessage.notifyVirtualSelectedParentBlueScoreChangedRequest:type_name -> protowire.NotifyVirtualSelectedParentBlueScoreChangedRequestMessage
+	102, // 102: protowire.CryptixdMessage.notifyVirtualSelectedParentBlueScoreChangedResponse:type_name -> protowire.NotifyVirtualSelectedParentBlueScoreChangedResponseMessage
+	103, // 103: protowire.CryptixdMessage.virtualSelectedParentBlueScoreChangedNotification:type_name -> protowire.VirtualSelectedParentBlueScoreChangedNotificationMessage
+	104, // 104: protowire.CryptixdMessage.banRequest:type_name -> protowire.BanRequestMessage
+	105, // 105: protowire.CryptixdMessage.banResponse:type_name -> protowire.BanResponseMessage
+	106, // 106: protowire.CryptixdMessage.unbanRequest:type_name -> protowire.UnbanRequestMessage
+	107, // 107: protowire.CryptixdMessage.unbanResponse:type_name -> protowire.UnbanResponseMessage
+	108, // 108: protowire.CryptixdMessage.getInfoRequest:type_name -> protowire.GetInfoRequestMessage
+	109, // 109: protowire.CryptixdMessage.getInfoResponse:type_name -> protowire.GetInfoResponseMessage
+	110, // 110: protowire.CryptixdMessage.stopNotifyingUtxosChangedRequest:type_name -> protowire.StopNotifyingUtxosChangedRequestMessage
+	111, // 111: protowire.CryptixdMessage.stopNotifyingUtxosChangedResponse:type_name -> protowire.StopNotifyingUtxosChangedResponseMessage
+	112, // 112: protowire.CryptixdMessage.notifyPruningPointUTXOSetOverrideRequest:type_name -> protowire.NotifyPruningPointUTXOSetOverrideRequestMessage
+	113, // 113: protowire.CryptixdMessage.notifyPruningPointUTXOSetOverrideResponse:type_name -> protowire.NotifyPruningPointUTXOSetOverrideResponseMessage
+	114, // 114: protowire.CryptixdMessage.pruningPointUTXOSetOverrideNotification:type_name -> protowire.PruningPointUTXOSetOverrideNotificationMessage
+	115, // 115: protowire.CryptixdMessage.stopNotifyingPruningPointUTXOSetOverrideRequest:type_name -> protowire.StopNotifyingPruningPointUTXOSetOverrideRequestMessage
+	116, // 116: protowire.CryptixdMessage.stopNotifyingPruningPointUTXOSetOverrideResponse:type_name -> protowire.StopNotifyingPruningPointUTXOSetOverrideResponseMessage
+	117, // 117: protowire.CryptixdMessage.estimateNetworkHashesPerSecondRequest:type_name -> protowire.EstimateNetworkHashesPerSecondRequestMessage
+	118, // 118: protowire.CryptixdMessage.estimateNetworkHashesPerSecondResponse:type_name -> protowire.EstimateNetworkHashesPerSecondResponseMessage
+	119, // 119: protowire.CryptixdMessage.notifyVirtualDaaScoreChangedRequest:type_name -> protowire.NotifyVirtualDaaScoreChangedRequestMessage
+	120, // 120: protowire.CryptixdMessage.notifyVirtualDaaScoreChangedResponse:type_name -> protowire.NotifyVirtualDaaScoreChangedResponseMessage
+	121, // 121: protowire.CryptixdMessage.virtualDaaScoreChangedNotification:type_name -> protowire.VirtualDaaScoreChangedNotificationMessage
+	122, // 122: protowire.CryptixdMessage.getBalanceByAddressRequest:type_name -> protowire.GetBalanceByAddressRequestMessage
+	123, // 123: protowire.CryptixdMessage.getBalanceByAddressResponse:type_name -> protowire.GetBalanceByAddressResponseMessage
+	124, // 124: protowire.CryptixdMessage.getBalancesByAddressesRequest:type_name -> protowire.GetBalancesByAddressesRequestMessage
+	125, // 125: protowire.CryptixdMessage.getBalancesByAddressesResponse:type_name -> protowire.GetBalancesByAddressesResponseMessage
+	126, // 126: protowire.CryptixdMessage.notifyNewBlockTemplateRequest:type_name -> protowire.NotifyNewBlockTemplateRequestMessage
+	127, // 127: protowire.CryptixdMessage.notifyNewBlockTemplateResponse:type_name -> protowire.NotifyNewBlockTemplateResponseMessage
+	128, // 128: protowire.CryptixdMessage.newBlockTemplateNotification:type_name -> protowire.NewBlockTemplateNotificationMessage
+	129, // 129: protowire.CryptixdMessage.getMempoolEntriesByAddressesRequest:type_name -> protowire.GetMempoolEntriesByAddressesRequestMessage
+	130, // 130: protowire.CryptixdMessage.getMempoolEntriesByAddressesResponse:type_name -> protowire.GetMempoolEntriesByAddressesResponseMessage
+	131, // 131: protowire.CryptixdMessage.getCoinSupplyRequest:type_name -> protowire.GetCoinSupplyRequestMessage
+	132, // 132: protowire.CryptixdMessage.getCoinSupplyResponse:type_name -> protowire.GetCoinSupplyResponseMessage
+	133, // 133: protowire.CryptixdMessage.pingRequest:type_name -> protowire.PingRequestMessage
+	134, // 134: protowire.CryptixdMessage.getMetricsRequest:type_name -> protowire.GetMetricsRequestMessage
+	135, // 135: protowire.CryptixdMessage.getServerInfoRequest:type_name -> protowire.GetServerInfoRequestMessage
+	136, // 136: protowire.CryptixdMessage.getSyncStatusRequest:type_name -> protowire.GetSyncStatusRequestMessage
+	137, // 137: protowire.CryptixdMessage.getDaaScoreTimestampEstimateRequest:type_name -> protowire.GetDaaScoreTimestampEstimateRequestMessage
+	138, // 138: protowire.CryptixdMessage.submitTransactionReplacementRequest:type_name -> protowire.SubmitTransactionReplacementRequestMessage
+	139, // 139: protowire.CryptixdMessage.getConnectionsRequest:type_name -> protowire.GetConnectionsRequestMessage
+	140, // 140: protowire.CryptixdMessage.getSystemInfoRequest:type_name -> protowire.GetSystemInfoRequestMessage
+	141, // 141: protowire.CryptixdMessage.getFeeEstimateRequest:type_name -> protowire.GetFeeEstimateRequestMessage
+	142, // 142: protowire.CryptixdMessage.getFeeEstimateExperimentalRequest:type_name -> protowire.GetFeeEstimateExperimentalRequestMessage
+	143, // 143: protowire.CryptixdMessage.getCurrentBlockColorRequest:type_name -> protowire.GetCurrentBlockColorRequestMessage
+	144, // 144: protowire.CryptixdMessage.pingResponse:type_name -> protowire.PingResponseMessage
+	145, // 145: protowire.CryptixdMessage.getMetricsResponse:type_name -> protowire.GetMetricsResponseMessage
+	146, // 146: protowire.CryptixdMessage.getServerInfoResponse:type_name -> protowire.GetServerInfoResponseMessage
+	147, // 147: protowire.CryptixdMessage.getSyncStatusResponse:type_name -> protowire.GetSyncStatusResponseMessage
+	148, // 148: protowire.CryptixdMessage.getDaaScoreTimestampEstimateResponse:type_name -> protowire.GetDaaScoreTimestampEstimateResponseMessage
+	149, // 149: protowire.CryptixdMessage.submitTransactionReplacementResponse:type_name -> protowire.SubmitTransactionReplacementResponseMessage
+	150, // 150: protowire.CryptixdMessage.getConnectionsResponse:type_name -> protowire.GetConnectionsResponseMessage
+	151, // 151: protowire.CryptixdMessage.getSystemInfoResponse:type_name -> protowire.GetSystemInfoResponseMessage
+	152, // 152: protowire.CryptixdMessage.getFeeEstimateResponse:type_name -> protowire.GetFeeEstimateResponseMessage
+	153, // 153: protowire.CryptixdMessage.getFeeEstimateExperimentalResponse:type_name -> protowire.GetFeeEstimateExperimentalResponseMessage
+	154, // 154: protowire.CryptixdMessage.getCurrentBlockColorResponse:type_name -> protowire.GetCurrentBlockColorResponseMessage
+	0,   // 155: protowire.P2P.MessageStream:input_type -> protowire.CryptixdMessage
+	0,   // 156: protowire.RPC.MessageStream:input_type -> protowire.CryptixdMessage
+	0,   // 157: protowire.P2P.MessageStream:output_type -> protowire.CryptixdMessage
+	0,   // 158: protowire.RPC.MessageStream:output_type -> protowire.CryptixdMessage
+	157, // [157:159] is the sub-list for method output_type
+	155, // [155:157] is the sub-list for method input_type
+	155, // [155:155] is the sub-list for extension type_name
+	155, // [155:155] is the sub-list for extension extendee
+	0,   // [0:155] is the sub-list for field type_name
 }
 
 func init() { file_messages_proto_init() }
@@ -3132,7 +3114,6 @@ func file_messages_proto_init() {
 		(*CryptixdMessage_IbdChainBlockLocator)(nil),
 		(*CryptixdMessage_RequestAnticone)(nil),
 		(*CryptixdMessage_RequestNextPruningPointAndItsAnticoneBlocks)(nil),
-		(*CryptixdMessage_StrongNodeAnnouncement)(nil),
 		(*CryptixdMessage_RequestAntiFraudSnapshotV1)(nil),
 		(*CryptixdMessage_AntiFraudSnapshotV1)(nil),
 		(*CryptixdMessage_BlockProducerClaimV1)(nil),

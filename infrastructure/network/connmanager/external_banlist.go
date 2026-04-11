@@ -19,7 +19,6 @@ import (
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
-	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
 	secp256k1 "github.com/cryptix-network/go-secp256k1"
 	"github.com/pkg/errors"
 	"github.com/zeebo/blake3"
@@ -1300,19 +1299,6 @@ func (c *ConnectionManager) isIPExternallyBanned(ip net.IP) bool {
 	return ok
 }
 
-// IsNodeIDBanned returns true if the given peer ID is present in the external antifraud banlist.
-func (c *ConnectionManager) IsNodeIDBanned(peerID *id.ID) bool {
-	if peerID == nil {
-		return false
-	}
-
-	c.externalBanlistLock.RLock()
-	defer c.externalBanlistLock.RUnlock()
-
-	_, ok := c.externallyBannedNodeIDs[strings.ToLower(peerID.String())]
-	return ok
-}
-
 // IsUnifiedNodeIDBanned returns true if the given unified node ID is blocked either locally or by external antifraud banlist.
 func (c *ConnectionManager) IsUnifiedNodeIDBanned(nodeID [32]byte) bool {
 	if c.IsUnifiedNodeIDLocallyBanned(nodeID) {
@@ -1333,7 +1319,6 @@ func (c *ConnectionManager) isNetConnectionExternallyBanned(netConnection *netad
 	unifiedNodeIDBanned := hasUnifiedNodeID && c.IsUnifiedNodeIDBanned(unifiedNodeID)
 
 	return c.isIPExternallyBanned(netConnection.NetAddress().IP) ||
-		c.IsNodeIDBanned(netConnection.ID()) ||
 		unifiedNodeIDBanned
 }
 
@@ -1345,18 +1330,14 @@ func (c *ConnectionManager) disconnectExternallyBannedConnections(connections []
 
 		ipAddress := connection.NetAddress().IP
 		ipBanned := c.isIPExternallyBanned(ipAddress)
-		nodeIDBanned := c.IsNodeIDBanned(connection.ID())
 		unifiedNodeID, hasUnifiedNodeID := connection.UnifiedNodeID()
 		unifiedNodeIDBanned := hasUnifiedNodeID && c.IsUnifiedNodeIDBanned(unifiedNodeID)
-		if !ipBanned && !nodeIDBanned && !unifiedNodeIDBanned {
+		if !ipBanned && !unifiedNodeIDBanned {
 			continue
 		}
 
 		if ipBanned {
 			log.Infof("Disconnecting %s due to external antifraud IP ban %s", connection, canonicalIPString(ipAddress))
-		}
-		if nodeIDBanned {
-			log.Infof("Disconnecting %s due to external antifraud node ID ban %s", connection, connection.ID())
 		}
 		if unifiedNodeIDBanned {
 			log.Infof("Disconnecting %s due to external antifraud unified node ID ban %s", connection, hex.EncodeToString(unifiedNodeID[:]))
