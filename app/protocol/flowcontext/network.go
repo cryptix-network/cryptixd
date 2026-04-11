@@ -41,22 +41,23 @@ func (f *FlowContext) RemoveFromPeers(peer *peerpkg.Peer) {
 	delete(f.peers, *peer.ID())
 }
 
-// readyPeerConnections returns the NetConnections of all the ready peers.
-func (f *FlowContext) readyPeerConnections() []*netadapter.NetConnection {
+// readyBroadcastPeerConnections returns NetConnections eligible for relay broadcasts.
+func (f *FlowContext) readyBroadcastPeerConnections() []*netadapter.NetConnection {
 	f.peersMutex.RLock()
 	defer f.peersMutex.RUnlock()
-	peerConnections := make([]*netadapter.NetConnection, len(f.peers))
-	i := 0
+	peerConnections := make([]*netadapter.NetConnection, 0, len(f.peers))
 	for _, peer := range f.peers {
-		peerConnections[i] = peer.Connection()
-		i++
+		if peer.AntiFraudRestricted() {
+			continue
+		}
+		peerConnections = append(peerConnections, peer.Connection())
 	}
 	return peerConnections
 }
 
-// Broadcast broadcast the given message to all the ready peers.
+// Broadcast sends the given message to all relay-eligible ready peers.
 func (f *FlowContext) Broadcast(message appmessage.Message) error {
-	return f.netAdapter.P2PBroadcast(f.readyPeerConnections(), message)
+	return f.netAdapter.P2PBroadcast(f.readyBroadcastPeerConnections(), message)
 }
 
 // Peers returns the currently active peers

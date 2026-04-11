@@ -275,6 +275,12 @@ func (flow *handleIBDFlow) syncPruningPointsAndPruningPointAnticone(proofPruning
 
 func (flow *handleIBDFlow) processBlockWithTrustedData(
 	consensus externalapi.Consensus, block *appmessage.MsgBlockWithTrustedDataV4, data *appmessage.MsgTrustedData) error {
+	if block == nil || block.Block == nil {
+		return protocolerrors.Errorf(true, "received block with trusted data missing block payload")
+	}
+	if data == nil {
+		return protocolerrors.Errorf(true, "received block with trusted data before trusted data payload")
+	}
 
 	blockWithTrustedData := &externalapi.BlockWithTrustedData{
 		Block:        appmessage.MsgBlockToDomainBlock(block.Block),
@@ -283,11 +289,20 @@ func (flow *handleIBDFlow) processBlockWithTrustedData(
 	}
 
 	for _, index := range block.DAAWindowIndices {
+		if index >= uint64(len(data.DAAWindow)) {
+			return protocolerrors.Errorf(true, "received invalid DAA window index %d (trusted window size %d)", index, len(data.DAAWindow))
+		}
 		blockWithTrustedData.DAAWindow = append(blockWithTrustedData.DAAWindow, appmessage.TrustedDataDataDAABlockV4ToTrustedDataDataDAAHeader(data.DAAWindow[index]))
 	}
 
 	for _, index := range block.GHOSTDAGDataIndices {
+		if index >= uint64(len(data.GHOSTDAGData)) {
+			return protocolerrors.Errorf(true, "received invalid GHOSTDAG index %d (trusted data size %d)", index, len(data.GHOSTDAGData))
+		}
 		blockWithTrustedData.GHOSTDAGData = append(blockWithTrustedData.GHOSTDAGData, appmessage.GHOSTDAGHashPairToDomainGHOSTDAGHashPair(data.GHOSTDAGData[index]))
+	}
+	if len(blockWithTrustedData.GHOSTDAGData) == 0 {
+		return protocolerrors.Errorf(true, "received block with trusted data without GHOSTDAG indices")
 	}
 
 	err := consensus.ValidateAndInsertBlockWithTrustedData(blockWithTrustedData, false)
