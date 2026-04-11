@@ -12,6 +12,13 @@ import (
 var notBannedAddressBucket = database.MakeBucket([]byte("not-banned-addresses"))
 var bannedAddressBucket = database.MakeBucket([]byte("banned-addresses"))
 
+const (
+	serializedAddressKeySize    = net.IPv6len + 2
+	serializedBannedKeySize     = net.IPv6len
+	serializedAddressLegacySize = net.IPv6len + 2 + 8 + 8
+	serializedAddressSize       = serializedAddressLegacySize + 1
+)
+
 type addressStore struct {
 	database           database.Database
 	notBannedAddresses map[addressKey]*address
@@ -51,11 +58,19 @@ func (as *addressStore) restoreNotBannedAddresses() error {
 			return err
 		}
 		serializedKey := databaseKey.Suffix()
+		if len(serializedKey) != serializedAddressKeySize {
+			log.Warnf("Skipping not-banned address with invalid key length %d", len(serializedKey))
+			continue
+		}
 		key := as.deserializeAddressKey(serializedKey)
 
 		serializedNetAddress, err := cursor.Value()
 		if err != nil {
 			return err
+		}
+		if len(serializedNetAddress) < serializedAddressLegacySize {
+			log.Warnf("Skipping not-banned address %x with invalid value length %d", serializedKey, len(serializedNetAddress))
+			continue
 		}
 		netAddress := as.deserializeAddress(serializedNetAddress)
 		as.notBannedAddresses[key] = netAddress
@@ -74,12 +89,21 @@ func (as *addressStore) restoreBannedAddresses() error {
 		if err != nil {
 			return err
 		}
+		serializedKey := databaseKey.Suffix()
+		if len(serializedKey) != serializedBannedKeySize {
+			log.Warnf("Skipping banned address with invalid key length %d", len(serializedKey))
+			continue
+		}
 		var ipv6 ipv6
-		copy(ipv6[:], databaseKey.Suffix())
+		copy(ipv6[:], serializedKey)
 
 		serializedNetAddress, err := cursor.Value()
 		if err != nil {
 			return err
+		}
+		if len(serializedNetAddress) < serializedAddressLegacySize {
+			log.Warnf("Skipping banned address %x with invalid value length %d", serializedKey, len(serializedNetAddress))
+			continue
 		}
 		netAddress := as.deserializeAddress(serializedNetAddress)
 		as.bannedAddresses[ipv6] = netAddress
@@ -239,10 +263,14 @@ func (as *addressStore) serializeAddressKey(key addressKey) []byte {
 }
 
 func (as *addressStore) deserializeAddressKey(serializedKey []byte) addressKey {
-	var ip ipv6
-	copy(ip[:], serializedKey[:])
+	if len(serializedKey) < serializedAddressKeySize {
+		return addressKey{}
+	}
 
-	port := binary.LittleEndian.Uint16(serializedKey[16:])
+	var ip ipv6
+	copy(ip[:], serializedKey[:net.IPv6len])
+
+	port := binary.LittleEndian.Uint16(serializedKey[net.IPv6len:serializedAddressKeySize])
 
 	return addressKey{
 		port:    port,
@@ -251,7 +279,7 @@ func (as *addressStore) deserializeAddressKey(serializedKey []byte) addressKey {
 }
 
 func (as *addressStore) serializeAddress(address *address) []byte {
-	serializedSize := 16 + 2 + 8 + 8 + 1 // ipv6 + port + timestamp + connectionFailedCount + verified
+	serializedSize := serializedAddressSize // ipv6 + port + timestamp + connectionFailedCount + verified
 	serializedNetAddress := make([]byte, serializedSize)
 
 	copy(serializedNetAddress[:], address.netAddress.IP.To16()[:])
@@ -266,13 +294,27 @@ func (as *addressStore) serializeAddress(address *address) []byte {
 }
 
 func (as *addressStore) deserializeAddress(serializedAddress []byte) *address {
-	ip := make(net.IP, 16)
-	copy(ip[:], serializedAddress[:])
+	ip := make(net.IP, net.IPv6len)
+	if len(serializedAddress) >= net.IPv6len {
+		copy(ip[:], serializedAddress[:net.IPv6len])
+	}
 
-	port := binary.LittleEndian.Uint16(serializedAddress[16:])
-	timestamp := mstime.UnixMilliseconds(int64(binary.LittleEndian.Uint64(serializedAddress[18:])))
-	connectionFailedCount := binary.LittleEndian.Uint64(serializedAddress[26:])
-	verified := len(serializedAddress) >= 35 && serializedAddress[34] == 1
+	var port uint16
+	if len(serializedAddress) >= net.IPv6len+2 {
+		port = binary.LittleEndian.Uint16(serializedAddress[net.IPv6len : net.IPv6len+2])
+	}
+
+	timestamp := mstime.Time{}
+	if len(serializedAddress) >= net.IPv6len+2+8 {
+		timestamp = mstime.UnixMilliseconds(int64(binary.LittleEndian.Uint64(serializedAddress[18:26])))
+	}
+
+	var connectionFailedCount uint64
+	if len(serializedAddress) >= serializedAddressLegacySize {
+		connectionFailedCount = binary.LittleEndian.Uint64(serializedAddress[26:34])
+	}
+
+	verified := len(serializedAddress) >= serializedAddressSize && serializedAddress[34] == 1
 
 	return &address{
 		netAddress: &appmessage.NetAddress{

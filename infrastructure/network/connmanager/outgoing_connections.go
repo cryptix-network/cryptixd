@@ -9,11 +9,23 @@ func (c *ConnectionManager) checkOutgoingConnections(connSet connectionSet) {
 		connection, ok := connSet.get(address)
 		if ok { // connection is still connected
 			connSet.remove(connection)
+			if pendingAddress, exists := c.pendingOutgoing[address]; exists {
+				if err := c.addressManager.MarkConnectionSuccess(pendingAddress); err != nil {
+					log.Debugf("Couldn't mark %s as successful connection: %s", address, err)
+				}
+				delete(c.pendingOutgoing, address)
+			}
 			continue
 		}
 
 		// if connection is dead - remove from list of active ones
 		delete(c.activeOutgoing, address)
+		if pendingAddress, exists := c.pendingOutgoing[address]; exists {
+			if err := c.addressManager.MarkConnectionFailure(pendingAddress); err != nil {
+				log.Debugf("Couldn't mark %s as failed connection: %s", address, err)
+			}
+			delete(c.pendingOutgoing, address)
+		}
 	}
 
 	connections := c.netAdapter.P2PConnections()
@@ -45,9 +57,9 @@ func (c *ConnectionManager) checkOutgoingConnections(connSet connectionSet) {
 			c.addressManager.MarkConnectionFailure(netAddress)
 			continue
 		}
-		c.addressManager.MarkConnectionSuccess(netAddress)
 
 		c.activeOutgoing[addressString] = struct{}{}
+		c.pendingOutgoing[addressString] = netAddress
 	}
 
 	if len(netAddresses) < connectionsNeededCount {

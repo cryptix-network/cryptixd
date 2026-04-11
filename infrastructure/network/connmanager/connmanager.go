@@ -36,6 +36,7 @@ type ConnectionManager struct {
 	activeRequested  map[string]*connectionRequest
 	pendingRequested map[string]*connectionRequest
 	activeOutgoing   map[string]struct{}
+	pendingOutgoing  map[string]*appmessage.NetAddress
 	targetOutgoing   int
 	activeIncoming   map[string]struct{}
 	maxIncoming      int
@@ -70,6 +71,7 @@ func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *
 		activeRequested:             map[string]*connectionRequest{},
 		pendingRequested:            map[string]*connectionRequest{},
 		activeOutgoing:              map[string]struct{}{},
+		pendingOutgoing:             map[string]*appmessage.NetAddress{},
 		activeIncoming:              map[string]struct{}{},
 		externallyBannedIPs:         map[string]struct{}{},
 		externallyBannedNodeIDs:     map[string]struct{}{},
