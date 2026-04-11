@@ -14,6 +14,7 @@ const (
 	snapshotRequestInterval = 20 * time.Second
 	snapshotRequestTimeout  = 5 * time.Second
 	modeRecheckInterval     = 1 * time.Second
+	hardforkProtocolVersion = uint32(7)
 )
 
 // HandleSnapshotRequestsContext is the context required for serving anti-fraud snapshots to peers.
@@ -60,6 +61,11 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 		case <-modeTicker.C:
 			if !context.IsPayloadHfActive() {
 				continue
+			}
+			if peer.ProtocolVersion() < hardforkProtocolVersion {
+				log.Warnf("Peer %s still uses pre-HF protocol version %d; reconnecting to enforce v%d+", peer, peer.ProtocolVersion(), hardforkProtocolVersion)
+				peer.Connection().Disconnect()
+				return nil
 			}
 			currentMode := context.ConnectionManager().AntiFraudModeForPeerHashes(peer.AntiFraudHashes())
 			if peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeFull {

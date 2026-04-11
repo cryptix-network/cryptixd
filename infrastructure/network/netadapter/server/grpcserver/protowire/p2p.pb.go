@@ -1429,6 +1429,8 @@ type VersionMessage struct {
 	SubnetworkId    *SubnetworkId          `protobuf:"bytes,9,opt,name=subnetworkId,proto3" json:"subnetworkId,omitempty"`
 	Network         string                 `protobuf:"bytes,10,opt,name=network,proto3" json:"network,omitempty"`
 	AntiFraudHashes [][]byte               `protobuf:"bytes,11,rep,name=antiFraudHashes,proto3" json:"antiFraudHashes,omitempty"`
+	NodePubkeyXonly []byte                 `protobuf:"bytes,12,opt,name=nodePubkeyXonly,proto3" json:"nodePubkeyXonly,omitempty"`
+	NodePowNonce    *uint64                `protobuf:"varint,13,opt,name=nodePowNonce,proto3,oneof" json:"nodePowNonce,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1531,6 +1533,20 @@ func (x *VersionMessage) GetAntiFraudHashes() [][]byte {
 		return x.AntiFraudHashes
 	}
 	return nil
+}
+
+func (x *VersionMessage) GetNodePubkeyXonly() []byte {
+	if x != nil {
+		return x.NodePubkeyXonly
+	}
+	return nil
+}
+
+func (x *VersionMessage) GetNodePowNonce() uint64 {
+	if x != nil && x.NodePowNonce != nil {
+		return *x.NodePowNonce
+	}
+	return 0
 }
 
 type RequestAntiFraudSnapshotV1Message struct {
@@ -3401,7 +3417,7 @@ const file_p2p_proto_rawDesc = "" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"#\n" +
 	"\vPongMessage\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"\x0f\n" +
-	"\rVerackMessage\"\xfc\x02\n" +
+	"\rVerackMessage\"\xe0\x03\n" +
 	"\x0eVersionMessage\x12(\n" +
 	"\x0fprotocolVersion\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x1a\n" +
 	"\bservices\x18\x02 \x01(\x04R\bservices\x12\x1c\n" +
@@ -3413,7 +3429,10 @@ const file_p2p_proto_rawDesc = "" +
 	"\fsubnetworkId\x18\t \x01(\v2\x17.protowire.SubnetworkIdR\fsubnetworkId\x12\x18\n" +
 	"\anetwork\x18\n" +
 	" \x01(\tR\anetwork\x12(\n" +
-	"\x0fantiFraudHashes\x18\v \x03(\fR\x0fantiFraudHashes\"#\n" +
+	"\x0fantiFraudHashes\x18\v \x03(\fR\x0fantiFraudHashes\x12(\n" +
+	"\x0fnodePubkeyXonly\x18\f \x01(\fR\x0fnodePubkeyXonly\x12'\n" +
+	"\fnodePowNonce\x18\r \x01(\x04H\x00R\fnodePowNonce\x88\x01\x01B\x0f\n" +
+	"\r_nodePowNonce\"#\n" +
 	"!RequestAntiFraudSnapshotV1Message\"\xaa\x02\n" +
 	"\x1aAntiFraudSnapshotV1Message\x12$\n" +
 	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
@@ -3674,6 +3693,7 @@ func file_p2p_proto_init() {
 	if File_p2p_proto != nil {
 		return
 	}
+	file_p2p_proto_msgTypes[27].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

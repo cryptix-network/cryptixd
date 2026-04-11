@@ -27,7 +27,7 @@ import (
 )
 
 const (
-	externalBanlistFetchInterval   = 20 * time.Minute
+	externalBanlistFetchInterval   = 10 * time.Minute
 	externalBanlistRequestTimeout  = 10 * time.Second
 	externalBanlistMaxResponseSize = 2 * 1024 * 1024
 	externalBanlistMaxIPs          = 4096
@@ -1346,6 +1346,15 @@ func (c *ConnectionManager) IsNodeIDBanned(peerID *id.ID) bool {
 	return ok
 }
 
+// IsUnifiedNodeIDBanned returns true if the given unified node ID is present in the external antifraud banlist.
+func (c *ConnectionManager) IsUnifiedNodeIDBanned(nodeID [32]byte) bool {
+	c.externalBanlistLock.RLock()
+	defer c.externalBanlistLock.RUnlock()
+
+	_, ok := c.externallyBannedNodeIDs[hex.EncodeToString(nodeID[:])]
+	return ok
+}
+
 // IsStrongNodeIDBanned returns true if the given strong-node ID is present in the external antifraud banlist.
 func (c *ConnectionManager) IsStrongNodeIDBanned(strongNodeID string) bool {
 	normalizedStrongID, ok := normalizeStrongNodeIDHex(strongNodeID)
@@ -1546,9 +1555,12 @@ func (c *ConnectionManager) isNetConnectionExternallyBanned(netConnection *netad
 	if netConnection == nil {
 		return false
 	}
+	unifiedNodeID, hasUnifiedNodeID := netConnection.UnifiedNodeID()
+	unifiedNodeIDBanned := hasUnifiedNodeID && c.IsUnifiedNodeIDBanned(unifiedNodeID)
 
 	return c.isIPExternallyBanned(netConnection.NetAddress().IP) ||
 		c.IsNodeIDBanned(netConnection.ID()) ||
+		unifiedNodeIDBanned ||
 		c.IsStrongNodeIDBanned(netConnection.StrongNodeID())
 }
 
@@ -1561,9 +1573,11 @@ func (c *ConnectionManager) disconnectExternallyBannedConnections(connections []
 		ipAddress := connection.NetAddress().IP
 		ipBanned := c.isIPExternallyBanned(ipAddress)
 		nodeIDBanned := c.IsNodeIDBanned(connection.ID())
+		unifiedNodeID, hasUnifiedNodeID := connection.UnifiedNodeID()
+		unifiedNodeIDBanned := hasUnifiedNodeID && c.IsUnifiedNodeIDBanned(unifiedNodeID)
 		strongNodeID := connection.StrongNodeID()
 		strongNodeIDBanned := c.IsStrongNodeIDBanned(strongNodeID)
-		if !ipBanned && !nodeIDBanned && !strongNodeIDBanned {
+		if !ipBanned && !nodeIDBanned && !unifiedNodeIDBanned && !strongNodeIDBanned {
 			continue
 		}
 
@@ -1572,6 +1586,9 @@ func (c *ConnectionManager) disconnectExternallyBannedConnections(connections []
 		}
 		if nodeIDBanned {
 			log.Infof("Disconnecting %s due to external antifraud node ID ban %s", connection, connection.ID())
+		}
+		if unifiedNodeIDBanned {
+			log.Infof("Disconnecting %s due to external antifraud unified node ID ban %s", connection, hex.EncodeToString(unifiedNodeID[:]))
 		}
 		if strongNodeIDBanned {
 			log.Infof("Disconnecting %s due to external antifraud strong-node ID ban %s", connection, strongNodeID)

@@ -57,6 +57,21 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		antiFraudHashes = append(antiFraudHashes, hash)
 	}
 
+	var nodePubkeyXOnly []byte
+	if len(x.NodePubkeyXonly) > 0 {
+		if len(x.NodePubkeyXonly) != 32 {
+			return nil, errors.Errorf("VersionMessage.NodePubkeyXonly length %d is invalid (expected 32)", len(x.NodePubkeyXonly))
+		}
+		nodePubkeyXOnly = make([]byte, 32)
+		copy(nodePubkeyXOnly, x.NodePubkeyXonly)
+	}
+
+	var nodePowNonce *uint64
+	if x.NodePowNonce != nil {
+		value := *x.NodePowNonce
+		nodePowNonce = &value
+	}
+
 	return &appmessage.MsgVersion{
 		ProtocolVersion: x.ProtocolVersion,
 		Network:         x.Network,
@@ -68,6 +83,8 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		DisableRelayTx:  x.DisableRelayTx,
 		SubnetworkID:    subnetworkID,
 		AntiFraudHashes: antiFraudHashes,
+		NodePubkeyXOnly: nodePubkeyXOnly,
+		NodePowNonce:    nodePowNonce,
 	}, nil
 }
 
@@ -97,6 +114,15 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		copy(entry, hash[:])
 		antiFraudHashes = append(antiFraudHashes, entry)
 	}
+	if len(msgVersion.NodePubkeyXOnly) != 0 && len(msgVersion.NodePubkeyXOnly) != 32 {
+		return errors.Errorf("MsgVersion.NodePubkeyXOnly length %d is invalid (expected 32)", len(msgVersion.NodePubkeyXOnly))
+	}
+	nodePubkeyXOnly := append([]byte(nil), msgVersion.NodePubkeyXOnly...)
+	var nodePowNonce *uint64
+	if msgVersion.NodePowNonce != nil {
+		value := *msgVersion.NodePowNonce
+		nodePowNonce = &value
+	}
 
 	x.Version = &VersionMessage{
 		ProtocolVersion: msgVersion.ProtocolVersion,
@@ -109,6 +135,8 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		DisableRelayTx:  msgVersion.DisableRelayTx,
 		SubnetworkId:    domainSubnetworkIDToProto(msgVersion.SubnetworkID),
 		AntiFraudHashes: antiFraudHashes,
+		NodePubkeyXonly: nodePubkeyXOnly,
+		NodePowNonce:    nodePowNonce,
 	}
 	return nil
 }

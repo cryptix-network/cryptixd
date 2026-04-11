@@ -62,6 +62,14 @@ type MsgVersion struct {
 	// antiFraudHashes is a newest-first window of up to 3 anti-fraud root hashes (32 bytes each).
 	// Zero-hash entries are allowed only as trailing padding.
 	AntiFraudHashes [][32]byte
+
+	// nodePubkeyXOnly is the node identity x-only pubkey (32 bytes) used for unified node identity PoW verification.
+	// Empty means not advertised (legacy pre-HF compatibility).
+	NodePubkeyXOnly []byte
+
+	// nodePowNonce is the nonce for the unified node identity PoW challenge.
+	// Nil means not advertised (legacy pre-HF compatibility).
+	NodePowNonce *uint64
 }
 
 // HasService returns whether the specified service is supported by the peer

@@ -73,17 +73,10 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		}
 		defer m.context.RemoveFromPeers(peer)
 
-		if m.context.ConnectionManager().IsNodeIDBanned(peer.ID()) {
-			log.Infof("Peer %s is externally banned by node ID. Disconnecting...", netConnection)
+		if unifiedNodeID := peer.UnifiedNodeID(); unifiedNodeID != nil && m.context.ConnectionManager().IsUnifiedNodeIDBanned(*unifiedNodeID) {
+			log.Infof("Peer %s is externally banned by unified node ID. Disconnecting...", netConnection)
 			netConnection.Disconnect()
 			return
-		}
-		if strongNodeID := m.context.ConnectionManager().UpdateConnectionStrongNodeIDFromUserAgent(netConnection, peer.UserAgent()); strongNodeID != "" {
-			if m.context.ConnectionManager().IsStrongNodeIDBanned(strongNodeID) {
-				log.Infof("Peer %s is externally banned by strong-node ID %s. Disconnecting...", netConnection, strongNodeID)
-				netConnection.Disconnect()
-				return
-			}
 		}
 
 		var flows []*common.Flow
@@ -101,8 +94,8 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 			peer.SetAntiFraudRestricted(antiFraudMode == connmanager.AntiFraudModeRestricted)
 		}
 		switch peer.ProtocolVersion() {
-		case 5, 6:
-			// Protocol version 6 keeps using the v5 flow set in this node implementation.
+		case 5, 6, 7:
+			// Protocol versions 6/7 keep using the v5 flow set in this node implementation.
 			if enforceAntiFraud && antiFraudMode == connmanager.AntiFraudModeRestricted {
 				log.Infof("Peer %s has no valid anti-fraud hash overlap and will run in RESTRICTED_AF mode", peer)
 				flows = v5.RegisterRestricted(m, router, errChan, &isStopping)

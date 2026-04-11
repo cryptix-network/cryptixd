@@ -11,6 +11,7 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
 	mathUtil "github.com/cryptix-network/cryptixd/util/math"
 	"github.com/cryptix-network/cryptixd/util/mstime"
+	"github.com/zeebo/blake3"
 )
 
 // Peer holds data about a peer.
@@ -25,6 +26,7 @@ type Peer struct {
 	subnetworkID             *externalapi.DomainSubnetworkID
 	antiFraudHashes          [][32]byte
 	antiFraudRestricted      bool
+	unifiedNodeID            *[32]byte
 
 	timeOffset        time.Duration
 	connectionStarted time.Time
@@ -110,6 +112,14 @@ func (p *Peer) UpdateFieldsFromMsgVersion(msg *appmessage.MsgVersion, maxProtoco
 	p.disableRelayTx = msg.DisableRelayTx
 	p.subnetworkID = msg.SubnetworkID
 	p.antiFraudHashes = append(p.antiFraudHashes[:0], msg.AntiFraudHashes...)
+	if len(msg.NodePubkeyXOnly) == 32 {
+		var pub [32]byte
+		copy(pub[:], msg.NodePubkeyXOnly)
+		nodeID := blake3.Sum256(pub[:])
+		p.unifiedNodeID = &nodeID
+	} else {
+		p.unifiedNodeID = nil
+	}
 
 	p.timeOffset = mstime.Since(msg.Timestamp)
 }
@@ -132,6 +142,15 @@ func (p *Peer) SetAntiFraudRestricted(restricted bool) {
 // AntiFraudRestricted returns whether this peer is currently in restricted anti-fraud mode.
 func (p *Peer) AntiFraudRestricted() bool {
 	return p.antiFraudRestricted
+}
+
+// UnifiedNodeID returns the verified node ID advertised in handshake when present.
+func (p *Peer) UnifiedNodeID() *[32]byte {
+	if p.unifiedNodeID == nil {
+		return nil
+	}
+	value := *p.unifiedNodeID
+	return &value
 }
 
 // SetPingPending sets the ping state of the peer to 'pending'

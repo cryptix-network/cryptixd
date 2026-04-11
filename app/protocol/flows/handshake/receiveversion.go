@@ -8,6 +8,7 @@ import (
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
+	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
 )
@@ -82,6 +83,11 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 		return nil, protocolerrors.Errorf(false, "protocol version must be %d or greater",
 			minAcceptableProtocolVersion)
 	}
+	hardforkActive := minAcceptableProtocolVersion >= hardforkProtocolVersion
+	peerUnifiedNodeID, err := validatePeerUnifiedNodeIdentity(flow.Config().ActiveNetParams.Name, msgVersion, hardforkActive)
+	if err != nil {
+		return nil, protocolerrors.Wrapf(false, err, "invalid unified node identity")
+	}
 
 	// Disconnect from partial nodes in networks that don't allow them
 	if !flow.Config().ActiveNetParams.EnableNonNativeSubnetworks && msgVersion.SubnetworkID != nil {
@@ -117,8 +123,36 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	}
 
 	flow.peer.Connection().SetID(msgVersion.ID)
+	if peerUnifiedNodeID != nil {
+		flow.peer.Connection().SetUnifiedNodeID(*peerUnifiedNodeID)
+	}
 
 	return msgVersion.Address, nil
+}
+
+func validatePeerUnifiedNodeIdentity(networkName string, msgVersion *appmessage.MsgVersion, required bool) (*[32]byte, error) {
+	if len(msgVersion.NodePubkeyXOnly) == 0 && msgVersion.NodePowNonce == nil {
+		if required {
+			return nil, errors.New("missing nodePubkeyXonly/nodePowNonce")
+		}
+		return nil, nil
+	}
+
+	if len(msgVersion.NodePubkeyXOnly) != 32 || msgVersion.NodePowNonce == nil {
+		return nil, errors.New("node identity fields are incomplete")
+	}
+
+	networkCode, err := netadapter.UnifiedNodeNetworkCodeFromName(networkName)
+	if err != nil {
+		return nil, err
+	}
+	var pubKeyXOnly [32]byte
+	copy(pubKeyXOnly[:], msgVersion.NodePubkeyXOnly)
+	if !netadapter.IsValidUnifiedNodePoWNonce(networkCode, pubKeyXOnly, *msgVersion.NodePowNonce) {
+		return nil, errors.New("node identity proof-of-work is invalid")
+	}
+	nodeID := netadapter.ComputeUnifiedNodeID(pubKeyXOnly)
+	return &nodeID, nil
 }
 
 func isCompatiblePeerNetwork(localNetwork, remoteNetwork string) bool {

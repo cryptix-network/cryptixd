@@ -17,6 +17,8 @@ type NetConnection struct {
 	connection            server.Connection
 	id                    *id.ID
 	strongNodeID          string
+	unifiedNodeID         [32]byte
+	hasUnifiedNodeID      bool
 	metadataLock          sync.RWMutex
 	router                *routerpkg.Router
 	onDisconnectedHandler server.OnDisconnectedHandler
@@ -80,6 +82,21 @@ func (c *NetConnection) SetStrongNodeID(strongNodeID string) {
 	c.metadataLock.Lock()
 	defer c.metadataLock.Unlock()
 	c.strongNodeID = strongNodeID
+}
+
+// UnifiedNodeID returns the unified node ID associated with this connection.
+func (c *NetConnection) UnifiedNodeID() ([32]byte, bool) {
+	c.metadataLock.RLock()
+	defer c.metadataLock.RUnlock()
+	return c.unifiedNodeID, c.hasUnifiedNodeID
+}
+
+// SetUnifiedNodeID sets the unified node ID associated with this connection.
+func (c *NetConnection) SetUnifiedNodeID(nodeID [32]byte) {
+	c.metadataLock.Lock()
+	defer c.metadataLock.Unlock()
+	c.unifiedNodeID = nodeID
+	c.hasUnifiedNodeID = true
 }
 
 // Address returns the address associated with this connection

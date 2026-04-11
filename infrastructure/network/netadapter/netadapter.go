@@ -1,6 +1,7 @@
 package netadapter
 
 import (
+	"encoding/hex"
 	"sync"
 	"sync/atomic"
 
@@ -26,6 +27,7 @@ type NetAdapter struct {
 	cfg                  *config.Config
 	id                   *id.ID
 	strongNodeID         string
+	unifiedNodeIdentity  *UnifiedNodeIdentity
 	p2pServer            server.P2PServer
 	p2pRouterInitializer RouterInitializer
 	rpcServer            server.Server
@@ -43,11 +45,15 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 	if err != nil {
 		return nil, err
 	}
-	strongNodeID, err := loadOrCreateStrongNodeID(cfg.AppDir)
+	unifiedNodeIdentity, err := loadOrCreateUnifiedNodeIdentity(cfg.AppDir, cfg.ActiveNetParams.Name)
 	if err != nil {
-		log.Warnf("Strong-node ID initialization failed, continuing without one: %s", err)
-		strongNodeID = ""
+		log.Warnf("Unified node identity initialization failed (%s), falling back to ephemeral identity", err)
+		unifiedNodeIdentity, err = createEphemeralUnifiedNodeIdentity(cfg.ActiveNetParams.Name)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed creating ephemeral unified node identity")
+		}
 	}
+	strongNodeID := hex.EncodeToString(unifiedNodeIdentity.NodeID[:])
 	p2pServer, err := grpcserver.NewP2PServer(cfg.Listeners)
 	if err != nil {
 		return nil, err
@@ -57,11 +63,12 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 		return nil, err
 	}
 	adapter := NetAdapter{
-		cfg:          cfg,
-		id:           netAdapterID,
-		strongNodeID: strongNodeID,
-		p2pServer:    p2pServer,
-		rpcServer:    rpcServer,
+		cfg:                 cfg,
+		id:                  netAdapterID,
+		strongNodeID:        strongNodeID,
+		unifiedNodeIdentity: unifiedNodeIdentity,
+		p2pServer:           p2pServer,
+		rpcServer:           rpcServer,
 
 		p2pConnections: make(map[*NetConnection]struct{}),
 	}
@@ -182,6 +189,30 @@ func (na *NetAdapter) ID() *id.ID {
 // StrongNodeID returns the node's local strong-node ID in 64-char lowercase hex form.
 func (na *NetAdapter) StrongNodeID() string {
 	return na.strongNodeID
+}
+
+// UnifiedNodePubKeyXOnly returns the local unified node identity x-only pubkey.
+func (na *NetAdapter) UnifiedNodePubKeyXOnly() [32]byte {
+	if na.unifiedNodeIdentity == nil {
+		return [32]byte{}
+	}
+	return na.unifiedNodeIdentity.PubKeyXOnly
+}
+
+// UnifiedNodePowNonce returns the local unified node identity PoW nonce.
+func (na *NetAdapter) UnifiedNodePowNonce() uint64 {
+	if na.unifiedNodeIdentity == nil {
+		return 0
+	}
+	return na.unifiedNodeIdentity.PowNonce
+}
+
+// UnifiedNodeID returns the local unified node ID (blake3 over x-only pubkey).
+func (na *NetAdapter) UnifiedNodeID() [32]byte {
+	if na.unifiedNodeIdentity == nil {
+		return [32]byte{}
+	}
+	return na.unifiedNodeIdentity.NodeID
 }
 
 // P2PBroadcast sends the given `message` to every peer corresponding

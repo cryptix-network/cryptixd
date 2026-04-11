@@ -71,11 +71,7 @@ func (flow *sendVersionFlow) start() error {
 	msg := appmessage.NewMsgVersion(localAddress, flow.NetAdapter().ID(),
 		flow.Config().ActiveNetParams.Name, subnetworkID, flow.Config().ProtocolVersion)
 	baseUserAgentComments := append([]string{}, flow.Config().UserAgentComments...)
-	userAgentComments := baseUserAgentComments
-	if strongNodeID := flow.NetAdapter().StrongNodeID(); strongNodeID != "" {
-		userAgentComments = append(append([]string{}, baseUserAgentComments...), "strong-id="+strongNodeID)
-	}
-	msg.AddUserAgent(userAgentName, userAgentVersion, userAgentComments...)
+	msg.AddUserAgent(userAgentName, userAgentVersion, baseUserAgentComments...)
 	if err := appmessage.ValidateUserAgent(msg.UserAgent); err != nil {
 		msg.UserAgent = appmessage.DefaultUserAgent
 		msg.AddUserAgent(userAgentName, userAgentVersion, baseUserAgentComments...)
@@ -90,6 +86,10 @@ func (flow *sendVersionFlow) start() error {
 	// Advertise if inv messages for transactions are desired.
 	msg.DisableRelayTx = flow.Config().BlocksOnly
 	msg.AntiFraudHashes = flow.ConnectionManager().AntiFraudHashWindow()
+	pubkeyXOnly := flow.NetAdapter().UnifiedNodePubKeyXOnly()
+	msg.NodePubkeyXOnly = append(msg.NodePubkeyXOnly[:0], pubkeyXOnly[:]...)
+	powNonce := flow.NetAdapter().UnifiedNodePowNonce()
+	msg.NodePowNonce = &powNonce
 
 	err = flow.outgoingRoute.Enqueue(msg)
 	if err != nil {
