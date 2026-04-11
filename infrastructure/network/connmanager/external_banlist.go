@@ -751,6 +751,11 @@ const (
 	AntiFraudModeRestricted
 )
 
+type IngestPeerAntiFraudSnapshotResult struct {
+	Applied  bool
+	RootHash [32]byte
+}
+
 func (c *ConnectionManager) AntiFraudHashWindow() [][32]byte {
 	c.externalBanlistLock.RLock()
 	defer c.externalBanlistLock.RUnlock()
@@ -826,21 +831,22 @@ func hasNonZeroAntiFraudHashOverlap(local, remote [][32]byte) bool {
 	return false
 }
 
-func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *appmessage.MsgAntiFraudSnapshotV1) (bool, error) {
+func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *appmessage.MsgAntiFraudSnapshotV1) (*IngestPeerAntiFraudSnapshotResult, error) {
 	if peerID == "" {
-		return false, errors.New("peer ID is empty")
+		return nil, errors.New("peer ID is empty")
 	}
 	if message == nil {
-		return false, errors.New("snapshot message is nil")
+		return nil, errors.New("snapshot message is nil")
 	}
 	expectedNetwork, err := antiFraudNetworkFromName(c.cfg.NetParams().Name)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
 	snapshot, err := decodeExternalBanlistSnapshotFromMessage(message, expectedNetwork)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
+	result := &IngestPeerAntiFraudSnapshotResult{Applied: false, RootHash: snapshot.RootHash}
 
 	c.externalBanlistLock.Lock()
 	c.antiFraudPeerVotes[peerID] = snapshot
@@ -854,7 +860,7 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 	}
 	if !hasHighest {
 		c.externalBanlistLock.Unlock()
-		return false, nil
+		return result, nil
 	}
 
 	candidates := make([]*externalBanlistSnapshot, 0, len(c.antiFraudPeerVotes))
@@ -882,12 +888,24 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 	required := len(candidates)/2 + 1
 	if winnerVotes < required {
 		c.externalBanlistLock.Unlock()
-		return false, nil
+		return result, nil
 	}
 	winner := snapshotByHash[winnerHash]
 	applied, err := c.tryApplyAntiFraudSnapshotLocked(winner, "peer")
 	c.externalBanlistLock.Unlock()
-	return applied, err
+	result.Applied = applied
+	return result, err
+}
+
+func (c *ConnectionManager) AdvancePeerAntiFraudHashWindow(current [][32]byte, newHash [32]byte) [][32]byte {
+	var normalized [antiFraudHashWindowLen][32]byte
+	if validateAntiFraudHashWindow(current) {
+		copy(normalized[:], current)
+	}
+	advanced := advanceAntiFraudHashWindow(normalized, newHash)
+	out := make([][32]byte, antiFraudHashWindowLen)
+	copy(out, advanced[:])
+	return out
 }
 
 func decodeExternalBanlistSnapshotFromMessage(message *appmessage.MsgAntiFraudSnapshotV1, expectedNetwork uint8) (*externalBanlistSnapshot, error) {

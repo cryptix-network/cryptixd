@@ -119,6 +119,11 @@ func (p *Peer) AntiFraudHashes() [][32]byte {
 	return append([][32]byte(nil), p.antiFraudHashes...)
 }
 
+// SetAntiFraudHashes updates the peer anti-fraud hash window used for runtime mode checks.
+func (p *Peer) SetAntiFraudHashes(hashes [][32]byte) {
+	p.antiFraudHashes = append(p.antiFraudHashes[:0], hashes...)
+}
+
 // SetAntiFraudRestricted stores whether this peer is currently restricted by anti-fraud compatibility.
 func (p *Peer) SetAntiFraudRestricted(restricted bool) {
 	p.antiFraudRestricted = restricted

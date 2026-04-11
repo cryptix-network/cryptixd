@@ -13,7 +13,7 @@ import (
 const (
 	snapshotRequestInterval = 20 * time.Second
 	snapshotRequestTimeout  = 5 * time.Second
-	modeRecheckInterval    = 1 * time.Second
+	modeRecheckInterval     = 1 * time.Second
 )
 
 // HandleSnapshotRequestsContext is the context required for serving anti-fraud snapshots to peers.
@@ -99,9 +99,32 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 			if peer != nil && peer.ID() != nil {
 				peerID = peer.ID().String()
 			}
-			_, ingestErr := context.ConnectionManager().IngestPeerAntiFraudSnapshot(peerID, snapshotMessage)
+			ingestResult, ingestErr := context.ConnectionManager().IngestPeerAntiFraudSnapshot(peerID, snapshotMessage)
 			if ingestErr != nil {
 				log.Warnf("Ignoring anti-fraud snapshot from peer %s: %s", peer, ingestErr)
+				continue
+			}
+			if ingestResult == nil {
+				continue
+			}
+
+			// Keep peer hash window current based on verified snapshot messages so
+			// mode rechecks don't rely on stale handshake-only hashes.
+			currentHashes := peer.AntiFraudHashes()
+			updatedHashes := context.ConnectionManager().AdvancePeerAntiFraudHashWindow(currentHashes, ingestResult.RootHash)
+			if len(updatedHashes) == len(currentHashes) {
+				same := true
+				for i := range updatedHashes {
+					if updatedHashes[i] != currentHashes[i] {
+						same = false
+						break
+					}
+				}
+				if !same {
+					peer.SetAntiFraudHashes(updatedHashes)
+				}
+			} else {
+				peer.SetAntiFraudHashes(updatedHashes)
 			}
 		}
 	}
