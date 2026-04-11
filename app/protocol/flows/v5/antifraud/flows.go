@@ -43,6 +43,7 @@ func HandleSnapshotRequests(context HandleSnapshotRequestsContext, incomingRoute
 type SyncSnapshotsContext interface {
 	ShutdownChan() <-chan struct{}
 	ConnectionManager() *connmanager.ConnectionManager
+	IsPayloadHfActive() bool
 }
 
 // SyncSnapshots requests peer snapshots while peer-fallback is required and ingests valid responses.
@@ -57,6 +58,9 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 		case <-context.ShutdownChan():
 			return nil
 		case <-modeTicker.C:
+			if !context.IsPayloadHfActive() {
+				continue
+			}
 			currentMode := context.ConnectionManager().AntiFraudModeForPeerHashes(peer.AntiFraudHashes())
 			if peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeFull {
 				log.Infof("Peer %s anti-fraud overlap became valid; reconnecting to upgrade from RESTRICTED_AF to FULL", peer)
