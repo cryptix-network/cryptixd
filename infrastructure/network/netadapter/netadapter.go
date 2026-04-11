@@ -1,7 +1,6 @@
 package netadapter
 
 import (
-	"encoding/hex"
 	"sync"
 	"sync/atomic"
 
@@ -26,7 +25,6 @@ type RouterInitializer func(*routerpkg.Router, *NetConnection)
 type NetAdapter struct {
 	cfg                  *config.Config
 	id                   *id.ID
-	strongNodeID         string
 	unifiedNodeIdentity  *UnifiedNodeIdentity
 	p2pServer            server.P2PServer
 	p2pRouterInitializer RouterInitializer
@@ -53,7 +51,6 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 			return nil, errors.Wrap(err, "failed creating ephemeral unified node identity")
 		}
 	}
-	strongNodeID := hex.EncodeToString(unifiedNodeIdentity.NodeID[:])
 	p2pServer, err := grpcserver.NewP2PServer(cfg.Listeners)
 	if err != nil {
 		return nil, err
@@ -65,7 +62,6 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 	adapter := NetAdapter{
 		cfg:                 cfg,
 		id:                  netAdapterID,
-		strongNodeID:        strongNodeID,
 		unifiedNodeIdentity: unifiedNodeIdentity,
 		p2pServer:           p2pServer,
 		rpcServer:           rpcServer,
@@ -186,11 +182,6 @@ func (na *NetAdapter) ID() *id.ID {
 	return na.id
 }
 
-// StrongNodeID returns the node's local strong-node ID in 64-char lowercase hex form.
-func (na *NetAdapter) StrongNodeID() string {
-	return na.strongNodeID
-}
-
 // UnifiedNodePubKeyXOnly returns the local unified node identity x-only pubkey.
 func (na *NetAdapter) UnifiedNodePubKeyXOnly() [32]byte {
 	if na.unifiedNodeIdentity == nil {
@@ -213,6 +204,48 @@ func (na *NetAdapter) UnifiedNodeID() [32]byte {
 		return [32]byte{}
 	}
 	return na.unifiedNodeIdentity.NodeID
+}
+
+// SignUnifiedNodeAuthProof signs a per-connection proof-of-possession for unified node identity.
+func (na *NetAdapter) SignUnifiedNodeAuthProof(
+	networkName string,
+	verifierNodeID [32]byte,
+	signerChallengeNonce uint64,
+	verifierChallengeNonce uint64,
+) ([64]byte, error) {
+	if na.unifiedNodeIdentity == nil {
+		return [64]byte{}, errors.New("unified node identity is not initialized")
+	}
+	networkCode, err := networkCodeFromName(networkName)
+	if err != nil {
+		return [64]byte{}, err
+	}
+	return signUnifiedNodeAuthProof(na.unifiedNodeIdentity, networkCode, verifierNodeID, signerChallengeNonce, verifierChallengeNonce)
+}
+
+// VerifyUnifiedNodeAuthProof verifies a peer proof-of-possession signature for unified node identity.
+func (na *NetAdapter) VerifyUnifiedNodeAuthProof(
+	networkName string,
+	signerPubKeyXOnly [32]byte,
+	signerNodeID [32]byte,
+	verifierNodeID [32]byte,
+	signerChallengeNonce uint64,
+	verifierChallengeNonce uint64,
+	signature [64]byte,
+) bool {
+	networkCode, err := networkCodeFromName(networkName)
+	if err != nil {
+		return false
+	}
+	return verifyUnifiedNodeAuthProof(
+		networkCode,
+		signerPubKeyXOnly,
+		signerNodeID,
+		verifierNodeID,
+		signerChallengeNonce,
+		verifierChallengeNonce,
+		signature,
+	)
 }
 
 // P2PBroadcast sends the given `message` to every peer corresponding

@@ -9,7 +9,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/blockrelay"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/ping"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/rejects"
-	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/strongnodes"
+	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/strongnodeclaims"
 	"github.com/cryptix-network/cryptixd/app/protocol/flows/v5/transactionrelay"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	routerpkg "github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
@@ -220,16 +220,16 @@ func registerRejectsFlow(m protocolManager, router *routerpkg.Router, isStopping
 }
 
 func registerStrongNodeFlows(m protocolManager, router *routerpkg.Router, isStopping *uint32, errChan chan error) []*common.Flow {
-	return []*common.Flow{
-		m.RegisterFlow("HandleStrongNodeAnnouncements", router,
-			[]appmessage.MessageCommand{appmessage.CmdStrongNodeAnnouncement},
-			isStopping,
-			errChan,
-			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
-				return strongnodes.HandleStrongNodeAnnouncements(m.Context(), incomingRoute, peer)
-			},
-		),
-	}
+	flows := make([]*common.Flow, 0, 1)
+	flows = append(flows, m.RegisterFlowWithCapacity("HandleBlockProducerClaims", 2048, router,
+		[]appmessage.MessageCommand{appmessage.CmdBlockProducerClaimV1},
+		isStopping,
+		errChan,
+		func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+			return strongnodeclaims.HandleBlockProducerClaims(m.Context(), incomingRoute, peer)
+		},
+	))
+	return flows
 }
 
 func registerAntiFraudFlows(m protocolManager, router *routerpkg.Router, isStopping *uint32, errChan chan error) []*common.Flow {

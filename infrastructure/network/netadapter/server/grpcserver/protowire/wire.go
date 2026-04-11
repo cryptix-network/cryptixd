@@ -364,13 +364,6 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 			return nil, err
 		}
 		return payload, nil
-	case *appmessage.MsgStrongNodeAnnouncement:
-		payload := new(CryptixdMessage_StrongNodeAnnouncement)
-		err := payload.fromAppMessage(message)
-		if err != nil {
-			return nil, err
-		}
-		return payload, nil
 	case *appmessage.MsgRequestAntiFraudSnapshotV1:
 		payload := new(CryptixdMessage_RequestAntiFraudSnapshotV1)
 		err := payload.fromAppMessage(message)
@@ -380,6 +373,13 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 		return payload, nil
 	case *appmessage.MsgAntiFraudSnapshotV1:
 		payload := new(CryptixdMessage_AntiFraudSnapshotV1)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgBlockProducerClaimV1:
+		payload := new(CryptixdMessage_BlockProducerClaimV1)
 		err := payload.fromAppMessage(message)
 		if err != nil {
 			return nil, err

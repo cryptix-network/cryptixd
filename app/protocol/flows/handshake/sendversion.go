@@ -1,6 +1,10 @@
 package handshake
 
 import (
+	"crypto/rand"
+	"encoding/binary"
+	"time"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
@@ -90,6 +94,9 @@ func (flow *sendVersionFlow) start() error {
 	msg.NodePubkeyXOnly = append(msg.NodePubkeyXOnly[:0], pubkeyXOnly[:]...)
 	powNonce := flow.NetAdapter().UnifiedNodePowNonce()
 	msg.NodePowNonce = &powNonce
+	challengeNonce := randomNodeChallengeNonce()
+	msg.NodeChallengeNonce = &challengeNonce
+	flow.peer.Connection().SetLocalNodeChallengeNonce(challengeNonce)
 
 	err = flow.outgoingRoute.Enqueue(msg)
 	if err != nil {
@@ -104,4 +111,13 @@ func (flow *sendVersionFlow) start() error {
 	}
 	log.Debugf("Got verack")
 	return nil
+}
+
+func randomNodeChallengeNonce() uint64 {
+	var bytes [8]byte
+	if _, err := rand.Read(bytes[:]); err == nil {
+		return binary.BigEndian.Uint64(bytes[:])
+	}
+	// Fallback should be practically unreachable; keep non-constant fallback for robustness.
+	return uint64(time.Now().UnixNano())
 }

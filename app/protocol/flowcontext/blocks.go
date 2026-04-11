@@ -22,6 +22,10 @@ func (f *FlowContext) OnNewBlock(block *externalapi.DomainBlock) error {
 	log.Tracef("OnNewBlock start for block %s", hash)
 	defer log.Tracef("OnNewBlock end for block %s", hash)
 
+	if err := f.refreshStrongNodeClaimsWindow(); err != nil {
+		log.Warnf("OnNewBlock: failed refreshing strong-node claim window: %s", err)
+	}
+
 	unorphanedBlocks, err := f.UnorphanBlocks(block)
 	if err != nil {
 		return err
@@ -122,6 +126,7 @@ func (f *FlowContext) AddBlock(block *externalapi.DomainBlock) error {
 	if err != nil {
 		return err
 	}
+	f.BroadcastLocalBlockProducerClaim(consensushashing.BlockHash(block))
 	return f.Broadcast(appmessage.NewMsgInvBlock(consensushashing.BlockHash(block)))
 }
 

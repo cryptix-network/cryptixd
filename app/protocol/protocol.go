@@ -106,10 +106,71 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 			panic(errors.Errorf("no way to handle protocol version %d", peer.ProtocolVersion()))
 		}
 
-		err = ready.HandleReady(receiveReadyRoute, router.OutgoingRoute(), peer)
+		outgoingReady := appmessage.NewMsgReady()
+		peerUnifiedNodeID := peer.UnifiedNodeID()
+		if peerUnifiedNodeID != nil {
+			localNonce, hasLocalNonce := netConnection.LocalNodeChallengeNonce()
+			remoteNonce, hasRemoteNonce := netConnection.RemoteNodeChallengeNonce()
+			if enforceAntiFraud && (!hasLocalNonce || !hasRemoteNonce) {
+				m.handleError(protocolerrors.New(false, "missing ready handshake challenge nonce"), netConnection, router.OutgoingRoute())
+				return
+			}
+			if hasLocalNonce && hasRemoteNonce {
+				readySignature, signErr := m.context.NetAdapter().SignUnifiedNodeAuthProof(
+					m.context.Config().ActiveNetParams.Name,
+					*peerUnifiedNodeID,
+					localNonce,
+					remoteNonce,
+				)
+				if signErr != nil {
+					m.handleError(protocolerrors.Wrap(false, signErr, "failed signing ready auth proof"), netConnection, router.OutgoingRoute())
+					return
+				}
+				outgoingReady.NodeAuthSignature = append(outgoingReady.NodeAuthSignature[:0], readySignature[:]...)
+			}
+		}
+
+		incomingReady, err := ready.HandleReady(receiveReadyRoute, router.OutgoingRoute(), peer, outgoingReady)
 		if err != nil {
 			m.handleError(err, netConnection, router.OutgoingRoute())
 			return
+		}
+		if peerUnifiedNodeID != nil {
+			if len(incomingReady.NodeAuthSignature) == 0 {
+				if enforceAntiFraud {
+					m.handleError(protocolerrors.New(false, "missing ready auth signature after hardfork"), netConnection, router.OutgoingRoute())
+					return
+				}
+			} else {
+				if len(incomingReady.NodeAuthSignature) != 64 {
+					m.handleError(protocolerrors.New(true, "ready auth signature must be exactly 64 bytes"), netConnection, router.OutgoingRoute())
+					return
+				}
+				peerPubKeyXOnly, hasPeerPubKey := netConnection.UnifiedNodePubKeyXOnly()
+				remoteNonce, hasRemoteNonce := netConnection.RemoteNodeChallengeNonce()
+				localNonce, hasLocalNonce := netConnection.LocalNodeChallengeNonce()
+				if !hasPeerPubKey || !hasRemoteNonce || !hasLocalNonce {
+					if enforceAntiFraud {
+						m.handleError(protocolerrors.New(false, "missing ready auth context"), netConnection, router.OutgoingRoute())
+						return
+					}
+				} else {
+					var signature [64]byte
+					copy(signature[:], incomingReady.NodeAuthSignature)
+					if !m.context.NetAdapter().VerifyUnifiedNodeAuthProof(
+						m.context.Config().ActiveNetParams.Name,
+						peerPubKeyXOnly,
+						*peerUnifiedNodeID,
+						m.context.NetAdapter().UnifiedNodeID(),
+						remoteNonce,
+						localNonce,
+						signature,
+					) {
+						m.handleError(protocolerrors.New(true, "ready auth signature verification failed"), netConnection, router.OutgoingRoute())
+						return
+					}
+				}
+			}
 		}
 
 		removeHandshakeRoutes(router)
@@ -133,7 +194,12 @@ func (m *Manager) handleError(err error, netConnection *netadapter.NetConnection
 		if m.context.Config().EnableBanning && protocolErr.ShouldBan {
 			log.Warnf("Banning %s (reason: %s)", netConnection, protocolErr.Cause)
 
-			err := m.context.ConnectionManager().Ban(netConnection)
+			var err error
+			if unifiedNodeID, hasUnifiedNodeID := netConnection.UnifiedNodeID(); hasUnifiedNodeID {
+				err = m.context.ConnectionManager().BanByUnifiedNodeID(unifiedNodeID)
+			} else {
+				err = m.context.ConnectionManager().Ban(netConnection)
+			}
 			if err != nil && !errors.Is(err, connmanager.ErrCannotBanPermanent) {
 				panic(err)
 			}

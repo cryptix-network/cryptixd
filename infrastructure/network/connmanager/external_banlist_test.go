@@ -4,15 +4,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"testing"
-	"time"
 
-	"github.com/cryptix-network/cryptixd/app/appmessage"
-	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
-	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/id"
-	secp256k1 "github.com/cryptix-network/go-secp256k1"
-	"github.com/zeebo/blake3"
 )
 
 func TestExternalBanlistCandidateURLs(t *testing.T) {
@@ -148,93 +142,5 @@ func TestIsNodeIDBanned(t *testing.T) {
 
 	if !cm.IsNodeIDBanned(peerID) {
 		t.Fatalf("expected peer ID to be banned")
-	}
-}
-
-func TestExtractStrongNodeIDFromUserAgent(t *testing.T) {
-	const strongNodeID = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	userAgent := "/cryptixd:1.0.0/cryptixd:1.0.0(strong-id=" + strongNodeID + ")/"
-
-	extracted, ok := extractStrongNodeIDFromUserAgent(userAgent)
-	if !ok {
-		t.Fatalf("expected strong-node ID to be extracted from user-agent")
-	}
-	if extracted != strongNodeID {
-		t.Fatalf("unexpected strong-node ID: got %s expected %s", extracted, strongNodeID)
-	}
-}
-
-func TestApplyStrongNodeAnnouncement(t *testing.T) {
-	keyPair, err := secp256k1.GenerateSchnorrKeyPair()
-	if err != nil {
-		t.Fatalf("GenerateSchnorrKeyPair failed: %s", err)
-	}
-	pubKey, err := keyPair.SchnorrPublicKey()
-	if err != nil {
-		t.Fatalf("SchnorrPublicKey failed: %s", err)
-	}
-	serializedPubKey, err := pubKey.Serialize()
-	if err != nil {
-		t.Fatalf("Serialize public key failed: %s", err)
-	}
-
-	pubKeyBytes := serializedPubKey[:]
-	staticIDRaw := blake3.Sum256(pubKeyBytes)
-
-	cm := &ConnectionManager{
-		cfg: &config.Config{
-			Flags: &config.Flags{},
-		},
-	}
-	cm.cfg.Flags.NetworkFlags.ActiveNetParams = &dagconfig.TestnetParams
-
-	netConnection := new(netadapter.NetConnection)
-	announcement := &appmessage.MsgStrongNodeAnnouncement{
-		SchemaVersion:  1,
-		Network:        cm.cfg.NetParams().Name,
-		StaticIDRaw:    staticIDRaw[:],
-		PubKeyXOnly:    pubKeyBytes,
-		SeqNo:          1,
-		WindowStartMs:  1_000_000,
-		WindowEndMs:    1_000_500,
-		FoundBlocks10m: 12,
-		TotalBlocks10m: 100,
-		SentAtMs:       uint64(time.Now().UnixMilli()),
-	}
-	preimage := buildStrongNodeAnnouncementPreimage(announcement)
-	digest := blake3.Sum256(preimage)
-	var secpHash secp256k1.Hash
-	copy(secpHash[:], digest[:])
-	signature, err := keyPair.SchnorrSign(&secpHash)
-	if err != nil {
-		t.Fatalf("SchnorrSign failed: %s", err)
-	}
-	serializedSig := signature.Serialize()
-	announcement.Signature = serializedSig[:]
-
-	strongNodeID := cm.ApplyStrongNodeAnnouncement(netConnection, announcement)
-	if strongNodeID == "" {
-		t.Fatalf("expected strong-node ID to be applied")
-	}
-	if netConnection.StrongNodeID() != strongNodeID {
-		t.Fatalf("connection strong-node ID was not updated")
-	}
-}
-
-func TestIsStrongNodeIDBanned(t *testing.T) {
-	const strongNodeID = "89abcdef0123456789abcdef0123456789abcdef0123456789abcdef01234567"
-	cm := &ConnectionManager{
-		cfg: &config.Config{
-			Flags: &config.Flags{
-				EnableExternalBanlist: true,
-			},
-		},
-		externallyBannedNodeIDs: map[string]struct{}{
-			strongNodeID: {},
-		},
-	}
-
-	if !cm.IsStrongNodeIDBanned(strongNodeID) {
-		t.Fatalf("expected strong-node ID to be banned")
 	}
 }

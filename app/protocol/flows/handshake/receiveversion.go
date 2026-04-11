@@ -84,7 +84,7 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 			minAcceptableProtocolVersion)
 	}
 	hardforkActive := minAcceptableProtocolVersion >= hardforkProtocolVersion
-	peerUnifiedNodeID, err := validatePeerUnifiedNodeIdentity(flow.Config().ActiveNetParams.Name, msgVersion, hardforkActive)
+	peerUnifiedNodeID, peerUnifiedNodePubKeyXOnly, err := validatePeerUnifiedNodeIdentity(flow.Config().ActiveNetParams.Name, msgVersion, hardforkActive)
 	if err != nil {
 		return nil, protocolerrors.Wrapf(false, err, "invalid unified node identity")
 	}
@@ -126,33 +126,45 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	if peerUnifiedNodeID != nil {
 		flow.peer.Connection().SetUnifiedNodeID(*peerUnifiedNodeID)
 	}
+	if peerUnifiedNodePubKeyXOnly != nil {
+		flow.peer.Connection().SetUnifiedNodePubKeyXOnly(*peerUnifiedNodePubKeyXOnly)
+	}
+	if msgVersion.NodeChallengeNonce != nil {
+		flow.peer.Connection().SetRemoteNodeChallengeNonce(*msgVersion.NodeChallengeNonce)
+	}
 
 	return msgVersion.Address, nil
 }
 
-func validatePeerUnifiedNodeIdentity(networkName string, msgVersion *appmessage.MsgVersion, required bool) (*[32]byte, error) {
+func validatePeerUnifiedNodeIdentity(networkName string, msgVersion *appmessage.MsgVersion, required bool) (*[32]byte, *[32]byte, error) {
 	if len(msgVersion.NodePubkeyXOnly) == 0 && msgVersion.NodePowNonce == nil {
 		if required {
-			return nil, errors.New("missing nodePubkeyXonly/nodePowNonce")
+			return nil, nil, errors.New("missing nodePubkeyXonly/nodePowNonce")
 		}
-		return nil, nil
+		if msgVersion.NodeChallengeNonce != nil {
+			return nil, nil, errors.New("nodeChallengeNonce provided without unified node identity")
+		}
+		return nil, nil, nil
 	}
 
 	if len(msgVersion.NodePubkeyXOnly) != 32 || msgVersion.NodePowNonce == nil {
-		return nil, errors.New("node identity fields are incomplete")
+		return nil, nil, errors.New("node identity fields are incomplete")
+	}
+	if required && msgVersion.NodeChallengeNonce == nil {
+		return nil, nil, errors.New("missing nodeChallengeNonce")
 	}
 
 	networkCode, err := netadapter.UnifiedNodeNetworkCodeFromName(networkName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	var pubKeyXOnly [32]byte
 	copy(pubKeyXOnly[:], msgVersion.NodePubkeyXOnly)
 	if !netadapter.IsValidUnifiedNodePoWNonce(networkCode, pubKeyXOnly, *msgVersion.NodePowNonce) {
-		return nil, errors.New("node identity proof-of-work is invalid")
+		return nil, nil, errors.New("node identity proof-of-work is invalid")
 	}
 	nodeID := netadapter.ComputeUnifiedNodeID(pubKeyXOnly)
-	return &nodeID, nil
+	return &nodeID, &pubKeyXOnly, nil
 }
 
 func isCompatiblePeerNetwork(localNetwork, remoteNetwork string) bool {

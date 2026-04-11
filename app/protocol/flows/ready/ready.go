@@ -15,24 +15,32 @@ import (
 // to send a ready message before start running the flows.
 func HandleReady(incomingRoute *routerpkg.Route, outgoingRoute *routerpkg.Route,
 	peer *peerpkg.Peer,
-) error {
+	outgoingReady *appmessage.MsgReady,
+) (*appmessage.MsgReady, error) {
 
 	log.Debugf("Sending ready message to %s", peer)
 
 	isStopping := uint32(0)
-	err := outgoingRoute.Enqueue(appmessage.NewMsgReady())
+	if outgoingReady == nil {
+		outgoingReady = appmessage.NewMsgReady()
+	}
+	err := outgoingRoute.Enqueue(outgoingReady)
 	if err != nil {
-		return handleError(err, "HandleReady", &isStopping)
+		return nil, handleError(err, "HandleReady", &isStopping)
 	}
 
-	_, err = incomingRoute.DequeueWithTimeout(common.DefaultTimeout)
+	message, err := incomingRoute.DequeueWithTimeout(common.DefaultTimeout)
 	if err != nil {
-		return handleError(err, "HandleReady", &isStopping)
+		return nil, handleError(err, "HandleReady", &isStopping)
+	}
+	incomingReady, ok := message.(*appmessage.MsgReady)
+	if !ok {
+		return nil, protocolerrors.New(true, "a ready message must be received in ready flow")
 	}
 
 	log.Debugf("Got ready message from %s", peer)
 
-	return nil
+	return incomingReady, nil
 }
 
 // Ready is different from other flows, since in it should forward router.ErrRouteClosed to errChan

@@ -1,6 +1,7 @@
 package connmanager
 
 import (
+	"encoding/hex"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -42,17 +43,19 @@ type ConnectionManager struct {
 	stop                   uint32
 	connectionRequestsLock sync.RWMutex
 
-	externalBanlistLock      sync.RWMutex
-	externallyBannedIPs      map[string]struct{}
-	externallyBannedNodeIDs  map[string]struct{}
-	nextExternalBanlistFetch time.Time
-	externalSnapshotSeq      uint64
-	externalSnapshotRootHash [32]byte
-	hasExternalSnapshot      bool
-	antiFraudHashWindow      [3][32]byte
-	antiFraudCurrentSnapshot *appmessage.MsgAntiFraudSnapshotV1
-	antiFraudPeerFallback    bool
-	antiFraudPeerVotes       map[string]*externalBanlistSnapshot
+	externalBanlistLock         sync.RWMutex
+	externallyBannedIPs         map[string]struct{}
+	externallyBannedNodeIDs     map[string]struct{}
+	localUnifiedBanLock         sync.RWMutex
+	locallyBannedUnifiedNodeIDs map[string]struct{}
+	nextExternalBanlistFetch    time.Time
+	externalSnapshotSeq         uint64
+	externalSnapshotRootHash    [32]byte
+	hasExternalSnapshot         bool
+	antiFraudHashWindow         [3][32]byte
+	antiFraudCurrentSnapshot    *appmessage.MsgAntiFraudSnapshotV1
+	antiFraudPeerFallback       bool
+	antiFraudPeerVotes          map[string]*externalBanlistSnapshot
 
 	resetLoopChan chan struct{}
 	loopTicker    *time.Ticker
@@ -61,19 +64,20 @@ type ConnectionManager struct {
 // New instantiates a new instance of a ConnectionManager
 func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *addressmanager.AddressManager) (*ConnectionManager, error) {
 	c := &ConnectionManager{
-		cfg:                     cfg,
-		netAdapter:              netAdapter,
-		addressManager:          addressManager,
-		activeRequested:         map[string]*connectionRequest{},
-		pendingRequested:        map[string]*connectionRequest{},
-		activeOutgoing:          map[string]struct{}{},
-		activeIncoming:          map[string]struct{}{},
-		externallyBannedIPs:     map[string]struct{}{},
-		externallyBannedNodeIDs: map[string]struct{}{},
-		antiFraudPeerFallback:   true,
-		antiFraudPeerVotes:      map[string]*externalBanlistSnapshot{},
-		resetLoopChan:           make(chan struct{}),
-		loopTicker:              time.NewTicker(connectionsLoopInterval),
+		cfg:                         cfg,
+		netAdapter:                  netAdapter,
+		addressManager:              addressManager,
+		activeRequested:             map[string]*connectionRequest{},
+		pendingRequested:            map[string]*connectionRequest{},
+		activeOutgoing:              map[string]struct{}{},
+		activeIncoming:              map[string]struct{}{},
+		externallyBannedIPs:         map[string]struct{}{},
+		externallyBannedNodeIDs:     map[string]struct{}{},
+		locallyBannedUnifiedNodeIDs: map[string]struct{}{},
+		antiFraudPeerFallback:       true,
+		antiFraudPeerVotes:          map[string]*externalBanlistSnapshot{},
+		resetLoopChan:               make(chan struct{}),
+		loopTicker:                  time.NewTicker(connectionsLoopInterval),
 	}
 
 	connectPeers := cfg.AddPeers
@@ -193,10 +197,43 @@ func (c *ConnectionManager) BanByIP(ip net.IP) error {
 	return c.addressManager.Ban(appmessage.NewNetAddressIPPort(ip, 0))
 }
 
+// BanByUnifiedNodeID bans the given unified node ID and disconnects all active matching peers.
+func (c *ConnectionManager) BanByUnifiedNodeID(nodeID [32]byte) error {
+	nodeIDHex := hex.EncodeToString(nodeID[:])
+	connections := c.netAdapter.P2PConnections()
+	for _, conn := range connections {
+		connNodeID, hasNodeID := conn.UnifiedNodeID()
+		if !hasNodeID || connNodeID != nodeID {
+			continue
+		}
+		if c.isPermanent(conn.Address()) {
+			return errors.Wrapf(ErrCannotBanPermanent, "Cannot ban unified node ID %s because %s is a permanent connection", nodeIDHex, conn.Address())
+		}
+	}
+
+	c.localUnifiedBanLock.Lock()
+	c.locallyBannedUnifiedNodeIDs[nodeIDHex] = struct{}{}
+	c.localUnifiedBanLock.Unlock()
+
+	for _, conn := range connections {
+		connNodeID, hasNodeID := conn.UnifiedNodeID()
+		if hasNodeID && connNodeID == nodeID {
+			conn.Disconnect()
+		}
+	}
+
+	return nil
+}
+
 // IsBanned returns whether the given netConnection is banned
 func (c *ConnectionManager) IsBanned(netConnection *netadapter.NetConnection) (bool, error) {
 	if c.isNetConnectionExternallyBanned(netConnection) {
 		return true, nil
+	}
+	if netConnection != nil {
+		if unifiedNodeID, hasNodeID := netConnection.UnifiedNodeID(); hasNodeID && c.IsUnifiedNodeIDLocallyBanned(unifiedNodeID) {
+			return true, nil
+		}
 	}
 
 	if c.isPermanent(netConnection.Address()) {
@@ -204,6 +241,14 @@ func (c *ConnectionManager) IsBanned(netConnection *netadapter.NetConnection) (b
 	}
 
 	return c.addressManager.IsBanned(netConnection.NetAddress())
+}
+
+// IsUnifiedNodeIDLocallyBanned returns true if the given unified node ID is present in the local autoban list.
+func (c *ConnectionManager) IsUnifiedNodeIDLocallyBanned(nodeID [32]byte) bool {
+	c.localUnifiedBanLock.RLock()
+	defer c.localUnifiedBanLock.RUnlock()
+	_, ok := c.locallyBannedUnifiedNodeIDs[hex.EncodeToString(nodeID[:])]
+	return ok
 }
 
 func (c *ConnectionManager) waitTillNextIteration() {

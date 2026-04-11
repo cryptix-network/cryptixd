@@ -74,6 +74,11 @@ func (p *Peer) UserAgent() string {
 	return p.userAgent
 }
 
+// Services returns the service flags advertised by the peer.
+func (p *Peer) Services() appmessage.ServiceFlag {
+	return p.services
+}
+
 // AdvertisedProtocolVersion returns the peer's advertised protocol version.
 func (p *Peer) AdvertisedProtocolVersion() uint32 {
 	return p.advertisedProtocolVerion

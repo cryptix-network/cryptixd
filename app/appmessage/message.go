@@ -167,9 +167,9 @@ const (
 	CmdGetFeeEstimateResponseMessage
 	CmdSubmitTransactionReplacementRequestMessage
 	CmdSubmitTransactionReplacementResponseMessage
-	CmdStrongNodeAnnouncement
 	CmdRequestAntiFraudSnapshotV1
 	CmdAntiFraudSnapshotV1
+	CmdBlockProducerClaimV1
 )
 
 // ProtocolMessageCommandToString maps all MessageCommands to their string representation
@@ -217,9 +217,9 @@ var ProtocolMessageCommandToString = map[MessageCommand]string{
 	CmdRequestIBDChainBlockLocator:                 "RequestIBDChainBlockLocator",
 	CmdIBDChainBlockLocator:                        "IBDChainBlockLocator",
 	CmdRequestAnticone:                             "RequestAnticone",
-	CmdStrongNodeAnnouncement:                      "StrongNodeAnnouncement",
 	CmdRequestAntiFraudSnapshotV1:                  "RequestAntiFraudSnapshotV1",
 	CmdAntiFraudSnapshotV1:                         "AntiFraudSnapshotV1",
+	CmdBlockProducerClaimV1:                        "BlockProducerClaimV1",
 }
 
 // RPCMessageCommandToString maps all MessageCommands to their string representation

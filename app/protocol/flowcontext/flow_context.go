@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/cryptix-network/cryptixd/app/protocol/strongnodeclaims"
 	"github.com/cryptix-network/cryptixd/util/mstime"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -37,6 +38,7 @@ type FlowContext struct {
 	domain            domain.Domain
 	addressManager    *addressmanager.AddressManager
 	connectionManager *connmanager.ConnectionManager
+	strongNodeClaims  *strongnodeclaims.Engine
 
 	timeStarted int64
 
@@ -75,6 +77,7 @@ func New(cfg *config.Config, domain domain.Domain, addressManager *addressmanage
 		domain:                           domain,
 		addressManager:                   addressManager,
 		connectionManager:                connectionManager,
+		strongNodeClaims:                 strongnodeclaims.New(true, cfg.ActiveNetParams.Name, cfg.AppDir),
 		sharedRequestedTransactions:      NewSharedRequestedTransactions(),
 		sharedRequestedBlocks:            NewSharedRequestedBlocks(),
 		peers:                            make(map[id.ID]*peerpkg.Peer),
@@ -88,6 +91,9 @@ func New(cfg *config.Config, domain domain.Domain, addressManager *addressmanage
 
 // Close signals to all flows the the protocol manager is closed.
 func (f *FlowContext) Close() {
+	if f.strongNodeClaims != nil {
+		f.strongNodeClaims.BestEffortFlush()
+	}
 	close(f.shutdownChan)
 }
 

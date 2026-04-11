@@ -3,10 +3,11 @@ package appmessage
 // MsgReady implements the Message interface and represents a cryptix
 // Ready message. It is used to notify that the peer is ready to receive
 // messages.
-//
-// This message has no payload.
 type MsgReady struct {
 	baseMessage
+	// NodeAuthSignature is a 64-byte BIP340 Schnorr signature proving ownership
+	// of the unified node identity for this specific handshake.
+	NodeAuthSignature []byte
 }
 
 // Command returns the protocol command string for the message. This is part

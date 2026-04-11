@@ -70,6 +70,10 @@ type MsgVersion struct {
 	// nodePowNonce is the nonce for the unified node identity PoW challenge.
 	// Nil means not advertised (legacy pre-HF compatibility).
 	NodePowNonce *uint64
+
+	// nodeChallengeNonce is the per-connection nonce used for Ready proof-of-possession.
+	// Nil means not advertised (legacy pre-HF compatibility).
+	NodeChallengeNonce *uint64
 }
 
 // HasService returns whether the specified service is supported by the peer

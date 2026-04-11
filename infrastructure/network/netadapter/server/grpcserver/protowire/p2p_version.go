@@ -71,20 +71,26 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		value := *x.NodePowNonce
 		nodePowNonce = &value
 	}
+	var nodeChallengeNonce *uint64
+	if x.NodeChallengeNonce != nil {
+		value := *x.NodeChallengeNonce
+		nodeChallengeNonce = &value
+	}
 
 	return &appmessage.MsgVersion{
-		ProtocolVersion: x.ProtocolVersion,
-		Network:         x.Network,
-		Services:        appmessage.ServiceFlag(x.Services),
-		Timestamp:       mstime.UnixMilliseconds(x.Timestamp),
-		Address:         address,
-		ID:              appMsgID,
-		UserAgent:       x.UserAgent,
-		DisableRelayTx:  x.DisableRelayTx,
-		SubnetworkID:    subnetworkID,
-		AntiFraudHashes: antiFraudHashes,
-		NodePubkeyXOnly: nodePubkeyXOnly,
-		NodePowNonce:    nodePowNonce,
+		ProtocolVersion:    x.ProtocolVersion,
+		Network:            x.Network,
+		Services:           appmessage.ServiceFlag(x.Services),
+		Timestamp:          mstime.UnixMilliseconds(x.Timestamp),
+		Address:            address,
+		ID:                 appMsgID,
+		UserAgent:          x.UserAgent,
+		DisableRelayTx:     x.DisableRelayTx,
+		SubnetworkID:       subnetworkID,
+		AntiFraudHashes:    antiFraudHashes,
+		NodePubkeyXOnly:    nodePubkeyXOnly,
+		NodePowNonce:       nodePowNonce,
+		NodeChallengeNonce: nodeChallengeNonce,
 	}, nil
 }
 
@@ -123,20 +129,26 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		value := *msgVersion.NodePowNonce
 		nodePowNonce = &value
 	}
+	var nodeChallengeNonce *uint64
+	if msgVersion.NodeChallengeNonce != nil {
+		value := *msgVersion.NodeChallengeNonce
+		nodeChallengeNonce = &value
+	}
 
 	x.Version = &VersionMessage{
-		ProtocolVersion: msgVersion.ProtocolVersion,
-		Network:         msgVersion.Network,
-		Services:        uint64(msgVersion.Services),
-		Timestamp:       msgVersion.Timestamp.UnixMilliseconds(),
-		Address:         address,
-		Id:              versionID,
-		UserAgent:       msgVersion.UserAgent,
-		DisableRelayTx:  msgVersion.DisableRelayTx,
-		SubnetworkId:    domainSubnetworkIDToProto(msgVersion.SubnetworkID),
-		AntiFraudHashes: antiFraudHashes,
-		NodePubkeyXonly: nodePubkeyXOnly,
-		NodePowNonce:    nodePowNonce,
+		ProtocolVersion:    msgVersion.ProtocolVersion,
+		Network:            msgVersion.Network,
+		Services:           uint64(msgVersion.Services),
+		Timestamp:          msgVersion.Timestamp.UnixMilliseconds(),
+		Address:            address,
+		Id:                 versionID,
+		UserAgent:          msgVersion.UserAgent,
+		DisableRelayTx:     msgVersion.DisableRelayTx,
+		SubnetworkId:       domainSubnetworkIDToProto(msgVersion.SubnetworkID),
+		AntiFraudHashes:    antiFraudHashes,
+		NodePubkeyXonly:    nodePubkeyXOnly,
+		NodePowNonce:       nodePowNonce,
+		NodeChallengeNonce: nodeChallengeNonce,
 	}
 	return nil
 }

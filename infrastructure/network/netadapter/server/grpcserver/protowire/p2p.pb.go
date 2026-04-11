@@ -1418,21 +1418,22 @@ func (*VerackMessage) Descriptor() ([]byte, []int) {
 }
 
 type VersionMessage struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	ProtocolVersion uint32                 `protobuf:"varint,1,opt,name=protocolVersion,proto3" json:"protocolVersion,omitempty"`
-	Services        uint64                 `protobuf:"varint,2,opt,name=services,proto3" json:"services,omitempty"`
-	Timestamp       int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	Address         *NetAddress            `protobuf:"bytes,4,opt,name=address,proto3" json:"address,omitempty"`
-	Id              []byte                 `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
-	UserAgent       string                 `protobuf:"bytes,6,opt,name=userAgent,proto3" json:"userAgent,omitempty"`
-	DisableRelayTx  bool                   `protobuf:"varint,8,opt,name=disableRelayTx,proto3" json:"disableRelayTx,omitempty"`
-	SubnetworkId    *SubnetworkId          `protobuf:"bytes,9,opt,name=subnetworkId,proto3" json:"subnetworkId,omitempty"`
-	Network         string                 `protobuf:"bytes,10,opt,name=network,proto3" json:"network,omitempty"`
-	AntiFraudHashes [][]byte               `protobuf:"bytes,11,rep,name=antiFraudHashes,proto3" json:"antiFraudHashes,omitempty"`
-	NodePubkeyXonly []byte                 `protobuf:"bytes,12,opt,name=nodePubkeyXonly,proto3" json:"nodePubkeyXonly,omitempty"`
-	NodePowNonce    *uint64                `protobuf:"varint,13,opt,name=nodePowNonce,proto3,oneof" json:"nodePowNonce,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	ProtocolVersion    uint32                 `protobuf:"varint,1,opt,name=protocolVersion,proto3" json:"protocolVersion,omitempty"`
+	Services           uint64                 `protobuf:"varint,2,opt,name=services,proto3" json:"services,omitempty"`
+	Timestamp          int64                  `protobuf:"varint,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
+	Address            *NetAddress            `protobuf:"bytes,4,opt,name=address,proto3" json:"address,omitempty"`
+	Id                 []byte                 `protobuf:"bytes,5,opt,name=id,proto3" json:"id,omitempty"`
+	UserAgent          string                 `protobuf:"bytes,6,opt,name=userAgent,proto3" json:"userAgent,omitempty"`
+	DisableRelayTx     bool                   `protobuf:"varint,8,opt,name=disableRelayTx,proto3" json:"disableRelayTx,omitempty"`
+	SubnetworkId       *SubnetworkId          `protobuf:"bytes,9,opt,name=subnetworkId,proto3" json:"subnetworkId,omitempty"`
+	Network            string                 `protobuf:"bytes,10,opt,name=network,proto3" json:"network,omitempty"`
+	AntiFraudHashes    [][]byte               `protobuf:"bytes,11,rep,name=antiFraudHashes,proto3" json:"antiFraudHashes,omitempty"`
+	NodePubkeyXonly    []byte                 `protobuf:"bytes,12,opt,name=nodePubkeyXonly,proto3" json:"nodePubkeyXonly,omitempty"`
+	NodePowNonce       *uint64                `protobuf:"varint,13,opt,name=nodePowNonce,proto3,oneof" json:"nodePowNonce,omitempty"`
+	NodeChallengeNonce *uint64                `protobuf:"varint,14,opt,name=nodeChallengeNonce,proto3,oneof" json:"nodeChallengeNonce,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *VersionMessage) Reset() {
@@ -1545,6 +1546,13 @@ func (x *VersionMessage) GetNodePubkeyXonly() []byte {
 func (x *VersionMessage) GetNodePowNonce() uint64 {
 	if x != nil && x.NodePowNonce != nil {
 		return *x.NodePowNonce
+	}
+	return 0
+}
+
+func (x *VersionMessage) GetNodeChallengeNonce() uint64 {
+	if x != nil && x.NodeChallengeNonce != nil {
+		return *x.NodeChallengeNonce
 	}
 	return 0
 }
@@ -3050,9 +3058,10 @@ func (x *PruningPointProofHeaderArray) GetHeaders() []*BlockHeader {
 }
 
 type ReadyMessage struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	NodeAuthSignature []byte                 `protobuf:"bytes,1,opt,name=nodeAuthSignature,proto3" json:"nodeAuthSignature,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *ReadyMessage) Reset() {
@@ -3083,6 +3092,13 @@ func (x *ReadyMessage) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ReadyMessage.ProtoReflect.Descriptor instead.
 func (*ReadyMessage) Descriptor() ([]byte, []int) {
 	return file_p2p_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *ReadyMessage) GetNodeAuthSignature() []byte {
+	if x != nil {
+		return x.NodeAuthSignature
+	}
+	return nil
 }
 
 type BlockWithTrustedDataV4Message struct {
@@ -3329,6 +3345,82 @@ func (x *StrongNodeAnnouncementMessage) GetSignature() []byte {
 	return nil
 }
 
+type BlockProducerClaimV1Message struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion   uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
+	Network         uint32                 `protobuf:"varint,2,opt,name=network,proto3" json:"network,omitempty"`
+	BlockHash       []byte                 `protobuf:"bytes,3,opt,name=blockHash,proto3" json:"blockHash,omitempty"`
+	NodePubkeyXonly []byte                 `protobuf:"bytes,4,opt,name=nodePubkeyXonly,proto3" json:"nodePubkeyXonly,omitempty"`
+	Signature       []byte                 `protobuf:"bytes,5,opt,name=signature,proto3" json:"signature,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *BlockProducerClaimV1Message) Reset() {
+	*x = BlockProducerClaimV1Message{}
+	mi := &file_p2p_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BlockProducerClaimV1Message) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockProducerClaimV1Message) ProtoMessage() {}
+
+func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockProducerClaimV1Message.ProtoReflect.Descriptor instead.
+func (*BlockProducerClaimV1Message) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *BlockProducerClaimV1Message) GetSchemaVersion() uint32 {
+	if x != nil {
+		return x.SchemaVersion
+	}
+	return 0
+}
+
+func (x *BlockProducerClaimV1Message) GetNetwork() uint32 {
+	if x != nil {
+		return x.Network
+	}
+	return 0
+}
+
+func (x *BlockProducerClaimV1Message) GetBlockHash() []byte {
+	if x != nil {
+		return x.BlockHash
+	}
+	return nil
+}
+
+func (x *BlockProducerClaimV1Message) GetNodePubkeyXonly() []byte {
+	if x != nil {
+		return x.NodePubkeyXonly
+	}
+	return nil
+}
+
+func (x *BlockProducerClaimV1Message) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
 var File_p2p_proto protoreflect.FileDescriptor
 
 const file_p2p_proto_rawDesc = "" +
@@ -3417,7 +3509,7 @@ const file_p2p_proto_rawDesc = "" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"#\n" +
 	"\vPongMessage\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"\x0f\n" +
-	"\rVerackMessage\"\xe0\x03\n" +
+	"\rVerackMessage\"\xac\x04\n" +
 	"\x0eVersionMessage\x12(\n" +
 	"\x0fprotocolVersion\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x1a\n" +
 	"\bservices\x18\x02 \x01(\x04R\bservices\x12\x1c\n" +
@@ -3431,8 +3523,10 @@ const file_p2p_proto_rawDesc = "" +
 	" \x01(\tR\anetwork\x12(\n" +
 	"\x0fantiFraudHashes\x18\v \x03(\fR\x0fantiFraudHashes\x12(\n" +
 	"\x0fnodePubkeyXonly\x18\f \x01(\fR\x0fnodePubkeyXonly\x12'\n" +
-	"\fnodePowNonce\x18\r \x01(\x04H\x00R\fnodePowNonce\x88\x01\x01B\x0f\n" +
-	"\r_nodePowNonce\"#\n" +
+	"\fnodePowNonce\x18\r \x01(\x04H\x00R\fnodePowNonce\x88\x01\x01\x123\n" +
+	"\x12nodeChallengeNonce\x18\x0e \x01(\x04H\x01R\x12nodeChallengeNonce\x88\x01\x01B\x0f\n" +
+	"\r_nodePowNonceB\x15\n" +
+	"\x13_nodeChallengeNonce\"#\n" +
 	"!RequestAntiFraudSnapshotV1Message\"\xaa\x02\n" +
 	"\x1aAntiFraudSnapshotV1Message\x12$\n" +
 	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
@@ -3516,8 +3610,9 @@ const file_p2p_proto_rawDesc = "" +
 	"\x18PruningPointProofMessage\x12A\n" +
 	"\aheaders\x18\x01 \x03(\v2'.protowire.PruningPointProofHeaderArrayR\aheaders\"P\n" +
 	"\x1cPruningPointProofHeaderArray\x120\n" +
-	"\aheaders\x18\x01 \x03(\v2\x16.protowire.BlockHeaderR\aheaders\"\x0e\n" +
-	"\fReadyMessage\"\xac\x01\n" +
+	"\aheaders\x18\x01 \x03(\v2\x16.protowire.BlockHeaderR\aheaders\"<\n" +
+	"\fReadyMessage\x12,\n" +
+	"\x11nodeAuthSignature\x18\x01 \x01(\fR\x11nodeAuthSignature\"\xac\x01\n" +
 	"\x1dBlockWithTrustedDataV4Message\x12-\n" +
 	"\x05block\x18\x01 \x01(\v2\x17.protowire.BlockMessageR\x05block\x12*\n" +
 	"\x10daaWindowIndices\x18\x02 \x03(\x04R\x10daaWindowIndices\x120\n" +
@@ -3538,7 +3633,13 @@ const file_p2p_proto_rawDesc = "" +
 	"\bsentAtMs\x18\n" +
 	" \x01(\x04R\bsentAtMs\x12\x1c\n" +
 	"\tclaimedIp\x18\v \x01(\fR\tclaimedIp\x12\x1c\n" +
-	"\tsignature\x18\f \x01(\fR\tsignatureB/Z-github.com/cryptix-network/cryptixd/protowireb\x06proto3"
+	"\tsignature\x18\f \x01(\fR\tsignature\"\xc3\x01\n" +
+	"\x1bBlockProducerClaimV1Message\x12$\n" +
+	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
+	"\anetwork\x18\x02 \x01(\rR\anetwork\x12\x1c\n" +
+	"\tblockHash\x18\x03 \x01(\fR\tblockHash\x12(\n" +
+	"\x0fnodePubkeyXonly\x18\x04 \x01(\fR\x0fnodePubkeyXonly\x12\x1c\n" +
+	"\tsignature\x18\x05 \x01(\fR\tsignatureB/Z-github.com/cryptix-network/cryptixd/protowireb\x06proto3"
 
 var (
 	file_p2p_proto_rawDescOnce sync.Once
@@ -3552,7 +3653,7 @@ func file_p2p_proto_rawDescGZIP() []byte {
 	return file_p2p_proto_rawDescData
 }
 
-var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 63)
+var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 64)
 var file_p2p_proto_goTypes = []any{
 	(*RequestAddressesMessage)(nil),                            // 0: protowire.RequestAddressesMessage
 	(*AddressesMessage)(nil),                                   // 1: protowire.AddressesMessage
@@ -3617,6 +3718,7 @@ var file_p2p_proto_goTypes = []any{
 	(*BlockWithTrustedDataV4Message)(nil),                      // 60: protowire.BlockWithTrustedDataV4Message
 	(*TrustedDataMessage)(nil),                                 // 61: protowire.TrustedDataMessage
 	(*StrongNodeAnnouncementMessage)(nil),                      // 62: protowire.StrongNodeAnnouncementMessage
+	(*BlockProducerClaimV1Message)(nil),                        // 63: protowire.BlockProducerClaimV1Message
 }
 var file_p2p_proto_depIdxs = []int32{
 	3,  // 0: protowire.RequestAddressesMessage.subnetworkId:type_name -> protowire.SubnetworkId
@@ -3700,7 +3802,7 @@ func file_p2p_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_p2p_proto_rawDesc), len(file_p2p_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   63,
+			NumMessages:   64,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

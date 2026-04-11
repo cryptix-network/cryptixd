@@ -2,6 +2,7 @@ package netadapter
 
 import (
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,7 @@ const (
 	unifiedNodeIdentityFileMaxBytes  = 16 * 1024
 	unifiedNodeIDHexLength           = 64
 	nodePoWDomainTag                 = "cryptix-node-id-pow-v1"
+	nodeAuthDomainTag                = "cryptix-node-id-auth-v1"
 	mainnetNodePoWDifficulty         = 20
 	nonMainnetNodePoWDifficulty      = 18
 )
@@ -287,6 +289,77 @@ func computeNodePoWHash(networkCode uint8, pubKeyXOnly [32]byte, powNonce uint64
 	var out [32]byte
 	copy(out[:], hasher.Sum(nil))
 	return out
+}
+
+func computeNodeAuthHash(
+	networkCode uint8,
+	signerNodeID [32]byte,
+	verifierNodeID [32]byte,
+	signerChallengeNonce uint64,
+	verifierChallengeNonce uint64,
+) [32]byte {
+	payload := make([]byte, 0, len(nodeAuthDomainTag)+1+32+32+8+8)
+	payload = append(payload, []byte(nodeAuthDomainTag)...)
+	payload = append(payload, networkCode)
+	payload = append(payload, signerNodeID[:]...)
+	payload = append(payload, verifierNodeID[:]...)
+	var nonceBytes [8]byte
+	binary.BigEndian.PutUint64(nonceBytes[:], signerChallengeNonce)
+	payload = append(payload, nonceBytes[:]...)
+	binary.BigEndian.PutUint64(nonceBytes[:], verifierChallengeNonce)
+	payload = append(payload, nonceBytes[:]...)
+	return blake3.Sum256(payload)
+}
+
+func signUnifiedNodeAuthProof(
+	identity *UnifiedNodeIdentity,
+	networkCode uint8,
+	verifierNodeID [32]byte,
+	signerChallengeNonce uint64,
+	verifierChallengeNonce uint64,
+) ([64]byte, error) {
+	var empty [64]byte
+	if identity == nil {
+		return empty, errors.New("unified node identity is nil")
+	}
+	keyPair, err := secp256k1.DeserializeSchnorrPrivateKeyFromSlice(identity.PrivateKey[:])
+	if err != nil {
+		return empty, err
+	}
+	digest := computeNodeAuthHash(networkCode, identity.NodeID, verifierNodeID, signerChallengeNonce, verifierChallengeNonce)
+	var secpHash secp256k1.Hash
+	copy(secpHash[:], digest[:])
+	signature, err := keyPair.SchnorrSign(&secpHash)
+	if err != nil {
+		return empty, err
+	}
+	serialized := signature.Serialize()
+	var out [64]byte
+	copy(out[:], serialized[:])
+	return out, nil
+}
+
+func verifyUnifiedNodeAuthProof(
+	networkCode uint8,
+	signerPubKeyXOnly [32]byte,
+	signerNodeID [32]byte,
+	verifierNodeID [32]byte,
+	signerChallengeNonce uint64,
+	verifierChallengeNonce uint64,
+	signature [64]byte,
+) bool {
+	pubKey, err := secp256k1.DeserializeSchnorrPubKey(signerPubKeyXOnly[:])
+	if err != nil {
+		return false
+	}
+	signatureObj, err := secp256k1.DeserializeSchnorrSignatureFromSlice(signature[:])
+	if err != nil {
+		return false
+	}
+	digest := computeNodeAuthHash(networkCode, signerNodeID, verifierNodeID, signerChallengeNonce, verifierChallengeNonce)
+	var secpHash secp256k1.Hash
+	copy(secpHash[:], digest[:])
+	return pubKey.SchnorrVerify(&secpHash, signatureObj)
 }
 
 func leadingZeroBits(hash [32]byte) uint8 {
