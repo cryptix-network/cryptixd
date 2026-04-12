@@ -14,7 +14,7 @@ const (
 	snapshotRequestInterval = 20 * time.Second
 	snapshotRequestTimeout  = 5 * time.Second
 	modeRecheckInterval     = 1 * time.Second
-	hardforkProtocolVersion = uint32(7)
+	hardforkProtocolVersion = uint32(8)
 )
 
 // HandleSnapshotRequestsContext is the context required for serving anti-fraud snapshots to peers.

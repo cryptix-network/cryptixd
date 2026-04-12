@@ -94,8 +94,8 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 			peer.SetAntiFraudRestricted(antiFraudMode == connmanager.AntiFraudModeRestricted)
 		}
 		switch peer.ProtocolVersion() {
-		case 5, 6, 7:
-			// Protocol versions 6/7 keep using the v5 flow set in this node implementation.
+		case 5, 6, 7, 8:
+			// Protocol versions 5/6/7/8 currently use the v5 flow set in this node implementation.
 			if enforceAntiFraud && antiFraudMode == connmanager.AntiFraudModeRestricted {
 				log.Infof("Peer %s has no valid anti-fraud hash overlap and will run in RESTRICTED_AF mode", peer)
 				flows = v5.RegisterRestricted(m, router, errChan, &isStopping)

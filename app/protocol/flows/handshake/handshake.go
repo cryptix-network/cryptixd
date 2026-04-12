@@ -91,7 +91,8 @@ func HandleHandshake(context HandleHandshakeContext, netConnection *netadapter.N
 	}
 
 	if peerAddress != nil {
-		err := context.AddressManager().AddAddressesVerified(peerAddress)
+		// Peer-advertised version address is unauthenticated and must not be marked as verified.
+		err := context.AddressManager().AddAddresses(peerAddress)
 		if err != nil {
 			return nil, err
 		}

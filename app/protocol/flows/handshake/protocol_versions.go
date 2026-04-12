@@ -4,7 +4,7 @@ import "github.com/pkg/errors"
 
 const (
 	legacyProtocolVersion   = uint32(5)
-	hardforkProtocolVersion = uint32(7)
+	hardforkProtocolVersion = uint32(8)
 )
 
 func minAcceptableProtocolVersionFor(context HandleHandshakeContext) (uint32, error) {

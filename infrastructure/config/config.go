@@ -55,7 +55,7 @@ const (
 	defaultSigCacheMaxSize  = 100_000
 	sampleConfigFilename    = "sample-cryptixd.conf"
 	defaultMaxUTXOCacheSize = 5_000_000_000
-	defaultProtocolVersion  = 7
+	defaultProtocolVersion  = 8
 )
 
 var (
@@ -131,6 +131,7 @@ type Flags struct {
 	AllowSubmitBlockWhenNotSynced   bool          `long:"allow-submit-block-when-not-synced" hidden:"true" description:"Allow the node to accept blocks from RPC while not synced (this flag is mainly used for testing)"`
 	EnableSanityCheckPruningUTXOSet bool          `long:"enable-sanity-check-pruning-utxo" hidden:"true" description:"When moving the pruning point - check that the utxo set matches the utxo commitment"`
 	ProtocolVersion                 uint32        `long:"protocol-version" description:"Use non default p2p protocol version"`
+	PayloadHfActivationDAAScore     *uint64       `long:"payload-hf-activation-daa-score" description:"Override payload hardfork activation DAA score for this node instance"`
 	NetworkFlags
 	ServiceOptions *ServiceOptions
 }
@@ -318,6 +319,9 @@ func LoadConfig() (*Config, error) {
 	err = cfg.ResolveNetwork(parser)
 	if err != nil {
 		return nil, err
+	}
+	if cfg.PayloadHfActivationDAAScore != nil {
+		cfg.NetParams().PayloadHfActivationDAAScore = *cfg.PayloadHfActivationDAAScore
 	}
 
 	// Set the default policy for relaying non-standard transactions

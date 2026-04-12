@@ -33,7 +33,7 @@ type server struct {
 	rpcClient           *rpcclient.RPCClient // RPC client for ongoing user requests
 	backgroundRPCClient *rpcclient.RPCClient // RPC client dedicated for address and UTXO background fetching
 	params              *dagconfig.Params
-	coinbaseMaturity    uint64 // Is different from default if we use testnet-11
+	coinbaseMaturity    uint64
 
 	lock                            sync.RWMutex
 	utxosSortedByAmount             []*walletUTXO
@@ -96,21 +96,15 @@ func Start(params *dagconfig.Params, listen, rpcServer string, keysFilePath stri
 		return err
 	}
 
-	dagInfo, err := rpcClient.GetBlockDAGInfo()
-	if err != nil {
+	if _, err := rpcClient.GetBlockDAGInfo(); err != nil {
 		return nil
-	}
-
-	coinbaseMaturity := params.BlockCoinbaseMaturity
-	if dagInfo.NetworkName == "cryptix-testnet-11" {
-		coinbaseMaturity = 1000
 	}
 
 	serverInstance := &server{
 		rpcClient:            rpcClient,
 		backgroundRPCClient:  backgroundRPCClient,
 		params:               params,
-		coinbaseMaturity:     coinbaseMaturity,
+		coinbaseMaturity:     params.BlockCoinbaseMaturity,
 		utxosSortedByAmount:  []*walletUTXO{},
 		mempoolExcludedUTXOs: map[externalapi.DomainOutpoint]*walletUTXO{},
 		nextSyncStartIndex:   0,

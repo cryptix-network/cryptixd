@@ -1,8 +1,6 @@
 package handshake
 
 import (
-	"strings"
-
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
@@ -168,12 +166,5 @@ func validatePeerUnifiedNodeIdentity(networkName string, msgVersion *appmessage.
 }
 
 func isCompatiblePeerNetwork(localNetwork, remoteNetwork string) bool {
-	if localNetwork == remoteNetwork {
-		return true
-	}
-	return isTestnetNetworkAlias(localNetwork) && isTestnetNetworkAlias(remoteNetwork)
-}
-
-func isTestnetNetworkAlias(name string) bool {
-	return name == "cryptix-testnet" || strings.HasPrefix(name, "cryptix-testnet-")
+	return localNetwork == remoteNetwork
 }
