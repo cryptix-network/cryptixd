@@ -26,6 +26,7 @@ import (
 
 const (
 	externalBanlistFetchInterval   = 10 * time.Minute
+	externalBanlistRetryInterval   = 15 * time.Second
 	externalBanlistRequestTimeout  = 10 * time.Second
 	externalBanlistMaxResponseSize = 2 * 1024 * 1024
 	externalBanlistMaxIPs          = 4096
@@ -44,6 +45,7 @@ const (
 	antiFraudPersistDir            = "antifraud"
 	antiFraudCurrentFile           = "current.snapshot"
 	antiFraudPreviousFile          = "previous.snapshot"
+	defaultExternalBanlistSeedURL  = "https://guard.seed2.cryptix-network.org/api/v1/antifraud/snapshot"
 )
 
 type externalBanlistSnapshot struct {
@@ -85,6 +87,7 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	if !c.externalBanlistEnabled() {
 		c.externalBanlistLock.Lock()
 		c.antiFraudPeerFallback = true
+		c.externalBanlistRetryPending = false
 		c.externalBanlistLock.Unlock()
 		return
 	}
@@ -97,29 +100,20 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	}
 
 	snapshot, err := c.fetchExternalBanlist()
-
-	c.externalBanlistLock.Lock()
-	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
-	c.externalBanlistLock.Unlock()
-
 	if err != nil {
-		log.Warnf("External antifraud banlist refresh failed: %s", err)
-		c.externalBanlistLock.Lock()
-		c.antiFraudPeerFallback = true
-		c.externalBanlistLock.Unlock()
+		c.handleExternalBanlistRefreshFailure(now, err)
 		return
 	}
 
 	applied, applyErr := c.tryApplyAntiFraudSnapshot(snapshot, "banserver")
 	if applyErr != nil {
-		log.Warnf("External antifraud snapshot rejected: %s", applyErr)
-		c.externalBanlistLock.Lock()
-		c.antiFraudPeerFallback = true
-		c.externalBanlistLock.Unlock()
+		c.handleExternalBanlistRefreshFailure(now, errors.Wrap(applyErr, "snapshot rejected"))
 		return
 	}
 	c.externalBanlistLock.Lock()
+	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
 	c.antiFraudPeerFallback = false
+	c.externalBanlistRetryPending = false
 	c.externalBanlistLock.Unlock()
 	if applied {
 		log.Infof(
@@ -132,6 +126,30 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	}
 }
 
+func (c *ConnectionManager) handleExternalBanlistRefreshFailure(now time.Time, cause error) {
+	c.externalBanlistLock.Lock()
+	if c.externalBanlistRetryPending {
+		c.externalBanlistRetryPending = false
+		c.antiFraudPeerFallback = true
+		c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
+		c.externalBanlistLock.Unlock()
+		log.Warnf(
+			"External antifraud dual-endpoint validation failed again: %s. Enabling peer fallback.",
+			cause,
+		)
+		return
+	}
+
+	c.externalBanlistRetryPending = true
+	c.nextExternalBanlistFetch = now.Add(externalBanlistRetryInterval)
+	c.externalBanlistLock.Unlock()
+	log.Warnf(
+		"External antifraud dual-endpoint validation failed: %s. Retrying in %s before peer fallback.",
+		cause,
+		externalBanlistRetryInterval,
+	)
+}
+
 func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, error) {
 	if c.cfg == nil {
 		return nil, errors.New("connection manager config is nil")
@@ -142,9 +160,34 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, er
 		return nil, err
 	}
 
-	candidates := externalBanlistCandidateURLs(c.cfg.ExternalBanlistURL)
+	primarySnapshot, primarySourceURL, err := c.fetchExternalBanlistFromEndpoint("primary", c.cfg.ExternalBanlistURL, expectedNetwork)
+	if err != nil {
+		return nil, err
+	}
+	secondarySnapshot, secondarySourceURL, err := c.fetchExternalBanlistFromEndpoint("secondary", defaultExternalBanlistSeedURL, expectedNetwork)
+	if err != nil {
+		return nil, err
+	}
+
+	if primarySnapshot.RootHash != secondarySnapshot.RootHash {
+		return nil, errors.Errorf(
+			"seed endpoints returned different snapshots: primary %s seq=%d hash=%s, secondary %s seq=%d hash=%s",
+			primarySourceURL,
+			primarySnapshot.SnapshotSeq,
+			hex.EncodeToString(primarySnapshot.RootHash[:]),
+			secondarySourceURL,
+			secondarySnapshot.SnapshotSeq,
+			hex.EncodeToString(secondarySnapshot.RootHash[:]),
+		)
+	}
+
+	return primarySnapshot, nil
+}
+
+func (c *ConnectionManager) fetchExternalBanlistFromEndpoint(endpointName string, rawURL string, expectedNetwork uint8) (*externalBanlistSnapshot, string, error) {
+	candidates := externalBanlistCandidateURLs(rawURL)
 	if len(candidates) == 0 {
-		return nil, errors.Errorf("invalid external banlist URL %q", c.cfg.ExternalBanlistURL)
+		return nil, "", errors.Errorf("invalid %s external banlist URL %q", endpointName, rawURL)
 	}
 
 	var lastErr error
@@ -156,12 +199,12 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, er
 		}
 
 		if index > 0 {
-			log.Warnf("External antifraud banlist fetched via fallback URL %s", candidate)
+			log.Warnf("External antifraud %s endpoint fetched via fallback URL %s", endpointName, candidate)
 		}
-		return snapshot, nil
+		return snapshot, candidate, nil
 	}
 
-	return nil, errors.Wrap(lastErr, "failed to fetch external banlist from all configured endpoints")
+	return nil, "", errors.Wrapf(lastErr, "failed to fetch external banlist from %s endpoint", endpointName)
 }
 
 func externalBanlistCandidateURLs(rawURL string) []string {
