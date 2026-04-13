@@ -12,6 +12,7 @@ import (
 type SendAddressesContext interface {
 	AddressManager() *addressmanager.AddressManager
 	IsPayloadHfActive() bool
+	IsAntiFraudRuntimeEnabled() bool
 }
 
 // SendAddresses sends addresses to a peer that requests it.
@@ -23,7 +24,8 @@ func SendAddresses(context SendAddressesContext, incomingRoute *router.Route, ou
 		}
 
 		var addresses []*appmessage.NetAddress
-		if context.IsPayloadHfActive() {
+		requireVerified := context.IsPayloadHfActive() && context.IsAntiFraudRuntimeEnabled()
+		if requireVerified {
 			addresses = context.AddressManager().VerifiedAddresses()
 		} else {
 			addresses = context.AddressManager().Addresses()

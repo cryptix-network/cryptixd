@@ -117,6 +117,29 @@ func TestDecodeExternalBanlistPayloadStatusError(t *testing.T) {
 	}
 }
 
+func TestReadSnapshotAntiFraudEnabledRequiresStrictBool(t *testing.T) {
+	enabled, err := readSnapshotAntiFraudEnabled([]byte(`{"antifraud_enabled":true}`))
+	if err != nil {
+		t.Fatalf("expected boolean flag to parse, got error: %s", err)
+	}
+	if !enabled {
+		t.Fatalf("expected antifraud_enabled=true")
+	}
+
+	enabled, err = readSnapshotAntiFraudEnabled([]byte(`{"data":{"antifraud_enabled":false}}`))
+	if err != nil {
+		t.Fatalf("expected nested boolean flag to parse, got error: %s", err)
+	}
+	if enabled {
+		t.Fatalf("expected antifraud_enabled=false")
+	}
+
+	_, err = readSnapshotAntiFraudEnabled([]byte(`{"antifraud_enabled":"true"}`))
+	if err == nil {
+		t.Fatalf("expected string antifraud_enabled to be rejected")
+	}
+}
+
 func TestPruneAntiFraudPeerVotesRemovesExpiredAndInvalidEntries(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	votes := map[string]*peerAntiFraudVote{

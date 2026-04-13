@@ -8,3 +8,11 @@ func (f *FlowContext) IsPayloadHfActive() bool {
 	}
 	return virtualDAAScore >= f.Config().NetParams().PayloadHfActivationDAAScore
 }
+
+// IsAntiFraudRuntimeEnabled returns whether antifraud runtime checks are currently enabled.
+func (f *FlowContext) IsAntiFraudRuntimeEnabled() bool {
+	if f.ConnectionManager() == nil {
+		return false
+	}
+	return f.ConnectionManager().IsAntiFraudRuntimeEnabled()
+}

@@ -155,8 +155,8 @@ func (e *Engine) LastSink() (*externalapi.DomainHash, bool) {
 	return externalapi.NewDomainHashFromByteArray(&hash), true
 }
 
-func (e *Engine) IngestClaim(message *appmessage.MsgBlockProducerClaimV1, _ bool, blockKnown bool) IngestOutcome {
-	if !e.enabled {
+func (e *Engine) IngestClaim(message *appmessage.MsgBlockProducerClaimV1, hardforkActive bool, blockKnown bool) IngestOutcome {
+	if !e.enabled || !hardforkActive {
 		return IngestOutcome{Status: IngestIgnored}
 	}
 	if message == nil {
@@ -190,8 +190,8 @@ func (e *Engine) IngestClaim(message *appmessage.MsgBlockProducerClaimV1, _ bool
 	return IngestOutcome{Status: IngestAccepted, Pending: false}
 }
 
-func (e *Engine) ApplyChainPathUpdate(path *externalapi.SelectedChainPath, newSink *externalapi.DomainHash, _ bool) {
-	if !e.enabled || path == nil || newSink == nil {
+func (e *Engine) ApplyChainPathUpdate(path *externalapi.SelectedChainPath, newSink *externalapi.DomainHash, hardforkActive bool) {
+	if !e.enabled || !hardforkActive || path == nil || newSink == nil {
 		return
 	}
 

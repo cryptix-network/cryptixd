@@ -23,6 +23,10 @@ func (f fakeReceiveAddressesContext) IsPayloadHfActive() bool {
 	return false
 }
 
+func (f fakeReceiveAddressesContext) IsAntiFraudRuntimeEnabled() bool {
+	return false
+}
+
 type fakeReceiveAddressesHFContext struct{}
 
 func (f fakeReceiveAddressesHFContext) AddressManager() *addressmanager.AddressManager {
@@ -30,6 +34,10 @@ func (f fakeReceiveAddressesHFContext) AddressManager() *addressmanager.AddressM
 }
 
 func (f fakeReceiveAddressesHFContext) IsPayloadHfActive() bool {
+	return true
+}
+
+func (f fakeReceiveAddressesHFContext) IsAntiFraudRuntimeEnabled() bool {
 	return true
 }
 

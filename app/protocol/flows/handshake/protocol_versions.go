@@ -13,7 +13,12 @@ func minAcceptableProtocolVersionFor(context HandleHandshakeContext) (uint32, er
 		return 0, errors.Wrap(err, "failed to get virtual DAA score for protocol version gate")
 	}
 
-	if virtualDAAScore >= context.Config().NetParams().PayloadHfActivationDAAScore {
+	antiFraudRuntimeEnabled := false
+	if cm := context.ConnectionManager(); cm != nil {
+		antiFraudRuntimeEnabled = cm.IsAntiFraudRuntimeEnabled()
+	}
+
+	if antiFraudRuntimeEnabled && virtualDAAScore >= context.Config().NetParams().PayloadHfActivationDAAScore {
 		return hardforkProtocolVersion, nil
 	}
 

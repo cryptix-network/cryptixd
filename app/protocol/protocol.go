@@ -82,10 +82,11 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		var flows []*common.Flow
 		log.Infof("Registering p2p flows for peer %s for protocol version %d", peer, peer.ProtocolVersion())
 		enforceAntiFraud := false
+		antiFraudRuntimeEnabled := m.context.ConnectionManager().IsAntiFraudRuntimeEnabled()
 		virtualDAAScore, err := m.context.Domain().Consensus().GetVirtualDAAScore()
 		if err != nil {
 			log.Warnf("Failed reading virtual DAA score for anti-fraud mode check: %s", err)
-		} else if virtualDAAScore >= m.context.Config().NetParams().PayloadHfActivationDAAScore {
+		} else if antiFraudRuntimeEnabled && virtualDAAScore >= m.context.Config().NetParams().PayloadHfActivationDAAScore {
 			enforceAntiFraud = true
 		}
 		antiFraudMode := connmanager.AntiFraudModeFull

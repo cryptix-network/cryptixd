@@ -13,6 +13,7 @@ import (
 type ReceiveAddressesContext interface {
 	AddressManager() *addressmanager.AddressManager
 	IsPayloadHfActive() bool
+	IsAntiFraudRuntimeEnabled() bool
 }
 
 const maxUniqueAddressesAccepted = 1024
@@ -20,7 +21,8 @@ const maxUniqueAddressesAccepted = 1024
 // ReceiveAddresses asks a peer for more addresses if needed.
 func ReceiveAddresses(context ReceiveAddressesContext, incomingRoute *router.Route, outgoingRoute *router.Route,
 	peer *peerpkg.Peer) error {
-	if context.IsPayloadHfActive() && peer.UnifiedNodeID() == nil {
+	enforceAntiFraud := context.IsPayloadHfActive() && context.IsAntiFraudRuntimeEnabled()
+	if enforceAntiFraud && peer.UnifiedNodeID() == nil {
 		return protocolerrors.Errorf(true, "received addresses from peer without verified unified node ID after hardfork")
 	}
 

@@ -111,6 +111,55 @@ func TestApplyChainPathUpdateRemovesClaimStateForRemovedBlocks(t *testing.T) {
 	}
 }
 
+func TestHardforkGatingIgnoresClaimsAndChainUpdatesPreHF(t *testing.T) {
+	tempDir := t.TempDir()
+	engine := New(true, "cryptix-mainnet", tempDir)
+
+	const (
+		privKeyHex   = "9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2"
+		blockHashHex = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	)
+	claim := mustBuildSignedClaim(t, 0, privKeyHex, blockHashHex)
+
+	outcome := engine.IngestClaim(claim, false, true)
+	if outcome.Status != IngestIgnored {
+		t.Fatalf("expected IngestIgnored before hardfork, got %+v", outcome)
+	}
+
+	blockHash, err := externalapi.NewDomainHashFromByteSlice(claim.BlockHash)
+	if err != nil {
+		t.Fatalf("invalid block hash in claim: %s", err)
+	}
+	engine.ApplyChainPathUpdate(
+		&externalapi.SelectedChainPath{Added: []*externalapi.DomainHash{blockHash}},
+		blockHash,
+		false,
+	)
+
+	key := *blockHash.ByteArray()
+	engine.mu.Lock()
+	defer engine.mu.Unlock()
+
+	if _, ok := engine.state.WindowSet[key]; ok {
+		t.Fatalf("expected pre-HF apply to keep window set unchanged")
+	}
+	if _, ok := engine.state.RetentionSet[key]; ok {
+		t.Fatalf("expected pre-HF apply to keep retention set unchanged")
+	}
+	if _, ok := engine.state.RecentClaimsByBlock[key]; ok {
+		t.Fatalf("expected no recent claim state pre-HF")
+	}
+	if _, ok := engine.state.WinningClaimByBlock[key]; ok {
+		t.Fatalf("expected no winning claim state pre-HF")
+	}
+	if _, ok := engine.state.PendingUnknownClaims[key]; ok {
+		t.Fatalf("expected no pending claim state pre-HF")
+	}
+	if len(engine.state.ScoreByNodeID) != 0 {
+		t.Fatalf("expected no scores pre-HF, got %d", len(engine.state.ScoreByNodeID))
+	}
+}
+
 func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex string) *appmessage.MsgBlockProducerClaimV1 {
 	t.Helper()
 	var privKey [32]byte

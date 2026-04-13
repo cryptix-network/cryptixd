@@ -55,6 +55,7 @@ type ConnectionManager struct {
 	hasExternalSnapshot         bool
 	antiFraudHashWindow         [3][32]byte
 	antiFraudCurrentSnapshot    *appmessage.MsgAntiFraudSnapshotV1
+	antiFraudRuntimeEnabled     bool
 	antiFraudPeerFallback       bool
 	externalBanlistRetryPending bool
 	antiFraudPeerVotes          map[string]*peerAntiFraudVote
@@ -77,6 +78,7 @@ func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *
 		externallyBannedIPs:         map[string]struct{}{},
 		externallyBannedNodeIDs:     map[string]struct{}{},
 		locallyBannedUnifiedNodeIDs: map[string]struct{}{},
+		antiFraudRuntimeEnabled:     false,
 		antiFraudPeerFallback:       false,
 		externalBanlistRetryPending: false,
 		antiFraudPeerVotes:          map[string]*peerAntiFraudVote{},
@@ -203,6 +205,10 @@ func (c *ConnectionManager) BanByIP(ip net.IP) error {
 
 // BanByUnifiedNodeID bans the given unified node ID and disconnects all active matching peers.
 func (c *ConnectionManager) BanByUnifiedNodeID(nodeID [32]byte) error {
+	if !c.IsAntiFraudRuntimeEnabled() {
+		return nil
+	}
+
 	nodeIDHex := hex.EncodeToString(nodeID[:])
 	connections := c.netAdapter.P2PConnections()
 	for _, conn := range connections {

@@ -59,7 +59,7 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 		case <-context.ShutdownChan():
 			return nil
 		case <-modeTicker.C:
-			if !context.IsPayloadHfActive() {
+			if !context.IsPayloadHfActive() || !context.ConnectionManager().IsAntiFraudRuntimeEnabled() {
 				continue
 			}
 			if peer.ProtocolVersion() < hardforkProtocolVersion {
@@ -79,7 +79,7 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 				return nil
 			}
 		case <-requestTicker.C:
-			if !context.ConnectionManager().IsAntiFraudPeerFallbackRequired() {
+			if !context.ConnectionManager().IsAntiFraudRuntimeEnabled() || !context.ConnectionManager().IsAntiFraudPeerFallbackRequired() {
 				continue
 			}
 
@@ -98,6 +98,9 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 
 			snapshotMessage, ok := message.(*appmessage.MsgAntiFraudSnapshotV1)
 			if !ok {
+				continue
+			}
+			if !context.ConnectionManager().IsAntiFraudRuntimeEnabled() {
 				continue
 			}
 
