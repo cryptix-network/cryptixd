@@ -205,10 +205,6 @@ func (c *ConnectionManager) BanByIP(ip net.IP) error {
 
 // BanByUnifiedNodeID bans the given unified node ID and disconnects all active matching peers.
 func (c *ConnectionManager) BanByUnifiedNodeID(nodeID [32]byte) error {
-	if !c.IsAntiFraudRuntimeEnabled() {
-		return nil
-	}
-
 	nodeIDHex := hex.EncodeToString(nodeID[:])
 	connections := c.netAdapter.P2PConnections()
 	for _, conn := range connections {

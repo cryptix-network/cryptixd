@@ -38,7 +38,6 @@ const (
 	defaultBanDuration           = time.Hour * 24
 	defaultBanThreshold          = 100
 	defaultEnableExternalBanlist = true
-	defaultExternalBanlistURL    = "https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot"
 	//DefaultConnectTimeout is the default connection timeout when dialing
 	DefaultConnectTimeout = time.Second * 30
 	//DefaultMaxRPCClients is the default max number of RPC clients
@@ -94,7 +93,6 @@ type Flags struct {
 	BanThreshold                    uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
 	EnableExternalBanlist           bool          `long:"external-banlist" description:"Enable external antifraud banlist synchronization (IP and node ID)"`
 	DisableExternalBanlist          bool          `long:"no-external-banlist" description:"Disable external antifraud banlist synchronization (overrides --external-banlist)"`
-	ExternalBanlistURL              string        `long:"external-banlist-url" description:"External antifraud banlist endpoint URL"`
 	Whitelists                      []string      `long:"whitelist" description:"Add an IP network or IP that will not be banned. (eg. 192.168.1.0/24 or ::1)"`
 	RPCListeners                    []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: 19201, testnet: 19202)"`
 	RPCCert                         string        `long:"rpccert" description:"File containing the certificate file"`
@@ -187,7 +185,6 @@ func defaultFlags() *Flags {
 		BanDuration:           defaultBanDuration,
 		BanThreshold:          defaultBanThreshold,
 		EnableExternalBanlist: defaultEnableExternalBanlist,
-		ExternalBanlistURL:    defaultExternalBanlistURL,
 		RPCMaxClients:         DefaultMaxRPCClients,
 		RPCMaxWebsockets:      defaultMaxRPCWebsockets,
 		RPCMaxConcurrentReqs:  defaultMaxRPCConcurrentReqs,
@@ -287,14 +284,6 @@ func LoadConfig() (*Config, error) {
 	// --no-external-banlist always has priority over --external-banlist.
 	if cfg.DisableExternalBanlist {
 		cfg.EnableExternalBanlist = false
-	}
-
-	cfg.ExternalBanlistURL = strings.TrimSpace(cfg.ExternalBanlistURL)
-	if cfg.EnableExternalBanlist && cfg.ExternalBanlistURL == "" {
-		err := errors.Errorf("%s: external banlist is enabled but external-banlist-url is empty", funcName)
-		fmt.Fprintln(os.Stderr, err)
-		fmt.Fprintln(os.Stderr, usageMessage)
-		return nil, err
 	}
 
 	// Create the home directory if it doesn't already exist.

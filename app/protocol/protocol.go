@@ -124,17 +124,18 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 
 		var flows []*common.Flow
 		log.Infof("Registering p2p flows for peer %s for protocol version %d", peer, peer.ProtocolVersion())
-		enforceAntiFraud := false
+		enforceHardforkCore := false
 		antiFraudRuntimeEnabled := m.context.ConnectionManager().IsAntiFraudRuntimeEnabled()
 		virtualDAAScore, err := m.context.Domain().Consensus().GetVirtualDAAScore()
 		if err != nil {
-			log.Warnf("Failed reading virtual DAA score for anti-fraud mode check: %s", err)
-		} else if antiFraudRuntimeEnabled && virtualDAAScore >= m.context.Config().NetParams().PayloadHfActivationDAAScore {
-			enforceAntiFraud = true
+			log.Warnf("Failed reading virtual DAA score for hardfork mode check: %s", err)
+		} else if virtualDAAScore >= m.context.Config().NetParams().PayloadHfActivationDAAScore {
+			enforceHardforkCore = true
 		}
-		logQuantumHandshakeModeTransition(enforceAntiFraud)
-		logQuantumHandshakeStartupOnce(enforceAntiFraud)
-		if enforceAntiFraud {
+		enforceAntiFraud := enforceHardforkCore && antiFraudRuntimeEnabled
+		logQuantumHandshakeModeTransition(enforceHardforkCore)
+		logQuantumHandshakeStartupOnce(enforceHardforkCore)
+		if enforceHardforkCore {
 			log.Debugf("Starting handshake with peer %s in quantum-safe mode (ML-KEM-1024 enforced)", peer)
 		} else {
 			log.Debugf("Starting handshake with peer %s in legacy-compatible mode", peer)
@@ -166,7 +167,7 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		if peerUnifiedNodeID != nil {
 			localNonce, hasLocalNonce = netConnection.LocalNodeChallengeNonce()
 			remoteNonce, hasRemoteNonce = netConnection.RemoteNodeChallengeNonce()
-			if enforceAntiFraud && (!hasLocalNonce || !hasRemoteNonce) {
+			if enforceHardforkCore && (!hasLocalNonce || !hasRemoteNonce) {
 				m.handleError(protocolerrors.New(false, "missing ready handshake challenge nonce"), netConnection, router.OutgoingRoute())
 				return
 			}
@@ -204,7 +205,7 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 					}
 					outgoingReady.PQMLKEM1024Ciphertext = append(outgoingReady.PQMLKEM1024Ciphertext[:0], pqCiphertext...)
 					outgoingReady.PQHandshakeProof = append(outgoingReady.PQHandshakeProof[:0], pqProof[:]...)
-				} else if enforceAntiFraud {
+				} else if enforceHardforkCore {
 					m.handleError(protocolerrors.New(false, "missing peer ML-KEM-1024 public key for hardfork handshake"), netConnection, router.OutgoingRoute())
 					return
 				}
@@ -218,7 +219,7 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		}
 		if peerUnifiedNodeID != nil {
 			if len(incomingReady.NodeAuthSignature) == 0 {
-				if enforceAntiFraud {
+				if enforceHardforkCore {
 					m.handleError(protocolerrors.New(false, "missing ready auth signature after hardfork"), netConnection, router.OutgoingRoute())
 					return
 				}
@@ -229,7 +230,7 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 				}
 				peerPubKeyXOnly, hasPeerPubKey := netConnection.UnifiedNodePubKeyXOnly()
 				if !hasPeerPubKey || !hasRemoteNonce || !hasLocalNonce {
-					if enforceAntiFraud {
+					if enforceHardforkCore {
 						m.handleError(protocolerrors.New(false, "missing ready auth context"), netConnection, router.OutgoingRoute())
 						return
 					}
@@ -253,7 +254,7 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 
 			peerHasQuantumReadyPayload := len(incomingReady.PQMLKEM1024Ciphertext) > 0 || len(incomingReady.PQHandshakeProof) > 0
 			if !peerHasQuantumReadyPayload {
-				if enforceAntiFraud {
+				if enforceHardforkCore {
 					m.handleError(protocolerrors.New(false, "missing quantum-safe ready payload after hardfork"), netConnection, router.OutgoingRoute())
 					return
 				}

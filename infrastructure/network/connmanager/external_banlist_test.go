@@ -164,6 +164,84 @@ func TestReadSnapshotAntiFraudEnabledRequiresStrictBool(t *testing.T) {
 	}
 }
 
+func TestEvaluateEnabledSnapshotPairRejectsSameSeqDifferentHash(t *testing.T) {
+	nowMs := uint64(1_700_000_020_000)
+	selected := testExternalSnapshotForConsistency(10, 1_700_000_000_000, 0x11)
+	peer := testExternalSnapshotForConsistency(10, 1_700_000_000_100, 0x22)
+
+	_, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
+	if err == nil {
+		t.Fatalf("expected mismatch for same seq with different root hash")
+	}
+}
+
+func TestEvaluateEnabledSnapshotPairAcceptsSameSeqSameHash(t *testing.T) {
+	nowMs := uint64(1_700_000_020_000)
+	selected := testExternalSnapshotForConsistency(10, 1_700_000_000_000, 0x11)
+	peer := testExternalSnapshotForConsistency(10, 1_700_000_000_100, 0x11)
+
+	toleratedSkew, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
+	if err != nil {
+		t.Fatalf("expected same hash pair to pass: %s", err)
+	}
+	if toleratedSkew {
+		t.Fatalf("expected no skew flag for same seq/hash pair")
+	}
+}
+
+func TestEvaluateEnabledSnapshotPairAllowsOneStepReplicationSkewWithinTolerance(t *testing.T) {
+	toleranceMs := uint64(externalBanlistPropagationLag / time.Millisecond)
+	nowMs := uint64(1_700_000_020_000)
+	newer := testExternalSnapshotForConsistency(11, nowMs-toleranceMs, 0x22)
+	older := testExternalSnapshotForConsistency(10, nowMs-30_000, 0x11)
+
+	toleratedSkew, newerLabel, olderLabel, newerSeq, olderSeq, newerAgeMs, err := evaluateEnabledSnapshotPair(
+		"primary",
+		newer,
+		"secondary",
+		older,
+		nowMs,
+	)
+	if err != nil {
+		t.Fatalf("expected tolerated one-step skew: %s", err)
+	}
+	if !toleratedSkew {
+		t.Fatalf("expected skew to be tolerated")
+	}
+	if newerLabel != "primary" || olderLabel != "secondary" {
+		t.Fatalf("unexpected skew labels: newer=%s older=%s", newerLabel, olderLabel)
+	}
+	if newerSeq != 11 || olderSeq != 10 {
+		t.Fatalf("unexpected skew seq values: newer=%d older=%d", newerSeq, olderSeq)
+	}
+	if newerAgeMs != toleranceMs {
+		t.Fatalf("unexpected newer age: got %d expected %d", newerAgeMs, toleranceMs)
+	}
+}
+
+func TestEvaluateEnabledSnapshotPairRejectsSkewBeyondTolerance(t *testing.T) {
+	toleranceMs := uint64(externalBanlistPropagationLag / time.Millisecond)
+	nowMs := uint64(1_700_000_020_000)
+	selected := testExternalSnapshotForConsistency(11, nowMs-toleranceMs-1, 0x22)
+	peer := testExternalSnapshotForConsistency(10, nowMs-30_000, 0x11)
+
+	_, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
+	if err == nil {
+		t.Fatalf("expected skew beyond tolerance to fail")
+	}
+}
+
+func TestEvaluateEnabledSnapshotPairRejectsLargeSeqGap(t *testing.T) {
+	nowMs := uint64(1_700_000_020_000)
+	selected := testExternalSnapshotForConsistency(14, nowMs-1000, 0x44)
+	peer := testExternalSnapshotForConsistency(10, nowMs-30_000, 0x11)
+
+	_, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
+	if err == nil {
+		t.Fatalf("expected seq gap > 1 to fail")
+	}
+}
+
 func TestPruneAntiFraudPeerVotesRemovesExpiredAndInvalidEntries(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	votes := map[string]*peerAntiFraudVote{
@@ -189,6 +267,16 @@ func TestPruneAntiFraudPeerVotesRemovesExpiredAndInvalidEntries(t *testing.T) {
 	}
 	if _, ok := votes["fresh"]; !ok {
 		t.Fatalf("expected fresh vote to remain after pruning")
+	}
+}
+
+func testExternalSnapshotForConsistency(seq uint64, generatedAtMs uint64, hashByte byte) *externalBanlistSnapshot {
+	root := [32]byte{}
+	root[0] = hashByte
+	return &externalBanlistSnapshot{
+		SnapshotSeq:   seq,
+		GeneratedAtMs: generatedAtMs,
+		RootHash:      root,
 	}
 }
 

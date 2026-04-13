@@ -74,7 +74,7 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 		case <-context.ShutdownChan():
 			return nil
 		case <-modeTicker.C:
-			if !context.IsPayloadHfActive() || !context.ConnectionManager().IsAntiFraudRuntimeEnabled() {
+			if !context.IsPayloadHfActive() {
 				protocolMismatchStreak = 0
 				modeMismatchStreak = 0
 				continue
@@ -86,6 +86,10 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 				return nil
 			}
 			if protocolMismatch {
+				modeMismatchStreak = 0
+				continue
+			}
+			if !context.ConnectionManager().IsAntiFraudRuntimeEnabled() {
 				modeMismatchStreak = 0
 				continue
 			}

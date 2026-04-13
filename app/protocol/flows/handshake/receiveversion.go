@@ -82,6 +82,9 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 			minAcceptableProtocolVersion)
 	}
 	hardforkActive := minAcceptableProtocolVersion >= hardforkProtocolVersion
+	if hardforkActive && !msgVersion.HasService(appmessage.SFNodeStrongNodeClaims) {
+		return nil, protocolerrors.New(false, "peer missing mandatory strong-node-claims service bit after hardfork")
+	}
 	peerUnifiedNodeID, peerUnifiedNodePubKeyXOnly, err := validatePeerUnifiedNodeIdentity(flow.Config().ActiveNetParams.Name, msgVersion, hardforkActive)
 	if err != nil {
 		return nil, protocolerrors.Wrapf(false, err, "invalid unified node identity")
