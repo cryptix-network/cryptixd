@@ -30,14 +30,15 @@ func (x *CryptixdMessage_AntiFraudSnapshotV1) toAppMessage() (appmessage.Message
 	copy(signature, msg.Signature)
 
 	return &appmessage.MsgAntiFraudSnapshotV1{
-		SchemaVersion: msg.SchemaVersion,
-		Network:       msg.Network,
-		SnapshotSeq:   msg.SnapshotSeq,
-		GeneratedAtMs: msg.GeneratedAtMs,
-		SigningKeyID:  msg.SigningKeyId,
-		BannedIPs:     bannedIPs,
-		BannedNodeIDs: bannedNodeIDs,
-		Signature:     signature,
+		SchemaVersion:    msg.SchemaVersion,
+		Network:          msg.Network,
+		SnapshotSeq:      msg.SnapshotSeq,
+		GeneratedAtMs:    msg.GeneratedAtMs,
+		SigningKeyID:     msg.SigningKeyId,
+		AntiFraudEnabled: msg.AntifraudEnabled,
+		BannedIPs:        bannedIPs,
+		BannedNodeIDs:    bannedNodeIDs,
+		Signature:        signature,
 	}, nil
 }
 
@@ -62,14 +63,15 @@ func (x *CryptixdMessage_AntiFraudSnapshotV1) fromAppMessage(message *appmessage
 	copy(signature, message.Signature)
 
 	x.AntiFraudSnapshotV1 = &AntiFraudSnapshotV1Message{
-		SchemaVersion: message.SchemaVersion,
-		Network:       message.Network,
-		SnapshotSeq:   message.SnapshotSeq,
-		GeneratedAtMs: message.GeneratedAtMs,
-		SigningKeyId:  message.SigningKeyID,
-		BannedIps:     bannedIPs,
-		BannedNodeIds: bannedNodeIDs,
-		Signature:     signature,
+		SchemaVersion:    message.SchemaVersion,
+		Network:          message.Network,
+		SnapshotSeq:      message.SnapshotSeq,
+		GeneratedAtMs:    message.GeneratedAtMs,
+		SigningKeyId:     message.SigningKeyID,
+		AntifraudEnabled: message.AntiFraudEnabled,
+		BannedIps:        bannedIPs,
+		BannedNodeIds:    bannedNodeIDs,
+		Signature:        signature,
 	}
 	return nil
 }

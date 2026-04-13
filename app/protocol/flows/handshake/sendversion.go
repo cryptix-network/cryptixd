@@ -3,6 +3,8 @@ package handshake
 import (
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
+	"sync/atomic"
 	"time"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
@@ -30,6 +32,8 @@ var (
 	// defaultRequiredServices describes the default services that are
 	// required to be supported by outbound peers.
 	defaultRequiredServices = appmessage.SFNodeNetwork
+
+	quantumHandshakeKeySampleLogged uint32
 )
 
 type sendVersionFlow struct {
@@ -97,6 +101,16 @@ func (flow *sendVersionFlow) start() error {
 	challengeNonce := randomNodeChallengeNonce()
 	msg.NodeChallengeNonce = &challengeNonce
 	flow.peer.Connection().SetLocalNodeChallengeNonce(challengeNonce)
+	quantumPublicKey, quantumPrivateKey, err := flow.NetAdapter().GenerateQuantumHandshakeKeyPair()
+	if err != nil {
+		return errors.Wrap(err, "failed generating ML-KEM-1024 handshake key pair")
+	}
+	if atomic.CompareAndSwapUint32(&quantumHandshakeKeySampleLogged, 0, 1) {
+		log.Infof("Quantum-safe ML-KEM-1024 handshake key policy: using ephemeral per-connection keys (public key sample: %s)",
+			shortHexForLog(quantumPublicKey))
+	}
+	msg.PQMLKEM1024PubKey = append(msg.PQMLKEM1024PubKey[:0], quantumPublicKey...)
+	flow.peer.Connection().SetLocalPQMLKEM1024PrivateKey(quantumPrivateKey)
 
 	err = flow.outgoingRoute.Enqueue(msg)
 	if err != nil {
@@ -120,4 +134,14 @@ func randomNodeChallengeNonce() uint64 {
 	}
 	// Fallback should be practically unreachable; keep non-constant fallback for robustness.
 	return uint64(time.Now().UnixNano())
+}
+
+func shortHexForLog(data []byte) string {
+	if len(data) == 0 {
+		return "<empty>"
+	}
+	if len(data) <= 8 {
+		return hex.EncodeToString(data)
+	}
+	return hex.EncodeToString(data[:4]) + "..." + hex.EncodeToString(data[len(data)-4:])
 }

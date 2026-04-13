@@ -7,6 +7,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+const pqMLKEM1024PublicKeySize = 1568
+
 func (x *CryptixdMessage_Version) toAppMessage() (appmessage.Message, error) {
 	if x == nil {
 		return nil, errors.Wrapf(errorNil, "CryptixdMessage_Version is nil")
@@ -76,6 +78,13 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		value := *x.NodeChallengeNonce
 		nodeChallengeNonce = &value
 	}
+	var pqMLKEM1024PubKey []byte
+	if len(x.PqMlKem1024Pubkey) > 0 {
+		if len(x.PqMlKem1024Pubkey) != pqMLKEM1024PublicKeySize {
+			return nil, errors.Errorf("VersionMessage.PqMlKem1024Pubkey length %d is invalid (expected %d)", len(x.PqMlKem1024Pubkey), pqMLKEM1024PublicKeySize)
+		}
+		pqMLKEM1024PubKey = append([]byte(nil), x.PqMlKem1024Pubkey...)
+	}
 
 	return &appmessage.MsgVersion{
 		ProtocolVersion:    x.ProtocolVersion,
@@ -91,6 +100,7 @@ func (x *VersionMessage) toAppMessage() (appmessage.Message, error) {
 		NodePubkeyXOnly:    nodePubkeyXOnly,
 		NodePowNonce:       nodePowNonce,
 		NodeChallengeNonce: nodeChallengeNonce,
+		PQMLKEM1024PubKey:  pqMLKEM1024PubKey,
 	}, nil
 }
 
@@ -134,6 +144,14 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		value := *msgVersion.NodeChallengeNonce
 		nodeChallengeNonce = &value
 	}
+	if len(msgVersion.PQMLKEM1024PubKey) != 0 && len(msgVersion.PQMLKEM1024PubKey) != pqMLKEM1024PublicKeySize {
+		return errors.Errorf(
+			"MsgVersion.PQMLKEM1024PubKey length %d is invalid (expected %d)",
+			len(msgVersion.PQMLKEM1024PubKey),
+			pqMLKEM1024PublicKeySize,
+		)
+	}
+	pqMLKEM1024PubKey := append([]byte(nil), msgVersion.PQMLKEM1024PubKey...)
 
 	x.Version = &VersionMessage{
 		ProtocolVersion:    msgVersion.ProtocolVersion,
@@ -149,6 +167,7 @@ func (x *CryptixdMessage_Version) fromAppMessage(msgVersion *appmessage.MsgVersi
 		NodePubkeyXonly:    nodePubkeyXOnly,
 		NodePowNonce:       nodePowNonce,
 		NodeChallengeNonce: nodeChallengeNonce,
+		PqMlKem1024Pubkey:  pqMLKEM1024PubKey,
 	}
 	return nil
 }

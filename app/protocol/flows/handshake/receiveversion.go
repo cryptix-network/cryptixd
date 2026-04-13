@@ -86,6 +86,10 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	if err != nil {
 		return nil, protocolerrors.Wrapf(false, err, "invalid unified node identity")
 	}
+	peerQuantumHandshakePubKey, err := validatePeerQuantumHandshakePubKey(msgVersion, hardforkActive)
+	if err != nil {
+		return nil, protocolerrors.Wrapf(false, err, "invalid quantum-safe handshake key")
+	}
 
 	// Disconnect from partial nodes in networks that don't allow them
 	if !flow.Config().ActiveNetParams.EnableNonNativeSubnetworks && msgVersion.SubnetworkID != nil {
@@ -130,6 +134,9 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	if msgVersion.NodeChallengeNonce != nil {
 		flow.peer.Connection().SetRemoteNodeChallengeNonce(*msgVersion.NodeChallengeNonce)
 	}
+	if len(peerQuantumHandshakePubKey) > 0 {
+		flow.peer.Connection().SetRemotePQMLKEM1024PublicKey(peerQuantumHandshakePubKey)
+	}
 
 	return msgVersion.Address, nil
 }
@@ -163,6 +170,22 @@ func validatePeerUnifiedNodeIdentity(networkName string, msgVersion *appmessage.
 	}
 	nodeID := netadapter.ComputeUnifiedNodeID(pubKeyXOnly)
 	return &nodeID, &pubKeyXOnly, nil
+}
+
+func validatePeerQuantumHandshakePubKey(msgVersion *appmessage.MsgVersion, required bool) ([]byte, error) {
+	if len(msgVersion.PQMLKEM1024PubKey) == 0 {
+		if required {
+			return nil, errors.New("missing pqMlKem1024Pubkey")
+		}
+		return nil, nil
+	}
+	if len(msgVersion.PQMLKEM1024PubKey) != netadapter.QuantumHandshakeMLKEM1024PublicKeySize {
+		return nil, errors.Errorf(
+			"pqMlKem1024Pubkey length must be %d",
+			netadapter.QuantumHandshakeMLKEM1024PublicKeySize,
+		)
+	}
+	return append([]byte(nil), msgVersion.PQMLKEM1024PubKey...), nil
 }
 
 func isCompatiblePeerNetwork(localNetwork, remoteNetwork string) bool {

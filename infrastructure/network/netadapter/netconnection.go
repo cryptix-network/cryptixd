@@ -14,20 +14,24 @@ import (
 
 // NetConnection is a wrapper to a server connection for use by services external to NetAdapter
 type NetConnection struct {
-	connection                  server.Connection
-	id                          *id.ID
-	unifiedNodeID               [32]byte
-	hasUnifiedNodeID            bool
-	unifiedNodePubKeyXOnly      [32]byte
-	hasUnifiedNodePubKeyXOnly   bool
-	localNodeChallengeNonce     uint64
-	hasLocalNodeChallengeNonce  bool
-	remoteNodeChallengeNonce    uint64
-	hasRemoteNodeChallengeNonce bool
-	metadataLock                sync.RWMutex
-	router                      *routerpkg.Router
-	onDisconnectedHandler       server.OnDisconnectedHandler
-	isRouterClosed              uint32
+	connection                    server.Connection
+	id                            *id.ID
+	unifiedNodeID                 [32]byte
+	hasUnifiedNodeID              bool
+	unifiedNodePubKeyXOnly        [32]byte
+	hasUnifiedNodePubKeyXOnly     bool
+	localNodeChallengeNonce       uint64
+	hasLocalNodeChallengeNonce    bool
+	remoteNodeChallengeNonce      uint64
+	hasRemoteNodeChallengeNonce   bool
+	localPQMLKEM1024PrivateKey    []byte
+	hasLocalPQMLKEM1024PrivateKey bool
+	remotePQMLKEM1024PublicKey    []byte
+	hasRemotePQMLKEM1024PublicKey bool
+	metadataLock                  sync.RWMutex
+	router                        *routerpkg.Router
+	onDisconnectedHandler         server.OnDisconnectedHandler
+	isRouterClosed                uint32
 }
 
 func newNetConnection(connection server.Connection, routerInitializer RouterInitializer, name string) *NetConnection {
@@ -133,6 +137,42 @@ func (c *NetConnection) SetRemoteNodeChallengeNonce(nonce uint64) {
 	defer c.metadataLock.Unlock()
 	c.remoteNodeChallengeNonce = nonce
 	c.hasRemoteNodeChallengeNonce = true
+}
+
+// LocalPQMLKEM1024PrivateKey returns the local per-connection ML-KEM-1024 private key.
+func (c *NetConnection) LocalPQMLKEM1024PrivateKey() ([]byte, bool) {
+	c.metadataLock.RLock()
+	defer c.metadataLock.RUnlock()
+	if !c.hasLocalPQMLKEM1024PrivateKey {
+		return nil, false
+	}
+	return append([]byte(nil), c.localPQMLKEM1024PrivateKey...), true
+}
+
+// SetLocalPQMLKEM1024PrivateKey stores the local per-connection ML-KEM-1024 private key.
+func (c *NetConnection) SetLocalPQMLKEM1024PrivateKey(privateKey []byte) {
+	c.metadataLock.Lock()
+	defer c.metadataLock.Unlock()
+	c.localPQMLKEM1024PrivateKey = append(c.localPQMLKEM1024PrivateKey[:0], privateKey...)
+	c.hasLocalPQMLKEM1024PrivateKey = true
+}
+
+// RemotePQMLKEM1024PublicKey returns the peer ML-KEM-1024 public key from handshake.
+func (c *NetConnection) RemotePQMLKEM1024PublicKey() ([]byte, bool) {
+	c.metadataLock.RLock()
+	defer c.metadataLock.RUnlock()
+	if !c.hasRemotePQMLKEM1024PublicKey {
+		return nil, false
+	}
+	return append([]byte(nil), c.remotePQMLKEM1024PublicKey...), true
+}
+
+// SetRemotePQMLKEM1024PublicKey stores the peer ML-KEM-1024 public key from handshake.
+func (c *NetConnection) SetRemotePQMLKEM1024PublicKey(publicKey []byte) {
+	c.metadataLock.Lock()
+	defer c.metadataLock.Unlock()
+	c.remotePQMLKEM1024PublicKey = append(c.remotePQMLKEM1024PublicKey[:0], publicKey...)
+	c.hasRemotePQMLKEM1024PublicKey = true
 }
 
 // Address returns the address associated with this connection

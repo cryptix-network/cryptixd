@@ -74,6 +74,11 @@ type MsgVersion struct {
 	// nodeChallengeNonce is the per-connection nonce used for Ready proof-of-possession.
 	// Nil means not advertised (legacy pre-HF compatibility).
 	NodeChallengeNonce *uint64
+
+	// pqMlKem1024Pubkey is the per-connection ML-KEM-1024 encapsulation key used for
+	// quantum-safe handshake proof exchange during the Ready flow.
+	// Empty means not advertised.
+	PQMLKEM1024PubKey []byte
 }
 
 // HasService returns whether the specified service is supported by the peer

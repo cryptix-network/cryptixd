@@ -35,6 +35,7 @@ func NewManager(cfg *config.Config, domain domain.Domain, netAdapter *netadapter
 	manager := Manager{
 		context: flowcontext.New(cfg, domain, addressManager, netAdapter, connectionManager),
 	}
+	log.Infof("Quantum-safe ML-KEM-1024 handshake support enabled (ephemeral per-connection keys; no static startup key loaded)")
 
 	netAdapter.SetP2PRouterInitializer(manager.routerInitializer)
 	return &manager, nil

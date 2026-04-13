@@ -14,8 +14,21 @@ const (
 	snapshotRequestInterval = 20 * time.Second
 	snapshotRequestTimeout  = 5 * time.Second
 	modeRecheckInterval     = 1 * time.Second
+	modeMismatchThreshold   = 5
 	hardforkProtocolVersion = uint32(8)
 )
+
+func shouldDisconnectOnConsecutiveMismatch(streak *int, mismatch bool) bool {
+	if streak == nil {
+		return false
+	}
+	if !mismatch {
+		*streak = 0
+		return false
+	}
+	*streak++
+	return *streak >= modeMismatchThreshold
+}
 
 // HandleSnapshotRequestsContext is the context required for serving anti-fraud snapshots to peers.
 type HandleSnapshotRequestsContext interface {
@@ -51,6 +64,8 @@ type SyncSnapshotsContext interface {
 func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, outgoingRoute *router.Route, peer *peerpkg.Peer) error {
 	modeTicker := time.NewTicker(modeRecheckInterval)
 	requestTicker := time.NewTicker(snapshotRequestInterval)
+	protocolMismatchStreak := 0
+	modeMismatchStreak := 0
 	defer modeTicker.Stop()
 	defer requestTicker.Stop()
 
@@ -60,24 +75,34 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 			return nil
 		case <-modeTicker.C:
 			if !context.IsPayloadHfActive() || !context.ConnectionManager().IsAntiFraudRuntimeEnabled() {
+				protocolMismatchStreak = 0
+				modeMismatchStreak = 0
 				continue
 			}
-			if peer.ProtocolVersion() < hardforkProtocolVersion {
+			protocolMismatch := peer.ProtocolVersion() < hardforkProtocolVersion
+			if shouldDisconnectOnConsecutiveMismatch(&protocolMismatchStreak, protocolMismatch) {
 				log.Warnf("Peer %s still uses pre-HF protocol version %d; reconnecting to enforce v%d+", peer, peer.ProtocolVersion(), hardforkProtocolVersion)
 				peer.Connection().Disconnect()
 				return nil
 			}
+			if protocolMismatch {
+				modeMismatchStreak = 0
+				continue
+			}
 			currentMode := context.ConnectionManager().AntiFraudModeForPeerHashes(peer.AntiFraudHashes())
+			modeMismatch := (peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeFull) ||
+				(!peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeRestricted)
+			if !shouldDisconnectOnConsecutiveMismatch(&modeMismatchStreak, modeMismatch) {
+				continue
+			}
 			if peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeFull {
 				log.Infof("Peer %s anti-fraud overlap became valid; reconnecting to upgrade from RESTRICTED_AF to FULL", peer)
 				peer.Connection().Disconnect()
 				return nil
 			}
-			if !peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeRestricted {
-				log.Warnf("Peer %s lost anti-fraud hash overlap; reconnecting to enforce RESTRICTED_AF", peer)
-				peer.Connection().Disconnect()
-				return nil
-			}
+			log.Warnf("Peer %s lost anti-fraud hash overlap; reconnecting to enforce RESTRICTED_AF", peer)
+			peer.Connection().Disconnect()
+			return nil
 		case <-requestTicker.C:
 			if !context.ConnectionManager().IsAntiFraudRuntimeEnabled() || !context.ConnectionManager().IsAntiFraudPeerFallbackRequired() {
 				continue

@@ -2,6 +2,7 @@ package connmanager
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -43,11 +44,19 @@ func TestExternalBanlistCandidateURLs(t *testing.T) {
 	}
 }
 
-func buildSignedSnapshotPayload(t *testing.T) []byte {
+func buildSignedSnapshotPayload(t *testing.T, enabled bool) []byte {
 	t.Helper()
+
+	signature := "e78caa63a9121ecf7f845ca4bce4b62ca01bb9277af000a5ffd030dc3855c7707d870f6e85a589a1d2b630eddc643a25d93665c7c663d55741fe5e7293bc539f"
+	rootHash := "d121e2a127f06866c23799b48883e00e8c844f62a96e2e207457f52e11c7ab2f"
+	if !enabled {
+		signature = "5f94c8ec397d696d8c9c95f3c18865cd48a9e4f2b1d31b3c83dec516ed0f0f029812cf87c7abc82c43c4c8ac34fd828bc98e84b8f37459c8458a787398d85076"
+		rootHash = "35debec6b2f2ad6def2f701bb97ad5c1c055a4c35135c1f13e4818727ea9bdb0"
+	}
 
 	document := map[string]interface{}{
 		"status":                "success",
+		"antifraud_enabled":     enabled,
 		"schema_version":        antiFraudSchemaVersion,
 		"network":               0,
 		"snapshot_seq":          uint64(2),
@@ -57,8 +66,8 @@ func buildSignedSnapshotPayload(t *testing.T) []byte {
 		"banned_ips":            []string{"127.0.0.1"},
 		"banned_node_ids_count": 1,
 		"banned_node_ids":       []string{"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"},
-		"signature":             "cbab47b2818ea9f780b6c99467c7659504cb7a6f7f896277896d4e2ce291296af547b27c9c03fda0825b81cb16039503da1b100dac6942f2a0d654422905cdab",
-		"root_hash":             "52e4851244a37828f957d69b7de3f0ee07bc60f913dc0987f612f77411a070c0",
+		"signature":             signature,
+		"root_hash":             rootHash,
 	}
 	rawJSON, err := json.Marshal(document)
 	if err != nil {
@@ -68,7 +77,7 @@ func buildSignedSnapshotPayload(t *testing.T) []byte {
 }
 
 func TestDecodeExternalBanlistPayload(t *testing.T) {
-	rawJSON := buildSignedSnapshotPayload(t)
+	rawJSON := buildSignedSnapshotPayload(t, true)
 
 	snapshot, err := decodeExternalBanlistPayload(rawJSON, 0)
 	if err != nil {
@@ -77,6 +86,9 @@ func TestDecodeExternalBanlistPayload(t *testing.T) {
 
 	if snapshot.SnapshotSeq != 2 {
 		t.Fatalf("unexpected snapshot seq: got %d expected 2", snapshot.SnapshotSeq)
+	}
+	if !snapshot.AntiFraudEnabled {
+		t.Fatalf("expected antifraud_enabled=true")
 	}
 	if len(snapshot.IPs) != 1 {
 		t.Fatalf("unexpected IP count: got %d expected 1", len(snapshot.IPs))
@@ -93,7 +105,7 @@ func TestDecodeExternalBanlistPayload(t *testing.T) {
 }
 
 func TestDecodeExternalBanlistPayloadRejectsBadSignature(t *testing.T) {
-	rawJSON := buildSignedSnapshotPayload(t)
+	rawJSON := buildSignedSnapshotPayload(t, true)
 	var payload map[string]interface{}
 	if err := json.Unmarshal(rawJSON, &payload); err != nil {
 		t.Fatalf("json.Unmarshal failed: %s", err)
@@ -107,6 +119,18 @@ func TestDecodeExternalBanlistPayloadRejectsBadSignature(t *testing.T) {
 	_, err = decodeExternalBanlistPayload(brokenJSON, 0)
 	if err == nil {
 		t.Fatalf("expected invalid signature to fail")
+	}
+}
+
+func TestDecodeExternalBanlistPayloadAcceptsSignedRuntimeDisable(t *testing.T) {
+	rawJSON := buildSignedSnapshotPayload(t, false)
+
+	snapshot, err := decodeExternalBanlistPayload(rawJSON, 0)
+	if err != nil {
+		t.Fatalf("decodeExternalBanlistPayload unexpectedly failed: %s", err)
+	}
+	if snapshot.AntiFraudEnabled {
+		t.Fatalf("expected antifraud_enabled=false")
 	}
 }
 
@@ -190,5 +214,88 @@ func TestPruneAntiFraudPeerVotesCapsSizeToNewestEntries(t *testing.T) {
 	oldestID := fmt.Sprintf("peer-%04d", externalBanlistPeerVoteMaxSize+9)
 	if _, ok := votes[oldestID]; ok {
 		t.Fatalf("expected oldest vote %s to be evicted", oldestID)
+	}
+}
+
+func TestHandleExternalBanlistRefreshFailureEscalatesToPeerFallback(t *testing.T) {
+	manager := &ConnectionManager{}
+	now := time.Unix(1_700_000_000, 0)
+
+	manager.handleExternalBanlistRefreshFailure(now, errors.New("seed endpoint unavailable"))
+
+	manager.externalBanlistLock.RLock()
+	firstRuntimeEnabled := manager.antiFraudRuntimeEnabled
+	firstRetryPending := manager.externalBanlistRetryPending
+	firstPeerFallback := manager.antiFraudPeerFallback
+	firstNextFetch := manager.nextExternalBanlistFetch
+	manager.externalBanlistLock.RUnlock()
+
+	if !firstRuntimeEnabled {
+		t.Fatalf("expected anti-fraud runtime to stay enabled during retry")
+	}
+	if !firstRetryPending {
+		t.Fatalf("expected retry pending to be true after first failure")
+	}
+	if firstPeerFallback {
+		t.Fatalf("expected peer fallback to remain false after first failure")
+	}
+	expectedRetryAt := now.Add(externalBanlistRetryInterval)
+	if !firstNextFetch.Equal(expectedRetryAt) {
+		t.Fatalf("unexpected first retry time: got %s expected %s", firstNextFetch, expectedRetryAt)
+	}
+
+	secondNow := now.Add(time.Second)
+	manager.handleExternalBanlistRefreshFailure(secondNow, errors.New("seed endpoint unavailable"))
+
+	manager.externalBanlistLock.RLock()
+	secondRuntimeEnabled := manager.antiFraudRuntimeEnabled
+	secondRetryPending := manager.externalBanlistRetryPending
+	secondPeerFallback := manager.antiFraudPeerFallback
+	secondNextFetch := manager.nextExternalBanlistFetch
+	manager.externalBanlistLock.RUnlock()
+
+	if !secondRuntimeEnabled {
+		t.Fatalf("expected anti-fraud runtime to remain enabled during peer fallback")
+	}
+	if secondRetryPending {
+		t.Fatalf("expected retry pending to be false after fallback activation")
+	}
+	if !secondPeerFallback {
+		t.Fatalf("expected peer fallback to be enabled after consecutive failures")
+	}
+	expectedFallbackFetch := secondNow.Add(externalBanlistFetchInterval)
+	if !secondNextFetch.Equal(expectedFallbackFetch) {
+		t.Fatalf("unexpected fallback fetch time: got %s expected %s", secondNextFetch, expectedFallbackFetch)
+	}
+}
+
+func TestHandleExternalBanlistRefreshFailureKeepsExistingPeerFallback(t *testing.T) {
+	manager := &ConnectionManager{
+		antiFraudRuntimeEnabled:     true,
+		antiFraudPeerFallback:       true,
+		externalBanlistRetryPending: true,
+		nextExternalBanlistFetch:    time.Unix(0, 0),
+		antiFraudCurrentSnapshot:    nil,
+		antiFraudHashWindow:         [antiFraudHashWindowLen][32]byte{},
+		antiFraudPeerVotes:          nil,
+		externallyBannedIPs:         nil,
+		externallyBannedNodeIDs:     nil,
+		locallyBannedUnifiedNodeIDs: nil,
+	}
+	now := time.Unix(1_700_000_500, 0)
+
+	manager.handleExternalBanlistRefreshFailure(now, errors.New("still unavailable"))
+
+	manager.externalBanlistLock.RLock()
+	defer manager.externalBanlistLock.RUnlock()
+	if !manager.antiFraudPeerFallback {
+		t.Fatalf("expected peer fallback to remain enabled")
+	}
+	if manager.externalBanlistRetryPending {
+		t.Fatalf("expected retry pending to be cleared while already in fallback")
+	}
+	expectedNextFetch := now.Add(externalBanlistFetchInterval)
+	if !manager.nextExternalBanlistFetch.Equal(expectedNextFetch) {
+		t.Fatalf("unexpected next fetch while in fallback: got %s expected %s", manager.nextExternalBanlistFetch, expectedNextFetch)
 	}
 }

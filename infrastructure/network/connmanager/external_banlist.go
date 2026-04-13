@@ -27,6 +27,7 @@ import (
 
 const (
 	externalBanlistFetchInterval   = 10 * time.Minute
+	externalBanlistRetryInterval   = 15 * time.Second
 	externalBanlistRequestTimeout  = 10 * time.Second
 	externalBanlistMaxResponseSize = 2 * 1024 * 1024
 	externalBanlistMaxIPs          = 4096
@@ -49,29 +50,31 @@ const (
 )
 
 type externalBanlistSnapshot struct {
-	SchemaVersion uint8
-	Network       uint8
-	SnapshotSeq   uint64
-	GeneratedAtMs uint64
-	SigningKeyID  uint8
-	Signature     [64]byte
-	RootHash      [32]byte
-	IPEntries     [][]byte
-	NodeIDEntries [][32]byte
-	IPs           map[string]struct{}
-	NodeIDs       map[string]struct{}
+	SchemaVersion    uint8
+	Network          uint8
+	SnapshotSeq      uint64
+	GeneratedAtMs    uint64
+	SigningKeyID     uint8
+	AntiFraudEnabled bool
+	Signature        [64]byte
+	RootHash         [32]byte
+	IPEntries        [][]byte
+	NodeIDEntries    [][32]byte
+	IPs              map[string]struct{}
+	NodeIDs          map[string]struct{}
 }
 
 type normalizedAntiFraudSnapshot struct {
-	schemaVersion uint8
-	network       uint8
-	snapshotSeq   uint64
-	generatedAtMs uint64
-	signingKeyID  uint8
-	ipEntries     [][]byte
-	nodeIDEntries [][32]byte
-	signature     [64]byte
-	rootHash      [32]byte
+	schemaVersion    uint8
+	network          uint8
+	snapshotSeq      uint64
+	generatedAtMs    uint64
+	signingKeyID     uint8
+	antiFraudEnabled bool
+	ipEntries        [][]byte
+	nodeIDEntries    [][32]byte
+	signature        [64]byte
+	rootHash         [32]byte
 }
 
 type peerAntiFraudVote struct {
@@ -85,6 +88,14 @@ type endpointAntiFraudSnapshotResult struct {
 	enabled      bool
 	snapshot     *externalBanlistSnapshot
 }
+
+type externalBanlistFetchOutcome uint8
+
+const (
+	externalBanlistFetchEnabled externalBanlistFetchOutcome = iota
+	externalBanlistFetchDisabledByGate
+	externalBanlistFetchUnavailable
+)
 
 func endpointLabel(endpoint *endpointAntiFraudSnapshotResult) string {
 	if endpoint == nil {
@@ -114,8 +125,37 @@ func (c *ConnectionManager) IsAntiFraudRuntimeEnabled() bool {
 	return c.antiFraudRuntimeEnabled
 }
 
+func logExternalAntiFraudRuntimeTransition(wasEnabled bool, enabled bool, reason string) {
+	if wasEnabled == enabled {
+		return
+	}
+	if enabled {
+		log.Warnf("External antifraud runtime switched: OFF -> ON (%s)", reason)
+	} else {
+		log.Warnf("External antifraud runtime switched: ON -> OFF (%s)", reason)
+	}
+}
+
+func (c *ConnectionManager) logExternalAntiFraudRuntimeState(reason string) {
+	c.externalBanlistLock.RLock()
+	enabled := c.antiFraudRuntimeEnabled
+	peerFallback := c.antiFraudPeerFallback
+	retryPending := c.externalBanlistRetryPending
+	snapshotSeq := c.externalSnapshotSeq
+	c.externalBanlistLock.RUnlock()
+	log.Infof(
+		"External antifraud runtime state: enabled=%t peer_fallback=%t retry_pending=%t snapshot_seq=%d (%s)",
+		enabled,
+		peerFallback,
+		retryPending,
+		snapshotSeq,
+		reason,
+	)
+}
+
 func (c *ConnectionManager) disableAntiFraudRuntime(now time.Time, reason string) {
 	c.externalBanlistLock.Lock()
+	wasEnabled := c.antiFraudRuntimeEnabled
 	hadState := c.antiFraudRuntimeEnabled ||
 		len(c.externallyBannedIPs) > 0 ||
 		len(c.externallyBannedNodeIDs) > 0 ||
@@ -139,9 +179,11 @@ func (c *ConnectionManager) disableAntiFraudRuntime(now time.Time, reason string
 	c.locallyBannedUnifiedNodeIDs = map[string]struct{}{}
 	c.localUnifiedBanLock.Unlock()
 
+	logExternalAntiFraudRuntimeTransition(wasEnabled, false, reason)
 	if hadState {
 		log.Infof("External antifraud runtime disabled: %s. Cleared anti-fraud state.", reason)
 	}
+	c.logExternalAntiFraudRuntimeState(reason)
 }
 
 func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
@@ -157,31 +199,34 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 		return
 	}
 
-	snapshot, runtimeEnabled, err := c.fetchExternalBanlist()
+	snapshot, fetchOutcome, err := c.fetchExternalBanlist()
 	if err != nil {
-		c.disableAntiFraudRuntime(now, errors.Wrap(err, "snapshot endpoint fetch/validation failed").Error())
+		c.handleExternalBanlistRefreshFailure(now, errors.Wrap(err, "snapshot endpoint fetch/validation failed"))
 		return
 	}
-	if !runtimeEnabled {
-		c.disableAntiFraudRuntime(now, "snapshot endpoint antifraud_enabled flag is false or unavailable")
+	if fetchOutcome == externalBanlistFetchDisabledByGate {
+		c.disableAntiFraudRuntime(now, "snapshot endpoint antifraud_enabled flag is false")
 		return
 	}
-
-	c.externalBanlistLock.Lock()
-	c.antiFraudRuntimeEnabled = true
-	c.externalBanlistLock.Unlock()
+	if fetchOutcome == externalBanlistFetchUnavailable {
+		c.handleExternalBanlistRefreshFailure(now, errors.New("no endpoint provided a usable antifraud snapshot"))
+		return
+	}
 
 	applied, applyErr := c.tryApplyAntiFraudSnapshot(snapshot, "banserver")
 	if applyErr != nil {
-		c.disableAntiFraudRuntime(now, errors.Wrap(applyErr, "snapshot rejected").Error())
+		c.handleExternalBanlistRefreshFailure(now, errors.Wrap(applyErr, "snapshot rejected"))
 		return
 	}
 	c.externalBanlistLock.Lock()
+	wasEnabled := c.antiFraudRuntimeEnabled
 	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
 	c.antiFraudPeerFallback = false
 	c.externalBanlistRetryPending = false
 	c.antiFraudRuntimeEnabled = true
 	c.externalBanlistLock.Unlock()
+	logExternalAntiFraudRuntimeTransition(wasEnabled, true, "validated signed snapshot gate is enabled")
+	c.logExternalAntiFraudRuntimeState("signed snapshot refresh completed")
 	if applied {
 		log.Infof(
 			"External antifraud snapshot refreshed: seq=%d hash=%s ips=%d node_ids=%d",
@@ -193,14 +238,64 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	}
 }
 
-func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, bool, error) {
+func (c *ConnectionManager) handleExternalBanlistRefreshFailure(now time.Time, cause error) {
+	c.externalBanlistLock.Lock()
+	wasEnabled := c.antiFraudRuntimeEnabled
+
+	if !c.antiFraudRuntimeEnabled {
+		c.antiFraudRuntimeEnabled = true
+	}
+
+	// If we're already in peer fallback mode, keep it active and only clear retry-pending.
+	if c.antiFraudPeerFallback {
+		c.externalBanlistRetryPending = false
+		c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
+		c.externalBanlistLock.Unlock()
+		logExternalAntiFraudRuntimeTransition(wasEnabled, true, "seed endpoint refresh failure fallback logic")
+		log.Warnf(
+			"External antifraud refresh failed while peer fallback is active: %s. Keeping peer fallback enabled.",
+			cause,
+		)
+		c.logExternalAntiFraudRuntimeState(cause.Error())
+		return
+	}
+
+	// First failure arms a fast consistency retry before entering peer fallback.
+	if !c.externalBanlistRetryPending {
+		c.externalBanlistRetryPending = true
+		c.nextExternalBanlistFetch = now.Add(externalBanlistRetryInterval)
+		c.externalBanlistLock.Unlock()
+		logExternalAntiFraudRuntimeTransition(wasEnabled, true, "seed endpoint refresh failure fallback logic")
+		log.Warnf(
+			"External antifraud refresh failed: %s. Retrying in %s before enabling peer fallback.",
+			cause,
+			externalBanlistRetryInterval,
+		)
+		c.logExternalAntiFraudRuntimeState(cause.Error())
+		return
+	}
+
+	// Consecutive failure activates peer fallback mode.
+	c.externalBanlistRetryPending = false
+	c.antiFraudPeerFallback = true
+	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
+	c.externalBanlistLock.Unlock()
+	logExternalAntiFraudRuntimeTransition(wasEnabled, true, "seed endpoint refresh failure fallback logic")
+	log.Warnf(
+		"External antifraud refresh failed again: %s. Enabling peer snapshot fallback mode.",
+		cause,
+	)
+	c.logExternalAntiFraudRuntimeState(cause.Error())
+}
+
+func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, externalBanlistFetchOutcome, error) {
 	if c.cfg == nil {
-		return nil, false, errors.New("connection manager config is nil")
+		return nil, externalBanlistFetchUnavailable, errors.New("connection manager config is nil")
 	}
 
 	expectedNetwork, err := antiFraudNetworkFromName(c.cfg.NetParams().Name)
 	if err != nil {
-		return nil, false, err
+		return nil, externalBanlistFetchUnavailable, err
 	}
 
 	primaryResult, primaryErr := c.fetchExternalBanlistFromEndpoint("primary", c.cfg.ExternalBanlistURL, expectedNetwork)
@@ -230,7 +325,7 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, bo
 			}
 			stateParts = append(stateParts, endpointErrors...)
 			log.Infof("External antifraud runtime gate from snapshots: %s -> disabled", strings.Join(stateParts, "; "))
-			return nil, false, nil
+			return nil, externalBanlistFetchDisabledByGate, nil
 		}
 	}
 
@@ -248,11 +343,11 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, bo
 
 	if len(enabledResults) == 0 {
 		if len(endpointErrors) == 0 {
-			log.Warnf("External antifraud runtime gate from snapshots: no endpoint provided usable antifraud payload -> disabled")
+			log.Warnf("External antifraud runtime gate from snapshots: no endpoint provided usable antifraud payload -> unavailable")
 		} else {
-			log.Warnf("External antifraud runtime gate from snapshots: %s -> disabled", strings.Join(endpointErrors, "; "))
+			log.Warnf("External antifraud runtime gate from snapshots: %s -> unavailable", strings.Join(endpointErrors, "; "))
 		}
-		return nil, false, nil
+		return nil, externalBanlistFetchUnavailable, nil
 	}
 
 	if len(endpointErrors) > 0 {
@@ -291,7 +386,7 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, bo
 		}
 	}
 
-	return selected.snapshot, true, nil
+	return selected.snapshot, externalBanlistFetchEnabled, nil
 }
 
 func (c *ConnectionManager) fetchExternalBanlistFromEndpoint(
@@ -388,17 +483,12 @@ func (c *ConnectionManager) fetchExternalBanlistFromURL(endpoint string, expecte
 		return nil, errors.Errorf("response body exceeded max size of %d bytes", externalBanlistMaxResponseSize)
 	}
 
-	enabled, err := readSnapshotAntiFraudEnabled(responseBody)
-	if err != nil {
-		return nil, err
-	}
-	if !enabled {
-		return &endpointAntiFraudSnapshotResult{enabled: false}, nil
-	}
-
 	snapshot, err := decodeExternalBanlistPayload(responseBody, expectedNetwork)
 	if err != nil {
 		return nil, err
+	}
+	if !snapshot.AntiFraudEnabled {
+		return &endpointAntiFraudSnapshotResult{enabled: false, snapshot: snapshot}, nil
 	}
 	return &endpointAntiFraudSnapshotResult{enabled: true, snapshot: snapshot}, nil
 }
@@ -418,6 +508,10 @@ func readSnapshotAntiFraudEnabled(payload []byte) (bool, error) {
 		root = dataMap
 	}
 
+	return readSnapshotAntiFraudEnabledFromObjects(root, top)
+}
+
+func readSnapshotAntiFraudEnabledFromObjects(root map[string]interface{}, top map[string]interface{}) (bool, error) {
 	readFlag := func(container map[string]interface{}) (bool, bool, error) {
 		value, ok := container["antifraud_enabled"]
 		if !ok {
@@ -471,6 +565,11 @@ func decodeExternalBanlistPayload(payload []byte, expectedNetwork uint8) (*exter
 		if status != "" && !strings.EqualFold(status, "success") {
 			return nil, errors.Errorf("banlist endpoint returned non-success status %q", status)
 		}
+	}
+
+	antiFraudEnabled, err := readSnapshotAntiFraudEnabledFromObjects(root, top)
+	if err != nil {
+		return nil, err
 	}
 
 	schemaVersion, ok, err := readJSONUint(root, "schema_version", "schemaVersion")
@@ -596,14 +695,15 @@ func decodeExternalBanlistPayload(payload []byte, expectedNetwork uint8) (*exter
 	}
 
 	normalized := normalizedAntiFraudSnapshot{
-		schemaVersion: uint8(schemaVersion),
-		network:       network,
-		snapshotSeq:   snapshotSeq,
-		generatedAtMs: generatedAtMs,
-		signingKeyID:  signingKeyID,
-		ipEntries:     ipEntries,
-		nodeIDEntries: nodeEntries,
-		signature:     signature,
+		schemaVersion:    uint8(schemaVersion),
+		network:          network,
+		snapshotSeq:      snapshotSeq,
+		generatedAtMs:    generatedAtMs,
+		signingKeyID:     signingKeyID,
+		antiFraudEnabled: antiFraudEnabled,
+		ipEntries:        ipEntries,
+		nodeIDEntries:    nodeEntries,
+		signature:        signature,
 	}
 	rootHash, err := normalized.computeRootHash()
 	if err != nil {
@@ -625,17 +725,18 @@ func decodeExternalBanlistPayload(payload []byte, expectedNetwork uint8) (*exter
 	}
 
 	return &externalBanlistSnapshot{
-		SchemaVersion: uint8(schemaVersion),
-		Network:       network,
-		SnapshotSeq:   snapshotSeq,
-		GeneratedAtMs: generatedAtMs,
-		SigningKeyID:  signingKeyID,
-		Signature:     signature,
-		RootHash:      normalized.rootHash,
-		IPEntries:     cloneIPEntries(ipEntries),
-		NodeIDEntries: append([][32]byte(nil), nodeEntries...),
-		IPs:           normalizedIPs,
-		NodeIDs:       normalizedNodeIDs,
+		SchemaVersion:    uint8(schemaVersion),
+		Network:          network,
+		SnapshotSeq:      snapshotSeq,
+		GeneratedAtMs:    generatedAtMs,
+		SigningKeyID:     signingKeyID,
+		AntiFraudEnabled: antiFraudEnabled,
+		Signature:        signature,
+		RootHash:         normalized.rootHash,
+		IPEntries:        cloneIPEntries(ipEntries),
+		NodeIDEntries:    append([][32]byte(nil), nodeEntries...),
+		IPs:              normalizedIPs,
+		NodeIDs:          normalizedNodeIDs,
 	}, nil
 }
 
@@ -646,6 +747,7 @@ func (snapshot *normalizedAntiFraudSnapshot) computeRootHash() ([32]byte, error)
 		snapshot.snapshotSeq,
 		snapshot.generatedAtMs,
 		snapshot.signingKeyID,
+		snapshot.antiFraudEnabled,
 		snapshot.ipEntries,
 		snapshot.nodeIDEntries,
 	)
@@ -661,6 +763,7 @@ func buildAntiFraudCanonicalPayload(
 	snapshotSeq uint64,
 	generatedAtMs uint64,
 	signingKeyID uint8,
+	antiFraudEnabled bool,
 	ipEntries [][]byte,
 	nodeIDEntries [][32]byte,
 ) ([]byte, error) {
@@ -679,6 +782,11 @@ func buildAntiFraudCanonicalPayload(
 	binary.BigEndian.PutUint64(u64[:], generatedAtMs)
 	payload = append(payload, u64[:]...)
 	payload = append(payload, signingKeyID)
+	if antiFraudEnabled {
+		payload = append(payload, 1)
+	} else {
+		payload = append(payload, 0)
+	}
 
 	var u32 [4]byte
 	binary.BigEndian.PutUint32(u32[:], uint32(len(ipEntries)))
@@ -1230,14 +1338,15 @@ func decodeExternalBanlistSnapshotFromMessage(message *appmessage.MsgAntiFraudSn
 	normalizedNodeEntries, normalizedNodeIDs := normalizeNodeIDEntriesFromRaw(message.BannedNodeIDs)
 
 	normalized := normalizedAntiFraudSnapshot{
-		schemaVersion: uint8(message.SchemaVersion),
-		network:       network,
-		snapshotSeq:   message.SnapshotSeq,
-		generatedAtMs: message.GeneratedAtMs,
-		signingKeyID:  uint8(message.SigningKeyID),
-		ipEntries:     normalizedIPEntries,
-		nodeIDEntries: normalizedNodeEntries,
-		signature:     signature,
+		schemaVersion:    uint8(message.SchemaVersion),
+		network:          network,
+		snapshotSeq:      message.SnapshotSeq,
+		generatedAtMs:    message.GeneratedAtMs,
+		signingKeyID:     uint8(message.SigningKeyID),
+		antiFraudEnabled: message.AntiFraudEnabled,
+		ipEntries:        normalizedIPEntries,
+		nodeIDEntries:    normalizedNodeEntries,
+		signature:        signature,
 	}
 	rootHash, err := normalized.computeRootHash()
 	if err != nil {
@@ -1249,17 +1358,18 @@ func decodeExternalBanlistSnapshotFromMessage(message *appmessage.MsgAntiFraudSn
 	}
 
 	return &externalBanlistSnapshot{
-		SchemaVersion: normalized.schemaVersion,
-		Network:       normalized.network,
-		SnapshotSeq:   normalized.snapshotSeq,
-		GeneratedAtMs: normalized.generatedAtMs,
-		SigningKeyID:  normalized.signingKeyID,
-		Signature:     normalized.signature,
-		RootHash:      normalized.rootHash,
-		IPEntries:     cloneIPEntries(normalized.ipEntries),
-		NodeIDEntries: append([][32]byte(nil), normalized.nodeIDEntries...),
-		IPs:           normalizedIPs,
-		NodeIDs:       normalizedNodeIDs,
+		SchemaVersion:    normalized.schemaVersion,
+		Network:          normalized.network,
+		SnapshotSeq:      normalized.snapshotSeq,
+		GeneratedAtMs:    normalized.generatedAtMs,
+		SigningKeyID:     normalized.signingKeyID,
+		AntiFraudEnabled: normalized.antiFraudEnabled,
+		Signature:        normalized.signature,
+		RootHash:         normalized.rootHash,
+		IPEntries:        cloneIPEntries(normalized.ipEntries),
+		NodeIDEntries:    append([][32]byte(nil), normalized.nodeIDEntries...),
+		IPs:              normalizedIPs,
+		NodeIDs:          normalizedNodeIDs,
 	}, nil
 }
 
@@ -1345,13 +1455,14 @@ func cloneAntiFraudSnapshotMessage(message *appmessage.MsgAntiFraudSnapshotV1) *
 		return nil
 	}
 	cloned := &appmessage.MsgAntiFraudSnapshotV1{
-		SchemaVersion: message.SchemaVersion,
-		Network:       message.Network,
-		SnapshotSeq:   message.SnapshotSeq,
-		GeneratedAtMs: message.GeneratedAtMs,
-		SigningKeyID:  message.SigningKeyID,
-		BannedIPs:     cloneIPEntries(message.BannedIPs),
-		Signature:     append([]byte(nil), message.Signature...),
+		SchemaVersion:    message.SchemaVersion,
+		Network:          message.Network,
+		SnapshotSeq:      message.SnapshotSeq,
+		GeneratedAtMs:    message.GeneratedAtMs,
+		SigningKeyID:     message.SigningKeyID,
+		AntiFraudEnabled: message.AntiFraudEnabled,
+		BannedIPs:        cloneIPEntries(message.BannedIPs),
+		Signature:        append([]byte(nil), message.Signature...),
 	}
 	cloned.BannedNodeIDs = make([][]byte, 0, len(message.BannedNodeIDs))
 	for _, entry := range message.BannedNodeIDs {
@@ -1412,14 +1523,15 @@ func (snapshot *externalBanlistSnapshot) toAppMessage() *appmessage.MsgAntiFraud
 	signature := make([]byte, 64)
 	copy(signature, snapshot.Signature[:])
 	return &appmessage.MsgAntiFraudSnapshotV1{
-		SchemaVersion: uint32(snapshot.SchemaVersion),
-		Network:       uint32(snapshot.Network),
-		SnapshotSeq:   snapshot.SnapshotSeq,
-		GeneratedAtMs: snapshot.GeneratedAtMs,
-		SigningKeyID:  uint32(snapshot.SigningKeyID),
-		BannedIPs:     bannedIPs,
-		BannedNodeIDs: bannedNodeIDs,
-		Signature:     signature,
+		SchemaVersion:    uint32(snapshot.SchemaVersion),
+		Network:          uint32(snapshot.Network),
+		SnapshotSeq:      snapshot.SnapshotSeq,
+		GeneratedAtMs:    snapshot.GeneratedAtMs,
+		SigningKeyID:     uint32(snapshot.SigningKeyID),
+		AntiFraudEnabled: snapshot.AntiFraudEnabled,
+		BannedIPs:        bannedIPs,
+		BannedNodeIDs:    bannedNodeIDs,
+		Signature:        signature,
 	}
 }
 

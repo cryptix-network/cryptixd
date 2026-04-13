@@ -1440,6 +1440,7 @@ type VersionMessage struct {
 	NodePubkeyXonly    []byte                 `protobuf:"bytes,12,opt,name=nodePubkeyXonly,proto3" json:"nodePubkeyXonly,omitempty"`
 	NodePowNonce       *uint64                `protobuf:"varint,13,opt,name=nodePowNonce,proto3,oneof" json:"nodePowNonce,omitempty"`
 	NodeChallengeNonce *uint64                `protobuf:"varint,14,opt,name=nodeChallengeNonce,proto3,oneof" json:"nodeChallengeNonce,omitempty"`
+	PqMlKem1024Pubkey  []byte                 `protobuf:"bytes,15,opt,name=pqMlKem1024Pubkey,proto3" json:"pqMlKem1024Pubkey,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -1565,6 +1566,13 @@ func (x *VersionMessage) GetNodeChallengeNonce() uint64 {
 	return 0
 }
 
+func (x *VersionMessage) GetPqMlKem1024Pubkey() []byte {
+	if x != nil {
+		return x.PqMlKem1024Pubkey
+	}
+	return nil
+}
+
 type RequestAntiFraudSnapshotV1Message struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
@@ -1602,17 +1610,18 @@ func (*RequestAntiFraudSnapshotV1Message) Descriptor() ([]byte, []int) {
 }
 
 type AntiFraudSnapshotV1Message struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SchemaVersion uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
-	Network       uint32                 `protobuf:"varint,2,opt,name=network,proto3" json:"network,omitempty"`
-	SnapshotSeq   uint64                 `protobuf:"varint,3,opt,name=snapshotSeq,proto3" json:"snapshotSeq,omitempty"`
-	GeneratedAtMs uint64                 `protobuf:"varint,4,opt,name=generatedAtMs,proto3" json:"generatedAtMs,omitempty"`
-	SigningKeyId  uint32                 `protobuf:"varint,5,opt,name=signingKeyId,proto3" json:"signingKeyId,omitempty"`
-	BannedIps     [][]byte               `protobuf:"bytes,6,rep,name=bannedIps,proto3" json:"bannedIps,omitempty"`
-	BannedNodeIds [][]byte               `protobuf:"bytes,7,rep,name=bannedNodeIds,proto3" json:"bannedNodeIds,omitempty"`
-	Signature     []byte                 `protobuf:"bytes,8,opt,name=signature,proto3" json:"signature,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	SchemaVersion    uint32                 `protobuf:"varint,1,opt,name=schemaVersion,proto3" json:"schemaVersion,omitempty"`
+	Network          uint32                 `protobuf:"varint,2,opt,name=network,proto3" json:"network,omitempty"`
+	SnapshotSeq      uint64                 `protobuf:"varint,3,opt,name=snapshotSeq,proto3" json:"snapshotSeq,omitempty"`
+	GeneratedAtMs    uint64                 `protobuf:"varint,4,opt,name=generatedAtMs,proto3" json:"generatedAtMs,omitempty"`
+	SigningKeyId     uint32                 `protobuf:"varint,5,opt,name=signingKeyId,proto3" json:"signingKeyId,omitempty"`
+	BannedIps        [][]byte               `protobuf:"bytes,6,rep,name=bannedIps,proto3" json:"bannedIps,omitempty"`
+	BannedNodeIds    [][]byte               `protobuf:"bytes,7,rep,name=bannedNodeIds,proto3" json:"bannedNodeIds,omitempty"`
+	Signature        []byte                 `protobuf:"bytes,8,opt,name=signature,proto3" json:"signature,omitempty"`
+	AntifraudEnabled bool                   `protobuf:"varint,9,opt,name=antifraudEnabled,proto3" json:"antifraudEnabled,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *AntiFraudSnapshotV1Message) Reset() {
@@ -1699,6 +1708,13 @@ func (x *AntiFraudSnapshotV1Message) GetSignature() []byte {
 		return x.Signature
 	}
 	return nil
+}
+
+func (x *AntiFraudSnapshotV1Message) GetAntifraudEnabled() bool {
+	if x != nil {
+		return x.AntifraudEnabled
+	}
+	return false
 }
 
 type RejectMessage struct {
@@ -3066,10 +3082,12 @@ func (x *PruningPointProofHeaderArray) GetHeaders() []*BlockHeader {
 }
 
 type ReadyMessage struct {
-	state             protoimpl.MessageState `protogen:"open.v1"`
-	NodeAuthSignature []byte                 `protobuf:"bytes,1,opt,name=nodeAuthSignature,proto3" json:"nodeAuthSignature,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	NodeAuthSignature     []byte                 `protobuf:"bytes,1,opt,name=nodeAuthSignature,proto3" json:"nodeAuthSignature,omitempty"`
+	PqMlKem1024Ciphertext []byte                 `protobuf:"bytes,2,opt,name=pqMlKem1024Ciphertext,proto3" json:"pqMlKem1024Ciphertext,omitempty"`
+	PqHandshakeProof      []byte                 `protobuf:"bytes,3,opt,name=pqHandshakeProof,proto3" json:"pqHandshakeProof,omitempty"`
+	unknownFields         protoimpl.UnknownFields
+	sizeCache             protoimpl.SizeCache
 }
 
 func (x *ReadyMessage) Reset() {
@@ -3105,6 +3123,20 @@ func (*ReadyMessage) Descriptor() ([]byte, []int) {
 func (x *ReadyMessage) GetNodeAuthSignature() []byte {
 	if x != nil {
 		return x.NodeAuthSignature
+	}
+	return nil
+}
+
+func (x *ReadyMessage) GetPqMlKem1024Ciphertext() []byte {
+	if x != nil {
+		return x.PqMlKem1024Ciphertext
+	}
+	return nil
+}
+
+func (x *ReadyMessage) GetPqHandshakeProof() []byte {
+	if x != nil {
+		return x.PqHandshakeProof
 	}
 	return nil
 }
@@ -3558,7 +3590,7 @@ const file_p2p_proto_rawDesc = "" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"#\n" +
 	"\vPongMessage\x12\x14\n" +
 	"\x05nonce\x18\x01 \x01(\x04R\x05nonce\"\x0f\n" +
-	"\rVerackMessage\"\xac\x04\n" +
+	"\rVerackMessage\"\xda\x04\n" +
 	"\x0eVersionMessage\x12(\n" +
 	"\x0fprotocolVersion\x18\x01 \x01(\rR\x0fprotocolVersion\x12\x1a\n" +
 	"\bservices\x18\x02 \x01(\x04R\bservices\x12\x1c\n" +
@@ -3573,10 +3605,11 @@ const file_p2p_proto_rawDesc = "" +
 	"\x0fantiFraudHashes\x18\v \x03(\fR\x0fantiFraudHashes\x12(\n" +
 	"\x0fnodePubkeyXonly\x18\f \x01(\fR\x0fnodePubkeyXonly\x12'\n" +
 	"\fnodePowNonce\x18\r \x01(\x04H\x00R\fnodePowNonce\x88\x01\x01\x123\n" +
-	"\x12nodeChallengeNonce\x18\x0e \x01(\x04H\x01R\x12nodeChallengeNonce\x88\x01\x01B\x0f\n" +
+	"\x12nodeChallengeNonce\x18\x0e \x01(\x04H\x01R\x12nodeChallengeNonce\x88\x01\x01\x12,\n" +
+	"\x11pqMlKem1024Pubkey\x18\x0f \x01(\fR\x11pqMlKem1024PubkeyB\x0f\n" +
 	"\r_nodePowNonceB\x15\n" +
 	"\x13_nodeChallengeNonce\"#\n" +
-	"!RequestAntiFraudSnapshotV1Message\"\xaa\x02\n" +
+	"!RequestAntiFraudSnapshotV1Message\"\xd6\x02\n" +
 	"\x1aAntiFraudSnapshotV1Message\x12$\n" +
 	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\rR\anetwork\x12 \n" +
@@ -3585,7 +3618,8 @@ const file_p2p_proto_rawDesc = "" +
 	"\fsigningKeyId\x18\x05 \x01(\rR\fsigningKeyId\x12\x1c\n" +
 	"\tbannedIps\x18\x06 \x03(\fR\tbannedIps\x12$\n" +
 	"\rbannedNodeIds\x18\a \x03(\fR\rbannedNodeIds\x12\x1c\n" +
-	"\tsignature\x18\b \x01(\fR\tsignature\"'\n" +
+	"\tsignature\x18\b \x01(\fR\tsignature\x12*\n" +
+	"\x10antifraudEnabled\x18\t \x01(\bR\x10antifraudEnabled\"'\n" +
 	"\rRejectMessage\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"`\n" +
 	"!RequestPruningPointUTXOSetMessage\x12;\n" +
@@ -3659,9 +3693,11 @@ const file_p2p_proto_rawDesc = "" +
 	"\x18PruningPointProofMessage\x12A\n" +
 	"\aheaders\x18\x01 \x03(\v2'.protowire.PruningPointProofHeaderArrayR\aheaders\"P\n" +
 	"\x1cPruningPointProofHeaderArray\x120\n" +
-	"\aheaders\x18\x01 \x03(\v2\x16.protowire.BlockHeaderR\aheaders\"<\n" +
+	"\aheaders\x18\x01 \x03(\v2\x16.protowire.BlockHeaderR\aheaders\"\x9e\x01\n" +
 	"\fReadyMessage\x12,\n" +
-	"\x11nodeAuthSignature\x18\x01 \x01(\fR\x11nodeAuthSignature\"\xac\x01\n" +
+	"\x11nodeAuthSignature\x18\x01 \x01(\fR\x11nodeAuthSignature\x124\n" +
+	"\x15pqMlKem1024Ciphertext\x18\x02 \x01(\fR\x15pqMlKem1024Ciphertext\x12*\n" +
+	"\x10pqHandshakeProof\x18\x03 \x01(\fR\x10pqHandshakeProof\"\xac\x01\n" +
 	"\x1dBlockWithTrustedDataV4Message\x12-\n" +
 	"\x05block\x18\x01 \x01(\v2\x17.protowire.BlockMessageR\x05block\x12*\n" +
 	"\x10daaWindowIndices\x18\x02 \x03(\x04R\x10daaWindowIndices\x120\n" +
