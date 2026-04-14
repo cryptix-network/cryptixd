@@ -26,29 +26,29 @@ import (
 )
 
 const (
-	externalBanlistFetchInterval   = 10 * time.Minute
-	externalBanlistRetryInterval   = 15 * time.Second
-	externalBanlistPropagationLag  = 15 * time.Second
-	externalBanlistRequestTimeout  = 10 * time.Second
-	externalBanlistMaxResponseSize = 2 * 1024 * 1024
-	externalBanlistMaxIPs          = 4096
-	externalBanlistMaxNodeIDs      = 4096
-	externalBanlistMaxEntryLength  = 256
-	externalBanlistPeerVoteMaxAge  = 2 * time.Minute
-	externalBanlistPeerVoteMaxSize = 512
-	antiFraudSchemaVersion         = 1
-	antiFraudDomainSep             = "cryptix-antifraud-snapshot-v1"
-	antiFraudSignatureHexLength    = 128
-	antiFraudNodeIDHexLength       = 64
-	antiFraudPubKeyCurrentHex      = "c93b4ed533a76866a3c3ea1cc0bc3e70c0dbe32a945057b5dff95b88ce9280dd"
-	antiFraudPubKeyNextHex         = "fc10777c57060195c83e9885c790c8a26496d305b366b8e5fbf475203c680f79"
-	antiFraudHashWindowLen         = 3
-	antiFraudZeroHashHex           = "0000000000000000000000000000000000000000000000000000000000000000"
-	antiFraudPersistDir            = "antifraud"
-	antiFraudCurrentFile           = "current.snapshot"
-	antiFraudPreviousFile          = "previous.snapshot"
+	externalBanlistFetchInterval     = 10 * time.Minute
+	externalBanlistRetryInterval     = 15 * time.Second
+	externalBanlistPropagationLag    = 15 * time.Second
+	externalBanlistRequestTimeout    = 10 * time.Second
+	externalBanlistMaxResponseSize   = 2 * 1024 * 1024
+	externalBanlistMaxIPs            = 4096
+	externalBanlistMaxNodeIDs        = 4096
+	externalBanlistMaxEntryLength    = 256
+	externalBanlistPeerVoteMaxAge    = 2 * time.Minute
+	externalBanlistPeerVoteMaxSize   = 512
+	antiFraudSchemaVersion           = 1
+	antiFraudDomainSep               = "cryptix-antifraud-snapshot-v1"
+	antiFraudSignatureHexLength      = 128
+	antiFraudNodeIDHexLength         = 64
+	antiFraudPubKeyCurrentHex        = "c93b4ed533a76866a3c3ea1cc0bc3e70c0dbe32a945057b5dff95b88ce9280dd"
+	antiFraudPubKeyNextHex           = "fc10777c57060195c83e9885c790c8a26496d305b366b8e5fbf475203c680f79"
+	antiFraudHashWindowLen           = 3
+	antiFraudZeroHashHex             = "0000000000000000000000000000000000000000000000000000000000000000"
+	antiFraudPersistDir              = "antifraud"
+	antiFraudCurrentFile             = "current.snapshot"
+	antiFraudPreviousFile            = "previous.snapshot"
 	defaultExternalBanlistPrimaryURL = "https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot"
-	defaultExternalBanlistSeedURL  = "https://guard.seed2.cryptix-network.org/api/v1/antifraud/snapshot"
+	defaultExternalBanlistSeedURL    = "https://guard.seed2.cryptix-network.org/api/v1/antifraud/snapshot"
 )
 
 type externalBanlistSnapshot struct {
@@ -1220,14 +1220,15 @@ func (c *ConnectionManager) AntiFraudModeForPeerHashes(peerHashes [][32]byte) An
 	}
 	local := c.AntiFraudHashWindow()
 	if isAllZeroAntiFraudHashWindow(local) {
-		return AntiFraudModeFull
+		// No local non-zero anchor yet => remain gated until overlap exists.
+		return AntiFraudModeRestricted
 	}
 	if !validateAntiFraudHashWindow(peerHashes) {
 		return AntiFraudModeRestricted
 	}
 	if isAllZeroAntiFraudHashWindow(peerHashes) {
-		// Smooth transition support: peers with AF disabled advertise zero hashes.
-		return AntiFraudModeFull
+		// Peer did not provide any non-zero anchor yet => remain gated.
+		return AntiFraudModeRestricted
 	}
 	if !hasNonZeroAntiFraudHashOverlap(local, peerHashes) {
 		return AntiFraudModeRestricted
@@ -1720,9 +1721,7 @@ func (c *ConnectionManager) loadPersistedSnapshotFile(path string) *externalBanl
 	}
 	var message appmessage.MsgAntiFraudSnapshotV1
 	if err := json.Unmarshal(content, &message); err != nil {
-		corruptPath := path + ".corrupt"
-		_ = os.Rename(path, corruptPath)
-		log.Warnf("Quarantined corrupt anti-fraud snapshot file %s -> %s", path, corruptPath)
+		c.quarantineInvalidPersistedSnapshotFile(path, fmt.Sprintf("invalid JSON: %s", err))
 		return nil
 	}
 	expectedNetwork, err := antiFraudNetworkFromName(c.cfg.NetParams().Name)
@@ -1731,10 +1730,22 @@ func (c *ConnectionManager) loadPersistedSnapshotFile(path string) *externalBanl
 	}
 	snapshot, err := decodeExternalBanlistSnapshotFromMessage(&message, expectedNetwork)
 	if err != nil {
-		log.Warnf("Invalid persisted anti-fraud snapshot in %s: %s", path, err)
+		c.quarantineInvalidPersistedSnapshotFile(path, fmt.Sprintf("invalid snapshot semantics: %s", err))
 		return nil
 	}
 	return snapshot
+}
+
+func (c *ConnectionManager) quarantineInvalidPersistedSnapshotFile(path string, reason string) {
+	if path == "" {
+		return
+	}
+	corruptPath := path + fmt.Sprintf(".corrupt-%d", time.Now().UnixMilli())
+	if err := os.Rename(path, corruptPath); err != nil {
+		log.Warnf("Failed quarantining invalid anti-fraud snapshot file %s (%s): %s", path, reason, err)
+		return
+	}
+	log.Warnf("Quarantined invalid anti-fraud snapshot file %s -> %s (%s)", path, corruptPath, reason)
 }
 
 func (c *ConnectionManager) persistAntiFraudSnapshotsLocked(previous *appmessage.MsgAntiFraudSnapshotV1, current *appmessage.MsgAntiFraudSnapshotV1) error {

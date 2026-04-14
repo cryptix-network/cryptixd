@@ -106,7 +106,7 @@ func (flow *sendVersionFlow) start() error {
 		return errors.Wrap(err, "failed generating ML-KEM-1024 handshake key pair")
 	}
 	if atomic.CompareAndSwapUint32(&quantumHandshakeKeySampleLogged, 0, 1) {
-		log.Infof("Quantum-safe ML-KEM-1024 handshake key policy: using ephemeral per-connection keys (public key sample: %s)",
+		log.Infof("Quantum-safe ML-KEM-1024 handshake key policy: using ephemeral per-connection keys (%s)",
 			shortHexForLog(quantumPublicKey))
 	}
 	msg.PQMLKEM1024PubKey = append(msg.PQMLKEM1024PubKey[:0], quantumPublicKey...)

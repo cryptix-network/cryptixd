@@ -18,6 +18,8 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 )
 
+const localUnifiedNodeBanDuration = 3 * time.Hour
+
 // connectionRequest represents a user request (either through CLI or RPC) to connect to a certain node
 type connectionRequest struct {
 	address       string
@@ -48,7 +50,7 @@ type ConnectionManager struct {
 	externallyBannedIPs         map[string]struct{}
 	externallyBannedNodeIDs     map[string]struct{}
 	localUnifiedBanLock         sync.RWMutex
-	locallyBannedUnifiedNodeIDs map[string]struct{}
+	locallyBannedUnifiedNodeIDs map[string]time.Time
 	nextExternalBanlistFetch    time.Time
 	externalSnapshotSeq         uint64
 	externalSnapshotRootHash    [32]byte
@@ -77,7 +79,7 @@ func New(cfg *config.Config, netAdapter *netadapter.NetAdapter, addressManager *
 		activeIncoming:              map[string]struct{}{},
 		externallyBannedIPs:         map[string]struct{}{},
 		externallyBannedNodeIDs:     map[string]struct{}{},
-		locallyBannedUnifiedNodeIDs: map[string]struct{}{},
+		locallyBannedUnifiedNodeIDs: map[string]time.Time{},
 		antiFraudRuntimeEnabled:     false,
 		antiFraudPeerFallback:       false,
 		externalBanlistRetryPending: false,
@@ -218,7 +220,13 @@ func (c *ConnectionManager) BanByUnifiedNodeID(nodeID [32]byte) error {
 	}
 
 	c.localUnifiedBanLock.Lock()
-	c.locallyBannedUnifiedNodeIDs[nodeIDHex] = struct{}{}
+	now := time.Now()
+	for knownNodeID, expiresAt := range c.locallyBannedUnifiedNodeIDs {
+		if !expiresAt.After(now) {
+			delete(c.locallyBannedUnifiedNodeIDs, knownNodeID)
+		}
+	}
+	c.locallyBannedUnifiedNodeIDs[nodeIDHex] = now.Add(localUnifiedNodeBanDuration)
 	c.localUnifiedBanLock.Unlock()
 
 	for _, conn := range connections {
@@ -251,10 +259,16 @@ func (c *ConnectionManager) IsBanned(netConnection *netadapter.NetConnection) (b
 
 // IsUnifiedNodeIDLocallyBanned returns true if the given unified node ID is present in the local autoban list.
 func (c *ConnectionManager) IsUnifiedNodeIDLocallyBanned(nodeID [32]byte) bool {
-	c.localUnifiedBanLock.RLock()
-	defer c.localUnifiedBanLock.RUnlock()
-	_, ok := c.locallyBannedUnifiedNodeIDs[hex.EncodeToString(nodeID[:])]
-	return ok
+	now := time.Now()
+	c.localUnifiedBanLock.Lock()
+	defer c.localUnifiedBanLock.Unlock()
+	for knownNodeID, expiresAt := range c.locallyBannedUnifiedNodeIDs {
+		if !expiresAt.After(now) {
+			delete(c.locallyBannedUnifiedNodeIDs, knownNodeID)
+		}
+	}
+	expiresAt, ok := c.locallyBannedUnifiedNodeIDs[hex.EncodeToString(nodeID[:])]
+	return ok && expiresAt.After(now)
 }
 
 func (c *ConnectionManager) waitTillNextIteration() {
