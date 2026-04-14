@@ -29,8 +29,8 @@ func TestAddresses(t *testing.T) {
 		// Positive P2PK tests.
 		{
 			name:    "mainnet p2pk",
-			addr:    "cryptix:qr35ennsep3hxfe7lnz5ee7j5jgmkjswsn35ennsep3hxfe7ln35cdv0dy335",
-			encoded: "cryptix:qr35ennsep3hxfe7lnz5ee7j5jgmkjswsn35ennsep3hxfe7ln35cdv0dy335",
+			addr:    "cryptix:qr35ennsep3hxfe7lnz5ee7j5jgmkjswsn35ennsep3hxfe7ln35cg25ssw4s",
+			encoded: "cryptix:qr35ennsep3hxfe7lnz5ee7j5jgmkjswsn35ennsep3hxfe7ln35cg25ssw4s",
 			valid:   true,
 			result: util.TstAddressPubKey(
 				util.Bech32PrefixCryptix,
@@ -53,8 +53,8 @@ func TestAddresses(t *testing.T) {
 		},
 		{
 			name:    "mainnet p2pk 2",
-			addr:    "cryptix:qq80qvqs0lfxuzmt7sz3909ze6camq9d4t35ennsep3hxfe7ln35cvfqgz3z8",
-			encoded: "cryptix:qq80qvqs0lfxuzmt7sz3909ze6camq9d4t35ennsep3hxfe7ln35cvfqgz3z8",
+			addr:    "cryptix:qq80qvqs0lfxuzmt7sz3909ze6camq9d4t35ennsep3hxfe7ln35cf0m4kwxr",
+			encoded: "cryptix:qq80qvqs0lfxuzmt7sz3909ze6camq9d4t35ennsep3hxfe7ln35cf0m4kwxr",
 			valid:   true,
 			result: util.TstAddressPubKey(
 				util.Bech32PrefixCryptix,
@@ -78,8 +78,8 @@ func TestAddresses(t *testing.T) {
 		},
 		{
 			name:    "testnet p2pk",
-			addr:    "cryptixtest:qputx94qseratdmjs0j395mq8u03er0x3l35ennsep3hxfe7ln35ckquw528z",
-			encoded: "cryptixtest:qputx94qseratdmjs0j395mq8u03er0x3l35ennsep3hxfe7ln35ckquw528z",
+			addr:    "cryptixtest:qputx94qseratdmjs0j395mq8u03er0x3l35ennsep3hxfe7ln35cvkyuq5pl",
+			encoded: "cryptixtest:qputx94qseratdmjs0j395mq8u03er0x3l35ennsep3hxfe7ln35cvkyuq5pl",
 			valid:   true,
 			result: util.TstAddressPubKey(
 				util.Bech32PrefixCryptixTest,
@@ -105,8 +105,8 @@ func TestAddresses(t *testing.T) {
 		// ECDSA P2PK tests.
 		{
 			name:    "mainnet ecdsa p2pk",
-			addr:    "cryptix:qyp0r5mcq4rd5grj3652ra09u5dcgwqq9ntuswp247nama5quyj40eq03sc2dkx",
-			encoded: "cryptix:qyp0r5mcq4rd5grj3652ra09u5dcgwqq9ntuswp247nama5quyj40eq03sc2dkx",
+			addr:    "cryptix:qyp0r5mcq4rd5grj3652ra09u5dcgwqq9ntuswp247nama5quyj40eqjhlk5e6d",
+			encoded: "cryptix:qyp0r5mcq4rd5grj3652ra09u5dcgwqq9ntuswp247nama5quyj40eqjhlk5e6d",
 			valid:   true,
 			result: util.TstAddressPubKeyECDSA(
 				util.Bech32PrefixCryptix,
@@ -149,8 +149,8 @@ func TestAddresses(t *testing.T) {
 		// Positive P2SH tests.
 		{
 			name:    "mainnet p2sh",
-			addr:    "cryptix:prq20q4qd9ulr044cauyy9wtpeupqpjv67pn2vyc6acly7xqkrjdzmh8rj9f4",
-			encoded: "cryptix:prq20q4qd9ulr044cauyy9wtpeupqpjv67pn2vyc6acly7xqkrjdzmh8rj9f4",
+			addr:    "cryptix:prq20q4qd9ulr044cauyy9wtpeupqpjv67pn2vyc6acly7xqkrjdz73u7x6d3",
+			encoded: "cryptix:prq20q4qd9ulr044cauyy9wtpeupqpjv67pn2vyc6acly7xqkrjdz73u7x6d3",
 			valid:   true,
 			result: util.TstAddressScriptHash(
 				util.Bech32PrefixCryptix,
@@ -190,8 +190,8 @@ func TestAddresses(t *testing.T) {
 		},
 		{
 			name:    "mainnet p2sh 2",
-			addr:    "cryptix:pr5vxqxg0xrwl2zvxlq9rxffqx00sm44kn5vxqxg0xrwl2zvxl5vxyhvsake2",
-			encoded: "cryptix:pr5vxqxg0xrwl2zvxlq9rxffqx00sm44kn5vxqxg0xrwl2zvxl5vxyhvsake2",
+			addr:    "cryptix:pr5vxqxg0xrwl2zvxlq9rxffqx00sm44kn5vxqxg0xrwl2zvxl5vxp3hdffaw",
+			encoded: "cryptix:pr5vxqxg0xrwl2zvxlq9rxffqx00sm44kn5vxqxg0xrwl2zvxl5vxp3hdffaw",
 			valid:   true,
 			result: util.TstAddressScriptHash(
 				util.Bech32PrefixCryptix,
@@ -215,8 +215,8 @@ func TestAddresses(t *testing.T) {
 		},
 		{
 			name:    "testnet p2sh",
-			addr:    "cryptixtest:przhjdpv93xfygpqtckdc2zkzuzqeyj2pt5vxqxg0xrwl2zvxl5vx35yyy2h9",
-			encoded: "cryptixtest:przhjdpv93xfygpqtckdc2zkzuzqeyj2pt5vxqxg0xrwl2zvxl5vx35yyy2h9",
+			addr:    "cryptixtest:przhjdpv93xfygpqtckdc2zkzuzqeyj2pt5vxqxg0xrwl2zvxl5vxtzuks53c",
+			encoded: "cryptixtest:przhjdpv93xfygpqtckdc2zkzuzqeyj2pt5vxqxg0xrwl2zvxl5vxtzuks53c",
 			valid:   true,
 			result: util.TstAddressScriptHash(
 				util.Bech32PrefixCryptixTest,
@@ -382,17 +382,17 @@ func TestDecodeAddressErrorConditions(t *testing.T) {
 			"decoded address's prefix could not be parsed",
 		},
 		{
-			"cryptixsim:raskzctpv9skzctpv9skzctpv9skzctpvy37ct7zafpv9skzctpvymmnd3gh8",
+			"cryptixsim:raskzctpv9skzctpv9skzctpv9skzctpvy37ct7zafpv9skzctpvyx6trn286",
 			util.Bech32PrefixCryptixSim,
 			"unknown address type",
 		},
 		{
-			"cryptixsim:raskzcg58mth0an",
+			"cryptixsim:raskzcwrpsrl35",
 			util.Bech32PrefixCryptixSim,
 			"unknown address type",
 		},
 		{
-			"cryptixtest:qqq65mvpxcmajeq44n2n8vfn6u9f8l4zsy0xez0tzw",
+			"cryptixtest:qqq65mvpxcmajeq44n2n8vfn6u9f8l4zsywdt3cq69",
 			util.Bech32PrefixCryptix,
 			"decoded address is of wrong network",
 		},

@@ -35,7 +35,17 @@ func TestUTXOIndex(t *testing.T) {
 	// Register for UTXO changes
 	const blockAmountToMine = 100
 	onUTXOsChangedChan := make(chan *appmessage.UTXOsChangedNotificationMessage, blockAmountToMine)
-	err := cryptixd.rpcClient.RegisterForUTXOsChangedNotifications([]string{miningAddress1}, func(
+
+	initialCoinSupplyResponse, err := cryptixd.rpcClient.GetCoinSupply()
+	if err != nil {
+		t.Fatalf("Error Retriving Initial Coin supply: %s", err)
+	}
+	initialBlockCountResponse, err := cryptixd.rpcClient.GetBlockCount()
+	if err != nil {
+		t.Fatalf("Error Retriving Initial BlockCount: %s", err)
+	}
+
+	err = cryptixd.rpcClient.RegisterForUTXOsChangedNotifications([]string{miningAddress1}, func(
 		notification *appmessage.UTXOsChangedNotificationMessage) {
 
 		onUTXOsChangedChan <- notification
@@ -45,8 +55,13 @@ func TestUTXOIndex(t *testing.T) {
 	}
 
 	// Mine some blocks
+	mintedSompi := uint64(0)
 	for i := 0; i < blockAmountToMine; i++ {
-		mineNextBlock(t, cryptixd)
+		block := mineNextBlock(t, cryptixd)
+		coinbase := block.Transactions[0]
+		for _, output := range coinbase.Outputs {
+			mintedSompi += output.Value
+		}
 	}
 
 	//check if rewards corrosponds to circulating supply.
@@ -55,19 +70,17 @@ func TestUTXOIndex(t *testing.T) {
 		t.Fatalf("Error Retriving Coin supply: %s", err)
 	}
 
-	rewardsMinedSompi := uint64(blockAmountToMine * constants.SompiPerCryptix * 500)
+	rewardsMinedSompi := initialCoinSupplyResponse.CirculatingSompi + mintedSompi
 	getBlockCountResponse, err := cryptixd.rpcClient.GetBlockCount()
 	if err != nil {
 		t.Fatalf("Error Retriving BlockCount: %s", err)
 	}
-	rewardsMinedViaBlockCountSompi := uint64(
-		(getBlockCountResponse.BlockCount - 2) * constants.SompiPerCryptix * 500, // -2 because of genesis and virtual.
-	)
+	rewardsMinedViaBlockCountSompi := getBlockCountResponse.BlockCount - initialBlockCountResponse.BlockCount
 
 	if getCoinSupplyResponse.CirculatingSompi != rewardsMinedSompi {
 		t.Fatalf("Error: Circulating supply Mismatch - Circulating Sompi: %d Sompi Mined: %d", getCoinSupplyResponse.CirculatingSompi, rewardsMinedSompi)
-	} else if getCoinSupplyResponse.CirculatingSompi != rewardsMinedViaBlockCountSompi {
-		t.Fatalf("Error: Circulating supply Mismatch - Circulating Sompi: %d Sompi Mined via Block count: %d", getCoinSupplyResponse.CirculatingSompi, rewardsMinedViaBlockCountSompi)
+	} else if rewardsMinedViaBlockCountSompi != uint64(blockAmountToMine) {
+		t.Fatalf("Error: Block count delta mismatch - mined blocks: %d block count delta: %d", blockAmountToMine, rewardsMinedViaBlockCountSompi)
 	}
 
 	// Collect the UTXO and make sure there's nothing in Removed

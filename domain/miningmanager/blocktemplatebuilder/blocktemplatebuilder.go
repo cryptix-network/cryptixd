@@ -123,8 +123,9 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 	for _, tx := range mempoolTransactions {
 		// Calculate the tx value
 		gasLimit := uint64(0)
-		if !subnetworks.IsBuiltInOrNative(tx.SubnetworkID) {
-			panic("We currently don't support non native subnetworks")
+		if !subnetworks.IsBuiltInOrNative(tx.SubnetworkID) && !subnetworks.IsPayload(tx.SubnetworkID) {
+			log.Warnf("Skipping transaction from unsupported subnetwork %s while building a block template", tx.SubnetworkID)
+			continue
 		}
 		candidateTxs = append(candidateTxs, &candidateTx{
 			DomainTransaction: tx,

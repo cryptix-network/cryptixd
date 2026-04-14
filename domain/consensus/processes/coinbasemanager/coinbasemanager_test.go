@@ -1,20 +1,17 @@
 package coinbasemanager
 
 import (
-	"strconv"
 	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 )
 
 func TestCalcDeflationaryPeriodBlockSubsidy(t *testing.T) {
 	const secondsPerMonth = 2629800
 	const secondsPerDay = 86400
-	const secondsPerHalving = secondsPerMonth * 12
 	const deflationaryPhaseDaaScore = secondsPerDay * 1
-	const deflationaryPhaseBaseSubsidy = 10 * constants.SompiPerCryptix
+	deflationaryPhaseBaseSubsidy := dagconfig.MainnetParams.DeflationaryPhaseBaseSubsidy
 	coinbaseManagerInterface := New(
 		nil,
 		0,
@@ -40,37 +37,32 @@ func TestCalcDeflationaryPeriodBlockSubsidy(t *testing.T) {
 		{
 			name:                 "start of deflationary phase",
 			blockDaaScore:        deflationaryPhaseDaaScore,
-			expectedBlockSubsidy: deflationaryPhaseBaseSubsidy,
+			expectedBlockSubsidy: subsidyByDeflationaryMonthTable[0],
 		},
 		{
-			name:                 "after one halving",
-			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerHalving,
-			expectedBlockSubsidy: deflationaryPhaseBaseSubsidy / 2,
+			name:                 "just before month boundary",
+			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerMonth - 1,
+			expectedBlockSubsidy: subsidyByDeflationaryMonthTable[0],
 		},
 		{
-			name:                 "after two halvings",
-			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerHalving*2,
-			expectedBlockSubsidy: deflationaryPhaseBaseSubsidy / 4,
+			name:                 "after one month",
+			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerMonth,
+			expectedBlockSubsidy: subsidyByDeflationaryMonthTable[1],
 		},
 		{
-			name:                 "after five halvings",
-			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerHalving*5,
-			expectedBlockSubsidy: deflationaryPhaseBaseSubsidy / 32,
+			name:                 "after one year",
+			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerMonth*12,
+			expectedBlockSubsidy: subsidyByDeflationaryMonthTable[12],
 		},
 		{
-			name:                 "after 32 halvings",
-			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerHalving*32,
-			expectedBlockSubsidy: deflationaryPhaseBaseSubsidy / 4294967296,
+			name:                 "late in deflationary schedule",
+			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerMonth*(uint64(len(subsidyByDeflationaryMonthTable))-2),
+			expectedBlockSubsidy: subsidyByDeflationaryMonthTable[len(subsidyByDeflationaryMonthTable)-2],
 		},
 		{
-			name:                 "just before subsidy depleted",
-			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerHalving*35,
-			expectedBlockSubsidy: 1,
-		},
-		{
-			name:                 "after subsidy depleted",
-			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerHalving*36,
-			expectedBlockSubsidy: 0,
+			name:                 "after subsidy table depletion",
+			blockDaaScore:        deflationaryPhaseDaaScore + secondsPerMonth*(uint64(len(subsidyByDeflationaryMonthTable))+100),
+			expectedBlockSubsidy: subsidyByDeflationaryMonthTable[len(subsidyByDeflationaryMonthTable)-1],
 		},
 	}
 
@@ -85,11 +77,6 @@ func TestCalcDeflationaryPeriodBlockSubsidy(t *testing.T) {
 
 func TestBuildSubsidyTable(t *testing.T) {
 	deflationaryPhaseBaseSubsidy := dagconfig.MainnetParams.DeflationaryPhaseBaseSubsidy
-	if deflationaryPhaseBaseSubsidy != 2*constants.SompiPerCryptix {
-		t.Errorf("TestBuildSubsidyTable: table generation function was not updated to reflect "+
-			"the new base subsidy %d. Please fix the constant above and replace subsidyByDeflationaryMonthTable "+
-			"in coinbasemanager.go with the printed table", deflationaryPhaseBaseSubsidy)
-	}
 	coinbaseManagerInterface := New(
 		nil,
 		0,
@@ -107,22 +94,38 @@ func TestBuildSubsidyTable(t *testing.T) {
 		nil)
 	coinbaseManagerInstance := coinbaseManagerInterface.(*coinbaseManager)
 
-	var subsidyTable []uint64
-	for M := uint64(0); M < 426; M++ {
-		subsidy := coinbaseManagerInstance.calcDeflationaryPeriodBlockSubsidyFloatCalc(M)
-		subsidyTable = append(subsidyTable, subsidy)
-		if subsidy == 0 {
-			break
+	if len(subsidyByDeflationaryMonthTable) == 0 {
+		t.Fatalf("subsidyByDeflationaryMonthTable must not be empty")
+	}
+
+	if subsidyByDeflationaryMonthTable[0] != deflationaryPhaseBaseSubsidy {
+		t.Fatalf("first table entry mismatch: expected %d got %d",
+			deflationaryPhaseBaseSubsidy, subsidyByDeflationaryMonthTable[0])
+	}
+
+	for i := 1; i < len(subsidyByDeflationaryMonthTable); i++ {
+		if subsidyByDeflationaryMonthTable[i] > subsidyByDeflationaryMonthTable[i-1] {
+			t.Fatalf("table must be non-increasing at month %d: %d > %d",
+				i, subsidyByDeflationaryMonthTable[i], subsidyByDeflationaryMonthTable[i-1])
 		}
 	}
 
-	tableStr := "\n{\t"
-	for i := 0; i < len(subsidyTable); i++ {
-		tableStr += strconv.FormatUint(subsidyTable[i], 10) + ", "
-		if (i+1)%25 == 0 {
-			tableStr += "\n\t"
+	if subsidyByDeflationaryMonthTable[len(subsidyByDeflationaryMonthTable)-1] != 0 {
+		t.Fatalf("last table entry must be zero, got %d",
+			subsidyByDeflationaryMonthTable[len(subsidyByDeflationaryMonthTable)-1])
+	}
+
+	for month, tableSubsidy := range subsidyByDeflationaryMonthTable {
+		floatSubsidy := coinbaseManagerInstance.calcDeflationaryPeriodBlockSubsidyFloatCalc(uint64(month))
+		var diff uint64
+		if tableSubsidy >= floatSubsidy {
+			diff = tableSubsidy - floatSubsidy
+		} else {
+			diff = floatSubsidy - tableSubsidy
+		}
+		if diff > 1 {
+			t.Fatalf("table diverges from float calc by more than 1 sompi at month %d: table=%d float=%d",
+				month, tableSubsidy, floatSubsidy)
 		}
 	}
-	tableStr += "\n}"
-	t.Logf(tableStr)
 }

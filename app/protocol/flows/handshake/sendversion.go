@@ -69,6 +69,7 @@ func (flow *sendVersionFlow) start() error {
 	if err != nil {
 		return err
 	}
+	hardforkActive := minAcceptableProtocolVersion >= hardforkProtocolVersion
 	if flow.Config().ProtocolVersion < minAcceptableProtocolVersion {
 		return errors.Errorf("configured protocol version %d is obsolete (minimum required: %d)",
 			flow.Config().ProtocolVersion, minAcceptableProtocolVersion)
@@ -87,6 +88,9 @@ func (flow *sendVersionFlow) start() error {
 
 	// Advertise the services flag
 	msg.Services = defaultServices
+	if hardforkActive {
+		msg.Services |= appmessage.SFNodeStrongNodeClaims
+	}
 
 	// Advertise our max supported protocol version.
 	msg.ProtocolVersion = flow.Config().ProtocolVersion

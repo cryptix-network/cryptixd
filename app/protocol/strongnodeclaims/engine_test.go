@@ -160,6 +160,33 @@ func TestHardforkGatingIgnoresClaimsAndChainUpdatesPreHF(t *testing.T) {
 	}
 }
 
+func TestServiceBitAdvertisementIsHardforkGated(t *testing.T) {
+	tempDir := t.TempDir()
+	engine := New(true, "cryptix-mainnet", tempDir)
+
+	if engine.ShouldAdvertiseServiceBit(false) {
+		t.Fatalf("expected service bit advertisement to be disabled before hardfork")
+	}
+	if !engine.ShouldAdvertiseServiceBit(true) {
+		t.Fatalf("expected service bit advertisement to be enabled after hardfork")
+	}
+
+	preHFSnapshot := engine.Snapshot(false)
+	if preHFSnapshot.RuntimeAvailable {
+		t.Fatalf("expected runtime availability to be false before hardfork")
+	}
+
+	postHFSnapshot := engine.Snapshot(true)
+	if !postHFSnapshot.RuntimeAvailable {
+		t.Fatalf("expected runtime availability to be true after hardfork")
+	}
+
+	disabledEngine := New(false, "cryptix-mainnet", tempDir)
+	if disabledEngine.ShouldAdvertiseServiceBit(false) || disabledEngine.ShouldAdvertiseServiceBit(true) {
+		t.Fatalf("expected disabled engine to never advertise service bit")
+	}
+}
+
 func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex string) *appmessage.MsgBlockProducerClaimV1 {
 	t.Helper()
 	var privKey [32]byte

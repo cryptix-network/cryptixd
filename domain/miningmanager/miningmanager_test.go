@@ -80,6 +80,58 @@ func TestValidateAndInsertTransaction(t *testing.T) {
 	})
 }
 
+func TestPayloadTransactionTemplateBuild(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		factory := consensus.NewFactory()
+		tc, teardown, err := factory.NewTestConsensus(consensusConfig, "TestPayloadTransactionTemplateBuild")
+		if err != nil {
+			t.Fatalf("Error setting up TestConsensus: %+v", err)
+		}
+		defer teardown(false)
+
+		miningFactory := miningmanager.NewFactory()
+		tcAsConsensus := tc.(externalapi.Consensus)
+		tcAsConsensusPointer := &tcAsConsensus
+		consensusReference := consensusreference.NewConsensusReference(&tcAsConsensusPointer)
+		miningManager := miningFactory.NewMiningManager(consensusReference, &consensusConfig.Params, mempool.DefaultConfig(&consensusConfig.Params))
+
+		payloadTx, err := createChildAndParentTxsAndAddParentToConsensus(tc)
+		if err != nil {
+			t.Fatalf("Error creating payload transaction parent: %v", err)
+		}
+		payloadTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		payloadTx.Payload = []byte("payload-hf")
+
+		_, err = miningManager.ValidateAndInsertTransaction(payloadTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction: %v", err)
+		}
+
+		blockTemplate, err := miningManager.GetBlockTemplateBuilder().BuildBlockTemplate(&externalapi.DomainCoinbaseData{
+			ScriptPublicKey: &externalapi.ScriptPublicKey{Script: nil, Version: 0},
+			ExtraData:       nil,
+		})
+		if err != nil {
+			t.Fatalf("BuildBlockTemplate: %v", err)
+		}
+
+		payloadTxID := consensushashing.TransactionID(payloadTx)
+		foundPayloadTx := false
+		for _, tx := range blockTemplate.Block.Transactions[1:] {
+			if *consensushashing.TransactionID(tx) == *payloadTxID {
+				foundPayloadTx = true
+				break
+			}
+		}
+		if !foundPayloadTx {
+			t.Fatalf("expected payload transaction %s in block template", payloadTxID)
+		}
+	})
+}
+
 func TestImmatureSpend(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		factory := consensus.NewFactory()

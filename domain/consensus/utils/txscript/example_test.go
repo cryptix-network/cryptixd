@@ -46,8 +46,8 @@ func ExamplePayToAddrScript() {
 	fmt.Println("Script Disassembly:", disasm)
 
 	// Output:
-	// Script Hex: 202454a285d8566b0cb2792919536ee0f1b6f69b58ba59e9850ecbc91eef722daeac
-	// Script Disassembly: 2454a285d8566b0cb2792919536ee0f1b6f69b58ba59e9850ecbc91eef722dae OP_CHECKSIG
+	// Script Hex: 20e594d9433b83a7f87b230db44bb38030ee225d1078ab5943f3e9e47d66cadacbac
+	// Script Disassembly: e594d9433b83a7f87b230db44bb38030ee225d1078ab5943f3e9e47d66cadacb OP_CHECKSIG
 }
 
 // This example demonstrates extracting information from a standard public key
@@ -76,5 +76,5 @@ func ExampleExtractScriptPubKeyAddress() {
 
 	// Output:
 	// Script Class: pubkey
-	// Address: cryptix:qzy6cf82zzah2xh5jwtz8nx9u4gdj6zzke8gljs0v055ksmnl424u6fv7ajrs
+	// Address: cryptix:qzy6cf82zzah2xh5jwtz8nx9u4gdj6zzke8gljs0v055ksmnl424ul0hrfd85
 }

@@ -140,8 +140,8 @@ func (e *Engine) Enabled() bool {
 	return e.enabled
 }
 
-func (e *Engine) ShouldAdvertiseServiceBit(_ bool) bool {
-	return e.enabled
+func (e *Engine) ShouldAdvertiseServiceBit(hardforkActive bool) bool {
+	return e.enabled && hardforkActive
 }
 
 func (e *Engine) LastSink() (*externalapi.DomainHash, bool) {
@@ -321,7 +321,7 @@ func (e *Engine) Snapshot(hardforkActive bool) RuntimeSnapshot {
 	return RuntimeSnapshot{
 		Enabled:          e.enabled,
 		HardforkActive:   hardforkActive,
-		RuntimeAvailable: e.enabled,
+		RuntimeAvailable: e.enabled && hardforkActive,
 		WindowSize:       CLAIM_WINDOW_SIZE_BLOCKS,
 		ConflictTotal:    e.state.ConflictTotal,
 		Entries:          entries,

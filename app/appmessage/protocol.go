@@ -13,7 +13,7 @@ import (
 const (
 	// DefaultServices describes the default services that are supported by
 	// the server.
-	DefaultServices = SFNodeNetwork | SFNodeBloom | SFNodeCF | SFNodeStrongNodeClaims
+	DefaultServices = SFNodeNetwork | SFNodeBloom | SFNodeCF
 )
 
 // ServiceFlag identifies services supported by a cryptix peer.

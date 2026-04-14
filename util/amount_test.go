@@ -29,7 +29,7 @@ func TestAmountCreation(t *testing.T) {
 		},
 		{
 			name:     "max producible",
-			amount:   29e9,
+			amount:   520395506,
 			valid:    true,
 			expected: Amount(constants.MaxSompi),
 		},
@@ -106,8 +106,8 @@ func TestAmountUnitConversions(t *testing.T) {
 			name:      "MCPAY",
 			amount:    Amount(constants.MaxSompi),
 			unit:      AmountMegaCPAY,
-			converted: 29000,
-			s:         "29000 MCPAY",
+			converted: 520.395506,
+			s:         "520.395506 MCPAY",
 		},
 		{
 			name:      "kCPAY",

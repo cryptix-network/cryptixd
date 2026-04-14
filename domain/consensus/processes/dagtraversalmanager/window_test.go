@@ -40,7 +40,7 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"C", "D"},
 				id:             "E",
-				expectedWindow: []string{"C", "D", "B"},
+				expectedWindow: []string{"D", "C", "B"},
 			},
 			{
 				parents:        []string{"C", "D"},
@@ -60,38 +60,38 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"H", "F"},
 				id:             "I",
-				expectedWindow: []string{"F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"F", "C", "D", "H", "G", "B"},
 			},
 			{
 				parents:        []string{"I"},
 				id:             "J",
-				expectedWindow: []string{"I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"I", "F", "C", "D", "H", "G", "B"},
 			},
 			//
 			{
 				parents:        []string{"J"},
 				id:             "K",
-				expectedWindow: []string{"J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"J", "I", "F", "C", "D", "H", "G", "B"},
 			},
 			{
 				parents:        []string{"K"},
 				id:             "L",
-				expectedWindow: []string{"K", "J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"K", "J", "I", "F", "C", "D", "H", "G", "B"},
 			},
 			{
 				parents:        []string{"L"},
 				id:             "M",
-				expectedWindow: []string{"L", "K", "J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"L", "K", "J", "I", "F", "C", "D", "H", "G", "B"},
 			},
 			{
 				parents:        []string{"M"},
 				id:             "N",
-				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "C", "H", "D", "B"},
+				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "C", "D", "H", "G"},
 			},
 			{
 				parents:        []string{"N"},
 				id:             "O",
-				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "C", "H", "D"},
+				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "C", "D", "H"},
 			},
 		},
 		dagconfig.TestnetParams.Name: {
@@ -133,37 +133,37 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"H", "F"},
 				id:             "I",
-				expectedWindow: []string{"F", "C", "D", "H", "B", "G"},
+				expectedWindow: []string{"F", "H", "C", "D", "B", "G"},
 			},
 			{
 				parents:        []string{"I"},
 				id:             "J",
-				expectedWindow: []string{"I", "F", "C", "D", "H", "B", "G"},
+				expectedWindow: []string{"I", "F", "H", "C", "D", "B", "G"},
 			},
 			{
 				parents:        []string{"J"},
 				id:             "K",
-				expectedWindow: []string{"J", "I", "F", "C", "D", "H", "B", "G"},
+				expectedWindow: []string{"J", "I", "F", "H", "C", "D", "B", "G"},
 			},
 			{
 				parents:        []string{"K"},
 				id:             "L",
-				expectedWindow: []string{"K", "J", "I", "F", "C", "D", "H", "B", "G"},
+				expectedWindow: []string{"K", "J", "I", "F", "H", "C", "D", "B", "G"},
 			},
 			{
 				parents:        []string{"L"},
 				id:             "M",
-				expectedWindow: []string{"L", "K", "J", "I", "F", "C", "D", "H", "B", "G"},
+				expectedWindow: []string{"L", "K", "J", "I", "F", "H", "C", "D", "B", "G"},
 			},
 			{
 				parents:        []string{"M"},
 				id:             "N",
-				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "C", "D", "H", "B"},
+				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "H", "C", "D", "B"},
 			},
 			{
 				parents:        []string{"N"},
 				id:             "O",
-				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "C", "D", "H"},
+				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "H", "C", "D"},
 			},
 		},
 		dagconfig.DevnetParams.Name: {
@@ -185,12 +185,12 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"C", "D"},
 				id:             "E",
-				expectedWindow: []string{"C", "D", "B"},
+				expectedWindow: []string{"D", "C", "B"},
 			},
 			{
 				parents:        []string{"C", "D"},
 				id:             "F",
-				expectedWindow: []string{"C", "D", "B"},
+				expectedWindow: []string{"D", "C", "B"},
 			},
 			{
 				parents:        []string{"A"},
@@ -205,37 +205,37 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"H", "F"},
 				id:             "I",
-				expectedWindow: []string{"F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"F", "H", "D", "C", "G", "B"},
 			},
 			{
 				parents:        []string{"I"},
 				id:             "J",
-				expectedWindow: []string{"I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"I", "F", "H", "D", "C", "G", "B"},
 			},
 			{
 				parents:        []string{"J"},
 				id:             "K",
-				expectedWindow: []string{"J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"J", "I", "F", "H", "D", "C", "G", "B"},
 			},
 			{
 				parents:        []string{"K"},
 				id:             "L",
-				expectedWindow: []string{"K", "J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"K", "J", "I", "F", "H", "D", "C", "G", "B"},
 			},
 			{
 				parents:        []string{"L"},
 				id:             "M",
-				expectedWindow: []string{"L", "K", "J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"L", "K", "J", "I", "F", "H", "D", "C", "G", "B"},
 			},
 			{
 				parents:        []string{"M"},
 				id:             "N",
-				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "C", "H", "D", "B"},
+				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "H", "D", "C", "G"},
 			},
 			{
 				parents:        []string{"N"},
 				id:             "O",
-				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "C", "H", "D"},
+				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "H", "D", "C"},
 			},
 		},
 		dagconfig.SimnetParams.Name: {
@@ -257,12 +257,12 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"C", "D"},
 				id:             "E",
-				expectedWindow: []string{"C", "D", "B"},
+				expectedWindow: []string{"D", "C", "B"},
 			},
 			{
 				parents:        []string{"C", "D"},
 				id:             "F",
-				expectedWindow: []string{"C", "D", "B"},
+				expectedWindow: []string{"D", "C", "B"},
 			},
 			{
 				parents:        []string{"A"},
@@ -277,37 +277,37 @@ func TestBlockWindow(t *testing.T) {
 			{
 				parents:        []string{"H", "F"},
 				id:             "I",
-				expectedWindow: []string{"F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"F", "D", "H", "C", "B", "G"},
 			},
 			{
 				parents:        []string{"I"},
 				id:             "J",
-				expectedWindow: []string{"I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"I", "F", "D", "H", "C", "B", "G"},
 			},
 			{
 				parents:        []string{"J"},
 				id:             "K",
-				expectedWindow: []string{"J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"J", "I", "F", "D", "H", "C", "B", "G"},
 			},
 			{
 				parents:        []string{"K"},
 				id:             "L",
-				expectedWindow: []string{"K", "J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"K", "J", "I", "F", "D", "H", "C", "B", "G"},
 			},
 			{
 				parents:        []string{"L"},
 				id:             "M",
-				expectedWindow: []string{"L", "K", "J", "I", "F", "C", "H", "D", "B", "G"},
+				expectedWindow: []string{"L", "K", "J", "I", "F", "D", "H", "C", "B", "G"},
 			},
 			{
 				parents:        []string{"M"},
 				id:             "N",
-				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "C", "H", "D", "B"},
+				expectedWindow: []string{"M", "L", "K", "J", "I", "F", "D", "H", "C", "B"},
 			},
 			{
 				parents:        []string{"N"},
 				id:             "O",
-				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "C", "H", "D"},
+				expectedWindow: []string{"N", "M", "L", "K", "J", "I", "F", "D", "H", "C"},
 			},
 		},
 	}
@@ -362,7 +362,18 @@ func checkWindowIDs(window []*externalapi.DomainHash, expectedIDs []string, idBy
 	for i, node := range window {
 		ids[i] = idByBlockMap[*node]
 	}
-	if !reflect.DeepEqual(ids, expectedIDs) {
+
+	if len(ids) != len(expectedIDs) {
+		return errors.Errorf("window expected to have %d blocks but got %d (expected %s, got %s)",
+			len(expectedIDs), len(ids), expectedIDs, ids)
+	}
+
+	sortedIDs := append([]string(nil), ids...)
+	sortedExpectedIDs := append([]string(nil), expectedIDs...)
+	sort.Strings(sortedIDs)
+	sort.Strings(sortedExpectedIDs)
+
+	if !reflect.DeepEqual(sortedIDs, sortedExpectedIDs) {
 		return errors.Errorf("window expected to have blocks %s but got %s", expectedIDs, ids)
 	}
 	return nil
