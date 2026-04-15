@@ -65,6 +65,7 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 	modeTicker := time.NewTicker(modeRecheckInterval)
 	requestTicker := time.NewTicker(snapshotRequestInterval)
 	protocolMismatchStreak := 0
+	serviceMismatchStreak := 0
 	modeMismatchStreak := 0
 	defer modeTicker.Stop()
 	defer requestTicker.Stop()
@@ -76,6 +77,7 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 		case <-modeTicker.C:
 			if !context.IsPayloadHfActive() {
 				protocolMismatchStreak = 0
+				serviceMismatchStreak = 0
 				modeMismatchStreak = 0
 				continue
 			}
@@ -86,6 +88,17 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 				return nil
 			}
 			if protocolMismatch {
+				serviceMismatchStreak = 0
+				modeMismatchStreak = 0
+				continue
+			}
+			missingStrongNodeClaimsService := peer.Services()&appmessage.SFNodeStrongNodeClaims == 0
+			if shouldDisconnectOnConsecutiveMismatch(&serviceMismatchStreak, missingStrongNodeClaimsService) {
+				log.Warnf("Peer %s is missing mandatory strong-node-claims service bit after hardfork; reconnecting to renegotiate post-HF capabilities", peer)
+				peer.Connection().Disconnect()
+				return nil
+			}
+			if missingStrongNodeClaimsService {
 				modeMismatchStreak = 0
 				continue
 			}
