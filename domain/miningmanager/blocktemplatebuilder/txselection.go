@@ -67,6 +67,7 @@ func (btb *blockTemplateBuilder) selectTransactions(candidateTxs []*candidateTx)
 	usedCount, usedP := 0, 0.0
 	candidateTxs, totalP := rebalanceCandidates(candidateTxs, true)
 	gasUsageMap := make(map[consensusexternalapi.DomainSubnetworkID]uint64)
+	totalPayloadBytes := uint64(0)
 
 	markCandidateTxForDeletion := func(candidateTx *candidateTx) {
 		candidateTx.isMarkedForDeletion = true
@@ -108,6 +109,11 @@ func (btb *blockTemplateBuilder) selectTransactions(candidateTxs []*candidateTx)
 			break
 		}
 
+		if !btb.payloadPolicyAllowsSelection(selectedTx, totalPayloadBytes) {
+			markCandidateTxForDeletion(selectedTx)
+			continue
+		}
+
 		// Enforce maximum gas per subnetwork per block. Also check
 		// for overflow.
 		if !subnetworks.IsBuiltInOrNative(tx.SubnetworkID) {
@@ -145,6 +151,7 @@ func (btb *blockTemplateBuilder) selectTransactions(candidateTxs []*candidateTx)
 		selectedTxs = append(selectedTxs, selectedTx)
 		txsForBlockTemplate.totalMass += selectedTx.Mass
 		txsForBlockTemplate.totalFees += selectedTx.Fee
+		totalPayloadBytes += payloadBytes(tx)
 
 		log.Tracef("Adding tx %s (feePerMegaGram %d)",
 			consensushashing.TransactionID(tx), selectedTx.Fee*1e6/selectedTx.Mass)
@@ -161,6 +168,35 @@ func (btb *blockTemplateBuilder) selectTransactions(candidateTxs []*candidateTx)
 		txsForBlockTemplate.txFees = append(txsForBlockTemplate.txFees, selectedTx.Fee)
 	}
 	return txsForBlockTemplate
+}
+
+func (btb *blockTemplateBuilder) payloadPolicyAllowsSelection(candidate *candidateTx, totalPayloadBytes uint64) bool {
+	payloadLen := payloadBytes(candidate.DomainTransaction)
+	if payloadLen == 0 {
+		return true
+	}
+
+	nextPayloadBytes := totalPayloadBytes + payloadLen
+	if nextPayloadBytes < totalPayloadBytes {
+		return false
+	}
+	if nextPayloadBytes <= btb.policy.PayloadSoftCapPerBlockBytes {
+		return true
+	}
+	if candidate.Mass == 0 {
+		return false
+	}
+
+	feerate := float64(candidate.Fee) / float64(candidate.Mass)
+	return feerate >= btb.policy.payloadOvercapFeerateFloor()
+}
+
+func payloadBytes(tx *consensusexternalapi.DomainTransaction) uint64 {
+	if !subnetworks.IsPayload(tx.SubnetworkID) {
+		return 0
+	}
+
+	return uint64(len(tx.Payload))
 }
 
 func rebalanceCandidates(oldCandidateTxs []*candidateTx, isFirstRun bool) (

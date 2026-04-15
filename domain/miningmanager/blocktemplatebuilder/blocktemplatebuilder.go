@@ -15,6 +15,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	miningmanagerapi "github.com/cryptix-network/cryptixd/domain/miningmanager/model"
+	"github.com/cryptix-network/cryptixd/util"
 	"github.com/pkg/errors"
 )
 
@@ -41,11 +42,16 @@ type blockTemplateBuilder struct {
 
 // New creates a new blockTemplateBuilder
 func New(consensusReference consensusreference.ConsensusReference, mempool miningmanagerapi.Mempool,
-	blockMaxMass uint64, coinbasePayloadScriptPublicKeyMaxLength uint8) miningmanagerapi.BlockTemplateBuilder {
+	blockMaxMass uint64, minimumRelayTransactionFee util.Amount, coinbasePayloadScriptPublicKeyMaxLength uint8) miningmanagerapi.BlockTemplateBuilder {
 	return &blockTemplateBuilder{
 		consensusReference: consensusReference,
 		mempool:            mempool,
-		policy:             policy{BlockMaxMass: blockMaxMass},
+		policy: policy{
+			BlockMaxMass:                    blockMaxMass,
+			PayloadSoftCapPerBlockBytes:     defaultPayloadSoftCapPerBlockBytes,
+			PayloadOvercapFeerateMultiplier: defaultPayloadOvercapFeerateMultiplier,
+			MinimumRelayFeerate:             float64(minimumRelayTransactionFee) / 1000.0,
+		},
 
 		coinbasePayloadScriptPublicKeyMaxLength: coinbasePayloadScriptPublicKeyMaxLength,
 	}

@@ -45,11 +45,7 @@ func NewNetAdapter(cfg *config.Config) (*NetAdapter, error) {
 	}
 	unifiedNodeIdentity, err := loadOrCreateUnifiedNodeIdentity(cfg.AppDir, cfg.ActiveNetParams.Name)
 	if err != nil {
-		log.Warnf("Unified node identity initialization failed (%s), falling back to ephemeral identity", err)
-		unifiedNodeIdentity, err = createEphemeralUnifiedNodeIdentity(cfg.ActiveNetParams.Name)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed creating ephemeral unified node identity")
-		}
+		return nil, errors.Wrap(err, "failed loading persistent unified node identity")
 	}
 	p2pServer, err := grpcserver.NewP2PServer(cfg.Listeners)
 	if err != nil {
