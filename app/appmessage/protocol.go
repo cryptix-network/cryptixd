@@ -44,9 +44,21 @@ const (
 )
 
 const (
+	// SFNodeHFAFastchain is a flag used to indicate a peer supports
+	// HFA fastchain relay compatibility.
+	SFNodeHFAFastchain ServiceFlag = 1 << 20
+
+	// SFNodeCryptixAtomic is a flag used to indicate this process has
+	// Cryptix Atomic runtime features enabled.
+	SFNodeCryptixAtomic ServiceFlag = 1 << 21
+
 	// SFNodeStrongNodeClaims is a flag used to indicate a peer accepts
 	// strong-node claimant v1 messages.
 	SFNodeStrongNodeClaims ServiceFlag = 1 << 22
+
+	// SFNodeArchival is a flag used to indicate the peer is configured
+	// as an archival node.
+	SFNodeArchival ServiceFlag = 1 << 23
 )
 
 // Map of service flags back to their constant names for pretty printing.
@@ -57,13 +69,19 @@ var sfStrings = map[ServiceFlag]string{
 	SFNodeXthin:            "SFNodeXthin",
 	SFNodeBit5:             "SFNodeBit5",
 	SFNodeCF:               "SFNodeCF",
+	SFNodeHFAFastchain:     "SFNodeHFAFastchain",
+	SFNodeCryptixAtomic:    "SFNodeCryptixAtomic",
 	SFNodeStrongNodeClaims: "SFNodeStrongNodeClaims",
+	SFNodeArchival:         "SFNodeArchival",
 }
 
 // orderedSFStrings is an ordered list of service flags from highest to
 // lowest.
 var orderedSFStrings = []ServiceFlag{
+	SFNodeArchival,
 	SFNodeStrongNodeClaims,
+	SFNodeCryptixAtomic,
+	SFNodeHFAFastchain,
 	SFNodeNetwork,
 	SFNodeGetUTXO,
 	SFNodeBloom,

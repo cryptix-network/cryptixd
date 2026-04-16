@@ -269,6 +269,15 @@ message GetConnectedPeerInfoMessage{
   // The protocol version that this peer claims to support
   uint32 advertisedProtocolVersion = 9;
 
+  // Raw service bitfield advertised by the peer in Version.
+  uint64 advertisedServices = 13;
+
+  // Convenience capability flags derived from advertisedServices.
+  bool isHfaFastchain = 14;
+  bool isCryptixAtomic = 15;
+  bool isStrongNodeClaims = 16;
+  bool isArchival = 17;
+
   // The timestamp of when this peer connected to this cryptixd
   int64 timeConnected = 10;
 

@@ -91,6 +91,11 @@ func (flow *sendVersionFlow) start() error {
 	if hardforkActive {
 		msg.Services |= appmessage.SFNodeStrongNodeClaims
 	}
+	// Go cryptixd intentionally remains a minimal/non-SC runtime and therefore
+	// does not advertise SFNodeCryptixAtomic or SFNodeHFAFastchain.
+	if flow.Config().IsArchivalNode {
+		msg.Services |= appmessage.SFNodeArchival
+	}
 
 	// Advertise our max supported protocol version.
 	msg.ProtocolVersion = flow.Config().ProtocolVersion

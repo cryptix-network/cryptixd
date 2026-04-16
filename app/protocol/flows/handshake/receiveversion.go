@@ -122,6 +122,15 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 
 	maxProtocolVersion := flow.Config().ProtocolVersion
 	flow.peer.UpdateFieldsFromMsgVersion(msgVersion, maxProtocolVersion)
+	log.Debugf(
+		"Peer %s capabilities: services=%s hfa=%t atomic=%t strong-node-claims=%t archival=%t",
+		flow.peer,
+		msgVersion.Services.String(),
+		msgVersion.HasService(appmessage.SFNodeHFAFastchain),
+		msgVersion.HasService(appmessage.SFNodeCryptixAtomic),
+		msgVersion.HasService(appmessage.SFNodeStrongNodeClaims),
+		msgVersion.HasService(appmessage.SFNodeArchival),
+	)
 	err = flow.outgoingRoute.Enqueue(appmessage.NewMsgVerAck())
 	if err != nil {
 		return nil, err

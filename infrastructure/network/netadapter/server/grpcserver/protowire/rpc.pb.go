@@ -2117,6 +2117,13 @@ type GetConnectedPeerInfoMessage struct {
 	UserAgent  string `protobuf:"bytes,8,opt,name=userAgent,proto3" json:"userAgent,omitempty"`
 	// The protocol version that this peer claims to support
 	AdvertisedProtocolVersion uint32 `protobuf:"varint,9,opt,name=advertisedProtocolVersion,proto3" json:"advertisedProtocolVersion,omitempty"`
+	// Raw service bitfield advertised by the peer in Version.
+	AdvertisedServices uint64 `protobuf:"varint,13,opt,name=advertisedServices,proto3" json:"advertisedServices,omitempty"`
+	// Convenience capability flags derived from advertisedServices.
+	IsHfaFastchain     bool `protobuf:"varint,14,opt,name=isHfaFastchain,proto3" json:"isHfaFastchain,omitempty"`
+	IsCryptixAtomic    bool `protobuf:"varint,15,opt,name=isCryptixAtomic,proto3" json:"isCryptixAtomic,omitempty"`
+	IsStrongNodeClaims bool `protobuf:"varint,16,opt,name=isStrongNodeClaims,proto3" json:"isStrongNodeClaims,omitempty"`
+	IsArchival         bool `protobuf:"varint,17,opt,name=isArchival,proto3" json:"isArchival,omitempty"`
 	// The timestamp of when this peer connected to this cryptixd
 	TimeConnected int64 `protobuf:"varint,10,opt,name=timeConnected,proto3" json:"timeConnected,omitempty"`
 	// Whether this peer is the IBD peer (if IBD is running)
@@ -2204,6 +2211,41 @@ func (x *GetConnectedPeerInfoMessage) GetAdvertisedProtocolVersion() uint32 {
 		return x.AdvertisedProtocolVersion
 	}
 	return 0
+}
+
+func (x *GetConnectedPeerInfoMessage) GetAdvertisedServices() uint64 {
+	if x != nil {
+		return x.AdvertisedServices
+	}
+	return 0
+}
+
+func (x *GetConnectedPeerInfoMessage) GetIsHfaFastchain() bool {
+	if x != nil {
+		return x.IsHfaFastchain
+	}
+	return false
+}
+
+func (x *GetConnectedPeerInfoMessage) GetIsCryptixAtomic() bool {
+	if x != nil {
+		return x.IsCryptixAtomic
+	}
+	return false
+}
+
+func (x *GetConnectedPeerInfoMessage) GetIsStrongNodeClaims() bool {
+	if x != nil {
+		return x.IsStrongNodeClaims
+	}
+	return false
+}
+
+func (x *GetConnectedPeerInfoMessage) GetIsArchival() bool {
+	if x != nil {
+		return x.IsArchival
+	}
+	return false
 }
 
 func (x *GetConnectedPeerInfoMessage) GetTimeConnected() int64 {
@@ -7940,7 +7982,7 @@ const file_rpc_proto_rawDesc = "" +
 	"\"GetConnectedPeerInfoRequestMessage\"\x8f\x01\n" +
 	"#GetConnectedPeerInfoResponseMessage\x12<\n" +
 	"\x05infos\x18\x01 \x03(\v2&.protowire.GetConnectedPeerInfoMessageR\x05infos\x12*\n" +
-	"\x05error\x18\xe8\a \x01(\v2\x13.protowire.RPCErrorR\x05error\"\xf9\x02\n" +
+	"\x05error\x18\xe8\a \x01(\v2\x13.protowire.RPCErrorR\x05error\"\xcb\x04\n" +
 	"\x1bGetConnectedPeerInfoMessage\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x18\n" +
 	"\aaddress\x18\x02 \x01(\tR\aaddress\x12*\n" +
@@ -7952,7 +7994,14 @@ const file_rpc_proto_rawDesc = "" +
 	"timeOffset\x18\a \x01(\x03R\n" +
 	"timeOffset\x12\x1c\n" +
 	"\tuserAgent\x18\b \x01(\tR\tuserAgent\x12<\n" +
-	"\x19advertisedProtocolVersion\x18\t \x01(\rR\x19advertisedProtocolVersion\x12$\n" +
+	"\x19advertisedProtocolVersion\x18\t \x01(\rR\x19advertisedProtocolVersion\x12.\n" +
+	"\x12advertisedServices\x18\r \x01(\x04R\x12advertisedServices\x12&\n" +
+	"\x0eisHfaFastchain\x18\x0e \x01(\bR\x0eisHfaFastchain\x12(\n" +
+	"\x0fisCryptixAtomic\x18\x0f \x01(\bR\x0fisCryptixAtomic\x12.\n" +
+	"\x12isStrongNodeClaims\x18\x10 \x01(\bR\x12isStrongNodeClaims\x12\x1e\n" +
+	"\n" +
+	"isArchival\x18\x11 \x01(\bR\n" +
+	"isArchival\x12$\n" +
 	"\rtimeConnected\x18\n" +
 	" \x01(\x03R\rtimeConnected\x12\x1c\n" +
 	"\tisIbdPeer\x18\v \x01(\bR\tisIbdPeer\x12$\n" +

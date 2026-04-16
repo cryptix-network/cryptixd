@@ -45,6 +45,11 @@ type GetConnectedPeerInfoMessage struct {
 	TimeOffset                int64
 	UserAgent                 string
 	AdvertisedProtocolVersion uint32
+	AdvertisedServices        uint64
+	IsHFAFastchain            bool
+	IsCryptixAtomic           bool
+	IsStrongNodeClaims        bool
+	IsArchival                bool
 	TimeConnected             int64
 	IsIBDPeer                 bool
 	UnifiedNodeID             string
