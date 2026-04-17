@@ -1,7 +1,10 @@
 package connmanager
 
 import (
+	"net"
 	"time"
+
+	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
 )
 
 const (
@@ -29,7 +32,7 @@ func (c *ConnectionManager) checkRequestedConnections(connSet connectionSet) {
 	now := time.Now()
 
 	for address, connReq := range c.activeRequested {
-		connection, ok := connSet.get(address)
+		connection, ok := c.findRequestedConnection(connSet, address)
 		if !ok { // a requested connection was disconnected
 			delete(c.activeRequested, address)
 
@@ -49,13 +52,13 @@ func (c *ConnectionManager) checkRequestedConnections(connSet connectionSet) {
 			continue
 		}
 
-		connection, ok := connSet.get(address)
+		connection, ok := c.findRequestedConnection(connSet, address)
 		// The pending connection request has already connected - move it to active
-		// This can happen in rare cases such as when the other side has connected to our node
-		// while it has been pending on our side.
+		// This can happen when the other side has connected to our node (potentially from an
+		// ephemeral source port) while it has been pending on our side.
 		if ok {
 			delete(c.pendingRequested, address)
-			c.pendingRequested[address] = connReq
+			c.activeRequested[address] = connReq
 
 			connSet.remove(connection)
 
@@ -83,6 +86,46 @@ func (c *ConnectionManager) checkRequestedConnections(connSet connectionSet) {
 		delete(c.pendingRequested, address)
 		c.activeRequested[address] = connReq
 	}
+}
+
+// findRequestedConnection locates an active connection that satisfies requestedAddress.
+// It first tries exact address match, and then falls back to host-IP match (ignoring port)
+// to prevent reconnect loops when the matching connection is inbound with an ephemeral port.
+func (c *ConnectionManager) findRequestedConnection(connSet connectionSet, requestedAddress string) (*netadapter.NetConnection, bool) {
+	if connection, ok := connSet.get(requestedAddress); ok {
+		return connection, true
+	}
+
+	requestedIPs, err := c.extractAddressIPs(requestedAddress)
+	if err != nil {
+		log.Debugf("Couldn't resolve requested peer address %s while matching active connections: %s", requestedAddress, err)
+		return nil, false
+	}
+
+	for connectionAddress, connection := range connSet {
+		connectionIPs, err := c.extractAddressIPs(connectionAddress)
+		if err != nil {
+			log.Tracef("Skipping active connection %s while matching requested peer %s: %s", connectionAddress, requestedAddress, err)
+			continue
+		}
+		if hasAnyMatchingIP(requestedIPs, connectionIPs) {
+			log.Debugf("Treating requested peer %s as satisfied by active connection %s", requestedAddress, connectionAddress)
+			return connection, true
+		}
+	}
+
+	return nil, false
+}
+
+func hasAnyMatchingIP(left []net.IP, right []net.IP) bool {
+	for _, leftIP := range left {
+		for _, rightIP := range right {
+			if leftIP.Equal(rightIP) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // AddConnectionRequest adds the given address to list of pending connection requests
