@@ -59,25 +59,31 @@ const (
 	// SFNodeArchival is a flag used to indicate the peer is configured
 	// as an archival node.
 	SFNodeArchival ServiceFlag = 1 << 23
+
+	// SFNodeQuantumHandshakeFallback indicates support for post-HF fallback to
+	// classical ready-auth handshake when the optional PQ-ready exchange fails.
+	SFNodeQuantumHandshakeFallback ServiceFlag = 1 << 24
 )
 
 // Map of service flags back to their constant names for pretty printing.
 var sfStrings = map[ServiceFlag]string{
-	SFNodeNetwork:          "SFNodeNetwork",
-	SFNodeGetUTXO:          "SFNodeGetUTXO",
-	SFNodeBloom:            "SFNodeBloom",
-	SFNodeXthin:            "SFNodeXthin",
-	SFNodeBit5:             "SFNodeBit5",
-	SFNodeCF:               "SFNodeCF",
-	SFNodeHFAFastchain:     "SFNodeHFAFastchain",
-	SFNodeCryptixAtomic:    "SFNodeCryptixAtomic",
-	SFNodeStrongNodeClaims: "SFNodeStrongNodeClaims",
-	SFNodeArchival:         "SFNodeArchival",
+	SFNodeNetwork:                  "SFNodeNetwork",
+	SFNodeGetUTXO:                  "SFNodeGetUTXO",
+	SFNodeBloom:                    "SFNodeBloom",
+	SFNodeXthin:                    "SFNodeXthin",
+	SFNodeBit5:                     "SFNodeBit5",
+	SFNodeCF:                       "SFNodeCF",
+	SFNodeHFAFastchain:             "SFNodeHFAFastchain",
+	SFNodeCryptixAtomic:            "SFNodeCryptixAtomic",
+	SFNodeStrongNodeClaims:         "SFNodeStrongNodeClaims",
+	SFNodeArchival:                 "SFNodeArchival",
+	SFNodeQuantumHandshakeFallback: "SFNodeQuantumHandshakeFallback",
 }
 
 // orderedSFStrings is an ordered list of service flags from highest to
 // lowest.
 var orderedSFStrings = []ServiceFlag{
+	SFNodeQuantumHandshakeFallback,
 	SFNodeArchival,
 	SFNodeStrongNodeClaims,
 	SFNodeCryptixAtomic,

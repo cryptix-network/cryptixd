@@ -88,6 +88,8 @@ func (flow *sendVersionFlow) start() error {
 
 	// Advertise the services flag
 	msg.Services = defaultServices
+	// Advertise support for post-HF PQ handshake fallback negotiation.
+	msg.Services |= appmessage.SFNodeQuantumHandshakeFallback
 	if hardforkActive {
 		msg.Services |= appmessage.SFNodeStrongNodeClaims
 	}

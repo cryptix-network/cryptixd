@@ -85,13 +85,24 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	if hardforkActive && !msgVersion.HasService(appmessage.SFNodeStrongNodeClaims) {
 		return nil, protocolerrors.New(false, "peer missing mandatory strong-node-claims service bit after hardfork")
 	}
+	peerSupportsQuantumFallback := msgVersion.HasService(appmessage.SFNodeQuantumHandshakeFallback)
+	requireQuantumHandshakeKey := hardforkActive && !peerSupportsQuantumFallback
 	peerUnifiedNodeID, peerUnifiedNodePubKeyXOnly, err := validatePeerUnifiedNodeIdentity(flow.Config().ActiveNetParams.Name, msgVersion, hardforkActive)
 	if err != nil {
 		return nil, protocolerrors.Wrapf(false, err, "invalid unified node identity")
 	}
-	peerQuantumHandshakePubKey, err := validatePeerQuantumHandshakePubKey(msgVersion, hardforkActive)
+	peerQuantumHandshakePubKey, err := validatePeerQuantumHandshakePubKey(msgVersion, requireQuantumHandshakeKey)
 	if err != nil {
-		return nil, protocolerrors.Wrapf(false, err, "invalid quantum-safe handshake key")
+		if hardforkActive && peerSupportsQuantumFallback {
+			log.Warnf(
+				"Peer %s advertised quantum-safe fallback capability but sent unusable ML-KEM-1024 key (%s); continuing with classical ready-auth fallback",
+				flow.peer,
+				err,
+			)
+			peerQuantumHandshakePubKey = nil
+		} else {
+			return nil, protocolerrors.Wrapf(false, err, "invalid quantum-safe handshake key")
+		}
 	}
 
 	// Disconnect from partial nodes in networks that don't allow them
@@ -123,13 +134,14 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	maxProtocolVersion := flow.Config().ProtocolVersion
 	flow.peer.UpdateFieldsFromMsgVersion(msgVersion, maxProtocolVersion)
 	log.Debugf(
-		"Peer %s capabilities: services=%s hfa=%t atomic=%t strong-node-claims=%t archival=%t",
+		"Peer %s capabilities: services=%s hfa=%t atomic=%t strong-node-claims=%t archival=%t pq-fallback=%t",
 		flow.peer,
 		msgVersion.Services.String(),
 		msgVersion.HasService(appmessage.SFNodeHFAFastchain),
 		msgVersion.HasService(appmessage.SFNodeCryptixAtomic),
 		msgVersion.HasService(appmessage.SFNodeStrongNodeClaims),
 		msgVersion.HasService(appmessage.SFNodeArchival),
+		peerSupportsQuantumFallback,
 	)
 	err = flow.outgoingRoute.Enqueue(appmessage.NewMsgVerAck())
 	if err != nil {

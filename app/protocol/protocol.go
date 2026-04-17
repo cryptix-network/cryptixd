@@ -61,6 +61,10 @@ func logQuantumHandshakeStartupOnce(enforceQuantumHandshake bool) {
 	}
 }
 
+func peerSupportsQuantumHandshakeFallback(peer *peerpkg.Peer) bool {
+	return peer.Services()&appmessage.SFNodeQuantumHandshakeFallback != 0
+}
+
 func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *netadapter.NetConnection) {
 	// isStopping flag is raised the moment that the connection associated with this router is disconnected
 	// errChan is used by the flow goroutines to return to runFlows when an error occurs.
@@ -133,12 +137,17 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 			enforceHardforkCore = true
 		}
 		enforceAntiFraud := enforceHardforkCore && antiFraudRuntimeEnabled
+		peerSupportsQuantumFallback := peerSupportsQuantumHandshakeFallback(peer)
+		requireQuantumReady := enforceHardforkCore && !peerSupportsQuantumFallback
 		logQuantumHandshakeModeTransition(enforceHardforkCore)
 		logQuantumHandshakeStartupOnce(enforceHardforkCore)
 		if enforceHardforkCore {
 			log.Debugf("Starting handshake with peer %s in quantum-safe mode (ML-KEM-1024 enforced)", peer)
 		} else {
 			log.Debugf("Starting handshake with peer %s in legacy-compatible mode", peer)
+		}
+		if enforceHardforkCore && !requireQuantumReady {
+			log.Debugf("Peer %s supports post-HF quantum-safe handshake fallback negotiation", peer)
 		}
 		antiFraudMode := connmanager.AntiFraudModeFull
 		if enforceAntiFraud {
@@ -188,26 +197,47 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 				if hasPeerQuantumPubKey {
 					pqCiphertext, pqSharedSecret, pqErr := m.context.NetAdapter().EncapsulateQuantumHandshake(peerQuantumPubKey)
 					if pqErr != nil {
-						m.handleError(protocolerrors.Wrap(false, pqErr, "failed encapsulating ML-KEM-1024 ready payload"), netConnection, router.OutgoingRoute())
-						return
+						if requireQuantumReady {
+							m.handleError(protocolerrors.Wrap(false, pqErr, "failed encapsulating ML-KEM-1024 ready payload"), netConnection, router.OutgoingRoute())
+							return
+						}
+						log.Warnf(
+							"Peer %s PQ fallback: failed encapsulating ML-KEM-1024 ready payload (%s); continuing with classical ready-auth only",
+							peer,
+							pqErr,
+						)
+					} else {
+						pqProof, pqProofErr := m.context.NetAdapter().ComputeQuantumHandshakeProof(
+							m.context.Config().ActiveNetParams.Name,
+							m.context.NetAdapter().UnifiedNodeID(),
+							*peerUnifiedNodeID,
+							localNonce,
+							remoteNonce,
+							pqSharedSecret,
+						)
+						if pqProofErr != nil {
+							if requireQuantumReady {
+								m.handleError(protocolerrors.Wrap(false, pqProofErr, "failed computing quantum-safe handshake proof"), netConnection, router.OutgoingRoute())
+								return
+							}
+							log.Warnf(
+								"Peer %s PQ fallback: failed computing quantum-safe handshake proof (%s); continuing with classical ready-auth only",
+								peer,
+								pqProofErr,
+							)
+						} else {
+							outgoingReady.PQMLKEM1024Ciphertext = append(outgoingReady.PQMLKEM1024Ciphertext[:0], pqCiphertext...)
+							outgoingReady.PQHandshakeProof = append(outgoingReady.PQHandshakeProof[:0], pqProof[:]...)
+						}
 					}
-					pqProof, pqProofErr := m.context.NetAdapter().ComputeQuantumHandshakeProof(
-						m.context.Config().ActiveNetParams.Name,
-						m.context.NetAdapter().UnifiedNodeID(),
-						*peerUnifiedNodeID,
-						localNonce,
-						remoteNonce,
-						pqSharedSecret,
-					)
-					if pqProofErr != nil {
-						m.handleError(protocolerrors.Wrap(false, pqProofErr, "failed computing quantum-safe handshake proof"), netConnection, router.OutgoingRoute())
-						return
-					}
-					outgoingReady.PQMLKEM1024Ciphertext = append(outgoingReady.PQMLKEM1024Ciphertext[:0], pqCiphertext...)
-					outgoingReady.PQHandshakeProof = append(outgoingReady.PQHandshakeProof[:0], pqProof[:]...)
-				} else if enforceHardforkCore {
+				} else if requireQuantumReady {
 					m.handleError(protocolerrors.New(false, "missing peer ML-KEM-1024 public key for hardfork handshake"), netConnection, router.OutgoingRoute())
 					return
+				} else if enforceHardforkCore {
+					log.Warnf(
+						"Peer %s PQ fallback: peer omitted ML-KEM-1024 public key after hardfork; continuing with classical ready-auth only",
+						peer,
+					)
 				}
 			}
 		}
@@ -254,51 +284,109 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 
 			peerHasQuantumReadyPayload := len(incomingReady.PQMLKEM1024Ciphertext) > 0 || len(incomingReady.PQHandshakeProof) > 0
 			if !peerHasQuantumReadyPayload {
-				if enforceHardforkCore {
+				if requireQuantumReady {
 					m.handleError(protocolerrors.New(false, "missing quantum-safe ready payload after hardfork"), netConnection, router.OutgoingRoute())
 					return
 				}
+				if enforceHardforkCore {
+					log.Warnf(
+						"Peer %s PQ fallback: peer omitted quantum-safe ready payload after hardfork; accepting classical ready-auth only",
+						peer,
+					)
+				}
 			} else {
 				if len(incomingReady.PQMLKEM1024Ciphertext) != netadapter.QuantumHandshakeMLKEM1024CiphertextSize {
-					m.handleError(protocolerrors.New(true, "ML-KEM-1024 ready ciphertext has invalid length"), netConnection, router.OutgoingRoute())
-					return
+					if requireQuantumReady {
+						m.handleError(protocolerrors.New(true, "ML-KEM-1024 ready ciphertext has invalid length"), netConnection, router.OutgoingRoute())
+						return
+					}
+					log.Warnf(
+						"Peer %s PQ fallback: invalid ML-KEM-1024 ready ciphertext length (%d); accepting classical ready-auth only",
+						peer,
+						len(incomingReady.PQMLKEM1024Ciphertext),
+					)
 				}
-				if len(incomingReady.PQHandshakeProof) != netadapter.QuantumHandshakeProofSize {
-					m.handleError(protocolerrors.New(true, "quantum-safe handshake proof has invalid length"), netConnection, router.OutgoingRoute())
-					return
+				if len(incomingReady.PQMLKEM1024Ciphertext) == netadapter.QuantumHandshakeMLKEM1024CiphertextSize &&
+					len(incomingReady.PQHandshakeProof) != netadapter.QuantumHandshakeProofSize {
+					if requireQuantumReady {
+						m.handleError(protocolerrors.New(true, "quantum-safe handshake proof has invalid length"), netConnection, router.OutgoingRoute())
+						return
+					}
+					log.Warnf(
+						"Peer %s PQ fallback: invalid quantum-safe handshake proof length (%d); accepting classical ready-auth only",
+						peer,
+						len(incomingReady.PQHandshakeProof),
+					)
 				}
-				if !hasLocalNonce || !hasRemoteNonce {
-					m.handleError(protocolerrors.New(false, "missing quantum-safe handshake nonce context"), netConnection, router.OutgoingRoute())
-					return
-				}
-				localQuantumPrivateKey, hasLocalQuantumPrivateKey := netConnection.LocalPQMLKEM1024PrivateKey()
-				if !hasLocalQuantumPrivateKey {
-					m.handleError(protocolerrors.New(false, "missing local ML-KEM-1024 private key for handshake verification"), netConnection, router.OutgoingRoute())
-					return
-				}
-				peerSharedSecret, decapErr := m.context.NetAdapter().DecapsulateQuantumHandshake(
-					localQuantumPrivateKey,
-					incomingReady.PQMLKEM1024Ciphertext,
-				)
-				if decapErr != nil {
-					m.handleError(protocolerrors.Wrap(true, decapErr, "failed decapsulating peer ML-KEM-1024 ready payload"), netConnection, router.OutgoingRoute())
-					return
-				}
-				expectedProof, proofErr := m.context.NetAdapter().ComputeQuantumHandshakeProof(
-					m.context.Config().ActiveNetParams.Name,
-					*peerUnifiedNodeID,
-					m.context.NetAdapter().UnifiedNodeID(),
-					remoteNonce,
-					localNonce,
-					peerSharedSecret,
-				)
-				if proofErr != nil {
-					m.handleError(protocolerrors.Wrap(false, proofErr, "failed computing expected quantum-safe handshake proof"), netConnection, router.OutgoingRoute())
-					return
-				}
-				if subtle.ConstantTimeCompare(expectedProof[:], incomingReady.PQHandshakeProof) != 1 {
-					m.handleError(protocolerrors.New(true, "quantum-safe handshake proof verification failed"), netConnection, router.OutgoingRoute())
-					return
+				if len(incomingReady.PQMLKEM1024Ciphertext) == netadapter.QuantumHandshakeMLKEM1024CiphertextSize &&
+					len(incomingReady.PQHandshakeProof) == netadapter.QuantumHandshakeProofSize {
+					if !hasLocalNonce || !hasRemoteNonce {
+						if requireQuantumReady {
+							m.handleError(protocolerrors.New(false, "missing quantum-safe handshake nonce context"), netConnection, router.OutgoingRoute())
+							return
+						}
+						log.Warnf(
+							"Peer %s PQ fallback: missing local nonce context for quantum-safe verification; accepting classical ready-auth only",
+							peer,
+						)
+					} else {
+						localQuantumPrivateKey, hasLocalQuantumPrivateKey := netConnection.LocalPQMLKEM1024PrivateKey()
+						if !hasLocalQuantumPrivateKey {
+							if requireQuantumReady {
+								m.handleError(protocolerrors.New(false, "missing local ML-KEM-1024 private key for handshake verification"), netConnection, router.OutgoingRoute())
+								return
+							}
+							log.Warnf(
+								"Peer %s PQ fallback: missing local ML-KEM-1024 private key; accepting classical ready-auth only",
+								peer,
+							)
+						} else {
+							peerSharedSecret, decapErr := m.context.NetAdapter().DecapsulateQuantumHandshake(
+								localQuantumPrivateKey,
+								incomingReady.PQMLKEM1024Ciphertext,
+							)
+							if decapErr != nil {
+								if requireQuantumReady {
+									m.handleError(protocolerrors.Wrap(true, decapErr, "failed decapsulating peer ML-KEM-1024 ready payload"), netConnection, router.OutgoingRoute())
+									return
+								}
+								log.Warnf(
+									"Peer %s PQ fallback: failed decapsulating peer ML-KEM-1024 ready payload (%s); accepting classical ready-auth only",
+									peer,
+									decapErr,
+								)
+							} else {
+								expectedProof, proofErr := m.context.NetAdapter().ComputeQuantumHandshakeProof(
+									m.context.Config().ActiveNetParams.Name,
+									*peerUnifiedNodeID,
+									m.context.NetAdapter().UnifiedNodeID(),
+									remoteNonce,
+									localNonce,
+									peerSharedSecret,
+								)
+								if proofErr != nil {
+									if requireQuantumReady {
+										m.handleError(protocolerrors.Wrap(false, proofErr, "failed computing expected quantum-safe handshake proof"), netConnection, router.OutgoingRoute())
+										return
+									}
+									log.Warnf(
+										"Peer %s PQ fallback: failed computing expected quantum-safe handshake proof (%s); accepting classical ready-auth only",
+										peer,
+										proofErr,
+									)
+								} else if subtle.ConstantTimeCompare(expectedProof[:], incomingReady.PQHandshakeProof) != 1 {
+									if requireQuantumReady {
+										m.handleError(protocolerrors.New(true, "quantum-safe handshake proof verification failed"), netConnection, router.OutgoingRoute())
+										return
+									}
+									log.Warnf(
+										"Peer %s PQ fallback: quantum-safe handshake proof verification failed; accepting classical ready-auth only",
+										peer,
+									)
+								}
+							}
+						}
+					}
 				}
 			}
 		}

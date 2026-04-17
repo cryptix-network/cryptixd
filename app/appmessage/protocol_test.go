@@ -23,7 +23,8 @@ func TestServiceFlagStringer(t *testing.T) {
 		{SFNodeCryptixAtomic, "SFNodeCryptixAtomic"},
 		{SFNodeStrongNodeClaims, "SFNodeStrongNodeClaims"},
 		{SFNodeArchival, "SFNodeArchival"},
-		{0xffffffff, "SFNodeArchival|SFNodeStrongNodeClaims|SFNodeCryptixAtomic|SFNodeHFAFastchain|SFNodeNetwork|SFNodeGetUTXO|SFNodeBloom|SFNodeXthin|SFNodeBit5|SFNodeCF|0xff0fffc0"},
+		{SFNodeQuantumHandshakeFallback, "SFNodeQuantumHandshakeFallback"},
+		{0xffffffff, "SFNodeQuantumHandshakeFallback|SFNodeArchival|SFNodeStrongNodeClaims|SFNodeCryptixAtomic|SFNodeHFAFastchain|SFNodeNetwork|SFNodeGetUTXO|SFNodeBloom|SFNodeXthin|SFNodeBit5|SFNodeCF|0xfe0fffc0"},
 	}
 
 	t.Logf("Running %d tests", len(tests))
