@@ -31,6 +31,8 @@ type RelayInvsContext interface {
 	OnPruningPointUTXOSetOverride() error
 	SharedRequestedBlocks() *flowcontext.SharedRequestedBlocks
 	Broadcast(message appmessage.Message) error
+	BroadcastBlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) error
+	WaitForValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool
 	AddOrphan(orphanBlock *externalapi.DomainBlock)
 	GetOrphanRoots(orphanHash *externalapi.DomainHash) ([]*externalapi.DomainHash, bool, error)
 	IsOrphan(blockHash *externalapi.DomainHash) bool
@@ -122,6 +124,10 @@ func (flow *handleRelayInvsFlow) start() error {
 				log.Debugf("Got block %s while in IBD and the node is out of sync. Continuing...", inv.Hash)
 				continue
 			}
+		}
+
+		if !flow.WaitForValidBlockProducerClaim(inv.Hash) {
+			return protocolerrors.Errorf(true, "relay block %s missing valid strong-node block producer claim", inv.Hash)
 		}
 
 		log.Debugf("Requesting block %s", inv.Hash)
@@ -346,6 +352,9 @@ func (flow *handleRelayInvsFlow) processBlock(block *externalapi.DomainBlock) ([
 
 func (flow *handleRelayInvsFlow) relayBlock(block *externalapi.DomainBlock) error {
 	blockHash := consensushashing.BlockHash(block)
+	if err := flow.BroadcastBlockProducerClaimsForBlock(blockHash); err != nil {
+		return err
+	}
 	return flow.Broadcast(appmessage.NewMsgInvBlock(blockHash))
 }
 

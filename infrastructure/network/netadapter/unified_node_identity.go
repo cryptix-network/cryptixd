@@ -24,8 +24,9 @@ const (
 	unifiedNodeIDHexLength           = 64
 	nodePoWDomainTag                 = "cryptix-node-id-pow-v1"
 	nodeAuthDomainTag                = "cryptix-node-id-auth-v1"
-	mainnetNodePoWDifficulty         = 24
+	mainnetNodePoWDifficulty         = 28
 	nonMainnetNodePoWDifficulty      = 22
+	simnetNodePoWDifficulty          = 8
 )
 
 type UnifiedNodeIdentity struct {
@@ -309,8 +310,10 @@ func nodePoWDifficulty(networkCode uint8) (uint8, bool) {
 	switch networkCode {
 	case 0:
 		return mainnetNodePoWDifficulty, true
-	case 1, 2, 3:
+	case 1, 2:
 		return nonMainnetNodePoWDifficulty, true
+	case 3:
+		return simnetNodePoWDifficulty, true
 	default:
 		return 0, false
 	}

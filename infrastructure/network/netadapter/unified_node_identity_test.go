@@ -34,21 +34,38 @@ func TestNodePoWNonceValidation(t *testing.T) {
 }
 
 func TestNodePoWDifficultyConstants(t *testing.T) {
-	if mainnetNodePoWDifficulty != 24 {
-		t.Fatalf("unexpected mainnet PoW difficulty: got %d want %d", mainnetNodePoWDifficulty, 24)
+	if mainnetNodePoWDifficulty != 28 {
+		t.Fatalf("unexpected mainnet PoW difficulty: got %d want %d", mainnetNodePoWDifficulty, 28)
 	}
 	if nonMainnetNodePoWDifficulty != 22 {
 		t.Fatalf("unexpected non-mainnet PoW difficulty: got %d want %d", nonMainnetNodePoWDifficulty, 22)
+	}
+	if simnetNodePoWDifficulty != 8 {
+		t.Fatalf("unexpected simnet PoW difficulty: got %d want %d", simnetNodePoWDifficulty, 8)
+	}
+	for _, test := range []struct {
+		network uint8
+		want    uint8
+	}{
+		{network: 0, want: 28},
+		{network: 1, want: 22},
+		{network: 2, want: 22},
+		{network: 3, want: 8},
+	} {
+		got, ok := nodePoWDifficulty(test.network)
+		if !ok || got != test.want {
+			t.Fatalf("unexpected network %d PoW difficulty: got %d ok=%t want %d", test.network, got, ok, test.want)
+		}
 	}
 }
 
 func TestLoadOrCreateUnifiedNodeIdentityPersists(t *testing.T) {
 	tempDir := t.TempDir()
-	identityA, err := loadOrCreateUnifiedNodeIdentity(tempDir, "cryptix-mainnet")
+	identityA, err := loadOrCreateUnifiedNodeIdentity(tempDir, "cryptix-testnet")
 	if err != nil {
 		t.Fatalf("loadOrCreateUnifiedNodeIdentity failed: %s", err)
 	}
-	identityB, err := loadOrCreateUnifiedNodeIdentity(tempDir, "cryptix-mainnet")
+	identityB, err := loadOrCreateUnifiedNodeIdentity(tempDir, "cryptix-testnet")
 	if err != nil {
 		t.Fatalf("loadOrCreateUnifiedNodeIdentity second call failed: %s", err)
 	}
@@ -77,15 +94,15 @@ func TestCrossLanguageVectorsMatch(t *testing.T) {
 			network:    0,
 			pubkeyHex:  "6d6caac248af96f6afa7f904f550253a0f3ef3f5aa2fe6838a95b216691468e2",
 			nodeIDHex:  "1b393963bd75edc656dbc0207e35416c509d27a2bf83119c4b4f916bedbab3a2",
-			nonce:      35392942,
-			powHashHex: "000000b2f399876eaed4de3156fe4aafa1b451e1a1ea2b3fa245e310dc9022ad",
+			nonce:      113177214,
+			powHashHex: "0000000f81607dd40401712821bd7e18c5d94c859212aea1cbe76cfc254f2093",
 		},
 		{
 			network:    0,
 			pubkeyHex:  "5f7117a78150fe2ef97db7cfc83bd57b2e2c0d0dd25eaf467a4a1c2a45ce1486",
 			nodeIDHex:  "53240c1f9d4506e30994f69fbbf8feb97f3d2e0d89330cf76207b41fef73d994",
-			nonce:      13829020,
-			powHashHex: "000000e250482b9640b31048b25776572deb49e45de48217938b2003ee4ef731",
+			nonce:      72946937,
+			powHashHex: "000000015dfb1322b693fbb2332fa02b8b41e565159ce457b391038c2b5f8bad",
 		},
 		{
 			network:    1,

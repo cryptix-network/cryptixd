@@ -19,8 +19,9 @@
 4. `pow_nonce_be64` (8 bytes, big-endian)
 
 Acceptance:
-- `k=24` for mainnet
-- `k=22` for testnet/devnet/simnet
+- `k=28` for mainnet
+- `k=22` for testnet/devnet
+- `k=8` for simnet
 - valid iff hash has at least `k` leading zero bits
 
 ## HF Enforcement

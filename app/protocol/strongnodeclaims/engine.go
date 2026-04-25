@@ -328,6 +328,30 @@ func (e *Engine) Snapshot(hardforkActive bool) RuntimeSnapshot {
 	}
 }
 
+func (e *Engine) ClaimNodeIDsForBlock(blockHash [32]byte) [][32]byte {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	records := collectValidClaimRecordsForBlock(e.state, e.networkCode, blockHash)
+	nodeIDs := make([][32]byte, 0, len(records))
+	for _, record := range records {
+		nodeIDs = append(nodeIDs, record.NodeID)
+	}
+	return nodeIDs
+}
+
+func (e *Engine) ClaimMessagesForBlock(blockHash [32]byte) []*appmessage.MsgBlockProducerClaimV1 {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	records := collectValidClaimRecordsForBlock(e.state, e.networkCode, blockHash)
+	messages := make([]*appmessage.MsgBlockProducerClaimV1, 0, len(records))
+	for _, record := range records {
+		messages = append(messages, claimRecordToMessage(e.networkCode, record))
+	}
+	return messages
+}
+
 func (e *Engine) MaybeFlush() {
 	e.flush(false)
 }
@@ -409,6 +433,64 @@ func validateClaimMessage(message *appmessage.MsgBlockProducerClaimV1, expectedN
 		ClaimID:      claimID,
 		ReceivedAtMs: nowMs,
 	}, nil
+}
+
+func claimRecordIsValid(record claimRecord, expectedNetworkCode uint8) bool {
+	nodeID := netadapter.ComputeUnifiedNodeID(record.PubKeyXOnly)
+	if nodeID != record.NodeID {
+		return false
+	}
+	claimID := netadapter.ComputeBlockProducerClaimDigest(expectedNetworkCode, record.BlockHash, record.NodeID)
+	if claimID != record.ClaimID {
+		return false
+	}
+	return netadapter.VerifyBlockProducerClaimSignature(record.PubKeyXOnly, record.ClaimID, record.Signature)
+}
+
+func collectValidClaimRecordsForBlock(state *engineState, networkCode uint8, blockHash [32]byte) []claimRecord {
+	byNode := make(map[[32]byte]claimRecord)
+	if records, ok := state.RecentClaimsByBlock[blockHash]; ok {
+		for _, record := range records {
+			if claimRecordIsValid(record, networkCode) {
+				if _, exists := byNode[record.NodeID]; !exists {
+					byNode[record.NodeID] = record
+				}
+			}
+		}
+	}
+	if records, ok := state.PendingUnknownClaims[blockHash]; ok {
+		for _, record := range records {
+			if claimRecordIsValid(record, networkCode) {
+				if _, exists := byNode[record.NodeID]; !exists {
+					byNode[record.NodeID] = record
+				}
+			}
+		}
+	}
+
+	nodeIDs := make([][32]byte, 0, len(byNode))
+	for nodeID := range byNode {
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+	sort.Slice(nodeIDs, func(i, j int) bool {
+		return bytes.Compare(nodeIDs[i][:], nodeIDs[j][:]) < 0
+	})
+
+	records := make([]claimRecord, 0, len(nodeIDs))
+	for _, nodeID := range nodeIDs {
+		records = append(records, byNode[nodeID])
+	}
+	return records
+}
+
+func claimRecordToMessage(networkCode uint8, record claimRecord) *appmessage.MsgBlockProducerClaimV1 {
+	return &appmessage.MsgBlockProducerClaimV1{
+		SchemaVersion:   claimSchemaVersion,
+		Network:         uint32(networkCode),
+		BlockHash:       append([]byte(nil), record.BlockHash[:]...),
+		NodePubkeyXOnly: append([]byte(nil), record.PubKeyXOnly[:]...),
+		Signature:       append([]byte(nil), record.Signature[:]...),
+	}
 }
 
 func insertKnownClaim(state *engineState, record claimRecord) bool {

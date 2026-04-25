@@ -93,6 +93,7 @@ type Flags struct {
 	BanThreshold                    uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
 	EnableExternalBanlist           bool          `long:"external-banlist" description:"Enable external antifraud banlist synchronization (IP and node ID)"`
 	DisableExternalBanlist          bool          `long:"no-external-banlist" description:"Disable external antifraud banlist synchronization (overrides --external-banlist)"`
+	AllowAntiFraudPeerFallback      bool          `long:"antifraud-allow-peer-fallback" description:"Allow peer snapshot fallback for AntiFraud when seed endpoints are unavailable; also implied by --nodnsseed"`
 	Whitelists                      []string      `long:"whitelist" description:"Add an IP network or IP that will not be banned. (eg. 192.168.1.0/24 or ::1)"`
 	RPCListeners                    []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: 19201, testnet: 19202)"`
 	RPCCert                         string        `long:"rpccert" description:"File containing the certificate file"`

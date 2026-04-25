@@ -5,6 +5,7 @@ import (
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
 )
@@ -12,6 +13,7 @@ import (
 // RelayBlockRequestsContext is the interface for the context needed for the HandleRelayBlockRequests flow.
 type RelayBlockRequestsContext interface {
 	Domain() domain.Domain
+	BlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) []*appmessage.MsgBlockProducerClaimV1
 }
 
 // HandleRelayBlockRequests listens to appmessage.MsgRequestRelayBlocks messages and sends
@@ -39,6 +41,11 @@ func HandleRelayBlockRequests(context RelayBlockRequestsContext, incomingRoute *
 
 			// TODO (Partial nodes): Convert block to partial block if needed
 
+			for _, claim := range context.BlockProducerClaimsForBlock(hash) {
+				if err := outgoingRoute.Enqueue(claim); err != nil {
+					return err
+				}
+			}
 			err = outgoingRoute.Enqueue(appmessage.DomainBlockToMsgBlock(block))
 			if err != nil {
 				return err

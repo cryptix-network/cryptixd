@@ -133,6 +133,10 @@ func (c *ConnectionManager) externalBanlistEnabled() bool {
 	return c != nil && c.cfg != nil && c.cfg.EnableExternalBanlist
 }
 
+func (c *ConnectionManager) antiFraudPeerFallbackAllowed() bool {
+	return c != nil && c.cfg != nil && (c.cfg.AllowAntiFraudPeerFallback || c.cfg.DisableDNSSeed)
+}
+
 func (c *ConnectionManager) IsAntiFraudRuntimeEnabled() bool {
 	c.externalBanlistLock.RLock()
 	defer c.externalBanlistLock.RUnlock()
@@ -214,16 +218,31 @@ func (c *ConnectionManager) ensurePeerOnlyAntiFraudRuntime(now time.Time, reason
 	c.logExternalAntiFraudRuntimeState(reason)
 }
 
-func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
-	if !c.externalBanlistEnabled() {
-		c.ensurePeerOnlyAntiFraudRuntime(now, "external banlist disabled by configuration; peer snapshot fallback only")
-		return
-	}
+func (c *ConnectionManager) holdCurrentAntiFraudState(now time.Time, reason string) {
+	c.externalBanlistLock.Lock()
+	c.antiFraudPeerFallback = false
+	c.externalBanlistRetryPending = false
+	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
+	c.externalBanlistLock.Unlock()
 
+	log.Warnf("%s. Peer fallback disabled by policy; keeping current anti-fraud state.", reason)
+	c.logExternalAntiFraudRuntimeState(reason)
+}
+
+func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	c.externalBanlistLock.RLock()
 	nextFetch := c.nextExternalBanlistFetch
 	c.externalBanlistLock.RUnlock()
 	if !nextFetch.IsZero() && now.Before(nextFetch) {
+		return
+	}
+
+	if !c.externalBanlistEnabled() {
+		if c.antiFraudPeerFallbackAllowed() {
+			c.ensurePeerOnlyAntiFraudRuntime(now, "external banlist disabled by configuration; peer snapshot fallback enabled by operator policy")
+		} else {
+			c.holdCurrentAntiFraudState(now, "external banlist disabled by configuration")
+		}
 		return
 	}
 
@@ -274,6 +293,12 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 func (c *ConnectionManager) handleExternalBanlistRefreshFailure(now time.Time, cause error) {
 	c.externalBanlistLock.Lock()
 	wasEnabled := c.antiFraudRuntimeEnabled
+
+	if !c.antiFraudPeerFallbackAllowed() {
+		c.externalBanlistLock.Unlock()
+		c.holdCurrentAntiFraudState(now, fmt.Sprintf("External antifraud refresh failed: %s", cause))
+		return
+	}
 
 	if !c.antiFraudRuntimeEnabled {
 		c.antiFraudRuntimeEnabled = true
@@ -1214,7 +1239,7 @@ func (c *ConnectionManager) IsAntiFraudPeerFallbackRequired() bool {
 	if !c.antiFraudRuntimeEnabled {
 		return false
 	}
-	return c.antiFraudPeerFallback
+	return c.antiFraudPeerFallbackAllowed() && c.antiFraudPeerFallback
 }
 
 func (c *ConnectionManager) AntiFraudSnapshotForPeer() *appmessage.MsgAntiFraudSnapshotV1 {
@@ -1299,7 +1324,7 @@ func isAllZeroAntiFraudHashWindow(hashes [][32]byte) bool {
 }
 
 func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *appmessage.MsgAntiFraudSnapshotV1) (*IngestPeerAntiFraudSnapshotResult, error) {
-	if !c.IsAntiFraudRuntimeEnabled() {
+	if !c.IsAntiFraudPeerFallbackRequired() {
 		return &IngestPeerAntiFraudSnapshotResult{Applied: false, RootHash: [32]byte{}}, nil
 	}
 	if peerID == "" {

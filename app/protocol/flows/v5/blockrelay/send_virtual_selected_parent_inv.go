@@ -4,6 +4,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	peerpkg "github.com/cryptix-network/cryptixd/app/protocol/peer"
 	"github.com/cryptix-network/cryptixd/domain"
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 )
@@ -12,6 +13,7 @@ import (
 type SendVirtualSelectedParentInvContext interface {
 	Domain() domain.Domain
 	Config() *config.Config
+	BlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) []*appmessage.MsgBlockProducerClaimV1
 }
 
 // SendVirtualSelectedParentInv sends a peer the selected parent hash of the virtual
@@ -30,6 +32,11 @@ func SendVirtualSelectedParentInv(context SendVirtualSelectedParentInvContext,
 
 	log.Debugf("Sending virtual selected parent hash %s to peer %s", virtualSelectedParent, peer)
 
+	for _, claim := range context.BlockProducerClaimsForBlock(virtualSelectedParent) {
+		if err := outgoingRoute.Enqueue(claim); err != nil {
+			return err
+		}
+	}
 	virtualSelectedParentInv := appmessage.NewMsgInvBlock(virtualSelectedParent)
 	return outgoingRoute.Enqueue(virtualSelectedParentInv)
 }

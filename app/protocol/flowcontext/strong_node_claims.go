@@ -7,10 +7,76 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/strongnodeclaims"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
+	"time"
+)
+
+const (
+	blockProducerClaimWaitTimeout  = 3 * time.Second
+	blockProducerClaimWaitInterval = 50 * time.Millisecond
 )
 
 func (f *FlowContext) isStrongNodeClaimsP2PEnabled() bool {
 	return f.strongNodeClaims != nil && f.strongNodeClaims.ShouldAdvertiseServiceBit(f.IsPayloadHfActive())
+}
+
+func (f *FlowContext) HasValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool {
+	if !f.isStrongNodeClaimsP2PEnabled() || blockHash == nil {
+		return true
+	}
+	key := *blockHash.ByteArray()
+	for _, nodeID := range f.strongNodeClaims.ClaimNodeIDsForBlock(key) {
+		if !f.ConnectionManager().IsUnifiedNodeIDBanned(nodeID) {
+			return true
+		}
+	}
+	return false
+}
+
+func (f *FlowContext) WaitForValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool {
+	if !f.isStrongNodeClaimsP2PEnabled() || blockHash == nil {
+		return true
+	}
+	deadline := time.Now().Add(blockProducerClaimWaitTimeout)
+	for {
+		if f.HasValidBlockProducerClaim(blockHash) {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(blockProducerClaimWaitInterval)
+	}
+}
+
+func (f *FlowContext) BlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) []*appmessage.MsgBlockProducerClaimV1 {
+	if !f.isStrongNodeClaimsP2PEnabled() || blockHash == nil {
+		return nil
+	}
+	key := *blockHash.ByteArray()
+	claims := f.strongNodeClaims.ClaimMessagesForBlock(key)
+	filtered := make([]*appmessage.MsgBlockProducerClaimV1, 0, len(claims))
+	for _, claim := range claims {
+		if claim == nil || len(claim.NodePubkeyXOnly) != 32 {
+			continue
+		}
+		var pubKey [32]byte
+		copy(pubKey[:], claim.NodePubkeyXOnly)
+		nodeID := netadapter.ComputeUnifiedNodeID(pubKey)
+		if f.ConnectionManager().IsUnifiedNodeIDBanned(nodeID) {
+			continue
+		}
+		filtered = append(filtered, claim)
+	}
+	return filtered
+}
+
+func (f *FlowContext) BroadcastBlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) error {
+	for _, claim := range f.BlockProducerClaimsForBlock(blockHash) {
+		if err := f.broadcastBlockProducerClaim(claim, nil); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // HandleBlockProducerClaim validates, ingests and relays claimant messages.

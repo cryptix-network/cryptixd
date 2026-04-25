@@ -1,6 +1,7 @@
 package strongnodeclaims
 
 import (
+	"bytes"
 	"encoding/hex"
 	"testing"
 
@@ -32,6 +33,17 @@ func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("invalid block hash in claim: %s", err)
 	}
+	key := *blockHash.ByteArray()
+	if got := len(engine.ClaimNodeIDsForBlock(key)); got != 1 {
+		t.Fatalf("expected pending claim to be discoverable for relay gating, got %d", got)
+	}
+	pendingMessages := engine.ClaimMessagesForBlock(key)
+	if len(pendingMessages) != 1 {
+		t.Fatalf("expected pending claim to be reconstructable for relay forwarding, got %d", len(pendingMessages))
+	}
+	if !bytes.Equal(pendingMessages[0].Signature, claim.Signature) {
+		t.Fatalf("reconstructed pending claim signature mismatch")
+	}
 	engine.ApplyChainPathUpdate(
 		&externalapi.SelectedChainPath{Added: []*externalapi.DomainHash{blockHash}},
 		blockHash,
@@ -46,6 +58,9 @@ func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 	if snapshot.Entries[0].ClaimedBlocks != 1 {
 		t.Fatalf("expected claimed_blocks=1, got %d", snapshot.Entries[0].ClaimedBlocks)
 	}
+	if got := len(engine.ClaimNodeIDsForBlock(key)); got != 1 {
+		t.Fatalf("expected promoted claim to remain discoverable, got %d", got)
+	}
 
 	reloaded := New(true, "cryptix-mainnet", tempDir)
 	reloadedSnapshot := reloaded.Snapshot(true)
@@ -54,6 +69,9 @@ func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 	}
 	if reloadedSnapshot.Entries[0].ClaimedBlocks != 1 {
 		t.Fatalf("expected claimed_blocks=1 after reload, got %d", reloadedSnapshot.Entries[0].ClaimedBlocks)
+	}
+	if got := len(reloaded.ClaimNodeIDsForBlock(key)); got != 1 {
+		t.Fatalf("expected persisted claim to be discoverable after reload, got %d", got)
 	}
 }
 

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/cryptix-network/cryptixd/infrastructure/config"
 )
 
 func TestExternalBanlistCandidateURLs(t *testing.T) {
@@ -357,7 +359,7 @@ func TestPruneAntiFraudPeerVotesCapsSizeToNewestEntries(t *testing.T) {
 }
 
 func TestHandleExternalBanlistRefreshFailureEscalatesToPeerFallback(t *testing.T) {
-	manager := &ConnectionManager{}
+	manager := &ConnectionManager{cfg: &config.Config{Flags: &config.Flags{AllowAntiFraudPeerFallback: true}}}
 	now := time.Unix(1_700_000_000, 0)
 
 	manager.handleExternalBanlistRefreshFailure(now, errors.New("seed endpoint unavailable"))
@@ -408,8 +410,44 @@ func TestHandleExternalBanlistRefreshFailureEscalatesToPeerFallback(t *testing.T
 	}
 }
 
+func TestAntiFraudPeerFallbackAllowedByNoDNSSeed(t *testing.T) {
+	manager := &ConnectionManager{cfg: &config.Config{Flags: &config.Flags{DisableDNSSeed: true}}}
+	if !manager.antiFraudPeerFallbackAllowed() {
+		t.Fatalf("expected --nodnsseed to imply anti-fraud peer fallback permission")
+	}
+}
+
+func TestHandleExternalBanlistRefreshFailureKeepsCurrentWhenPeerFallbackDisabled(t *testing.T) {
+	manager := &ConnectionManager{
+		cfg:                         &config.Config{Flags: &config.Flags{}},
+		antiFraudRuntimeEnabled:     true,
+		antiFraudPeerFallback:       true,
+		externalBanlistRetryPending: true,
+	}
+	now := time.Unix(1_700_000_000, 0)
+
+	manager.handleExternalBanlistRefreshFailure(now, errors.New("seed endpoint unavailable"))
+
+	manager.externalBanlistLock.RLock()
+	defer manager.externalBanlistLock.RUnlock()
+	if !manager.antiFraudRuntimeEnabled {
+		t.Fatalf("expected existing anti-fraud runtime state to remain enabled")
+	}
+	if manager.antiFraudPeerFallback {
+		t.Fatalf("expected peer fallback to be cleared when policy disables it")
+	}
+	if manager.externalBanlistRetryPending {
+		t.Fatalf("expected retry-pending to be cleared when peer fallback is disabled")
+	}
+	expectedNextFetch := now.Add(externalBanlistFetchInterval)
+	if !manager.nextExternalBanlistFetch.Equal(expectedNextFetch) {
+		t.Fatalf("unexpected next fetch after disabled fallback: got %s expected %s", manager.nextExternalBanlistFetch, expectedNextFetch)
+	}
+}
+
 func TestHandleExternalBanlistRefreshFailureKeepsExistingPeerFallback(t *testing.T) {
 	manager := &ConnectionManager{
+		cfg:                         &config.Config{Flags: &config.Flags{AllowAntiFraudPeerFallback: true}},
 		antiFraudRuntimeEnabled:     true,
 		antiFraudPeerFallback:       true,
 		externalBanlistRetryPending: true,
