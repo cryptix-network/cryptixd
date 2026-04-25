@@ -1,15 +1,16 @@
 package pruningstore
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
 var importedPruningPointUTXOsBucketName = []byte("imported-pruning-point-utxos")
 var importedPruningPointMultisetKeyName = []byte("imported-pruning-point-multiset")
+var importedPruningPointAtomicStateKeyName = []byte("imported-pruning-point-atomic-state")
 
 func (ps *pruningStore) ClearImportedPruningPointUTXOs(dbContext model.DBWriter) error {
 	cursor, err := dbContext.Cursor(ps.importedPruningPointUTXOsBucket)
@@ -177,6 +178,22 @@ func (ps *pruningStore) UpdateImportedPruningPointMultiset(dbTx model.DBTransact
 		return err
 	}
 	return dbTx.Put(ps.importedPruningPointMultisetKey, multisetBytes)
+}
+
+func (ps *pruningStore) ClearImportedPruningPointAtomicState(dbContext model.DBWriter) error {
+	return dbContext.Delete(ps.importedPruningPointAtomicStateKey)
+}
+
+func (ps *pruningStore) ImportedPruningPointAtomicState(dbContext model.DBReader) ([]byte, error) {
+	stateBytes, err := dbContext.Get(ps.importedPruningPointAtomicStateKey)
+	if err != nil {
+		return nil, err
+	}
+	return append([]byte(nil), stateBytes...), nil
+}
+
+func (ps *pruningStore) UpdateImportedPruningPointAtomicState(dbTx model.DBTransaction, stateBytes []byte) error {
+	return dbTx.Put(ps.importedPruningPointAtomicStateKey, append([]byte(nil), stateBytes...))
 }
 
 func (ps *pruningStore) serializeMultiset(multiset model.Multiset) ([]byte, error) {

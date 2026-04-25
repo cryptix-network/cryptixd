@@ -18,12 +18,20 @@ import (
 	"github.com/cryptix-network/cryptixd/util/panics"
 	"github.com/cryptix-network/cryptixd/util/profiling"
 	"github.com/cryptix-network/cryptixd/version"
+	"github.com/pkg/errors"
 )
 
 const (
 	leveldbCacheSizeMiB = 256
 	defaultDataDirname  = "datadir2"
 )
+
+var resetStateDirnames = []string{
+	defaultDataDirname,
+	"strong-nodes",
+	"strong-node-claims",
+	"antifraud",
+}
 
 var desiredLimits = &limits.DesiredLimits{
 	FileLimitWant: 2048,
@@ -167,8 +175,13 @@ func databasePath(cfg *config.Config) string {
 }
 
 func removeDatabase(cfg *config.Config) error {
-	dbPath := databasePath(cfg)
-	return os.RemoveAll(dbPath)
+	for _, dirname := range resetStateDirnames {
+		path := filepath.Join(cfg.AppDir, dirname)
+		if err := os.RemoveAll(path); err != nil {
+			return errors.Wrapf(err, "failed removing reset state path %s", path)
+		}
+	}
+	return nil
 }
 
 func openDB(cfg *config.Config) (database.Database, error) {

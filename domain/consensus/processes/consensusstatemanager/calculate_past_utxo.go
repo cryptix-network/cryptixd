@@ -1,6 +1,7 @@
 package consensusstatemanager
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
@@ -15,6 +16,13 @@ import (
 func (csm *consensusStateManager) CalculatePastUTXOAndAcceptanceData(stagingArea *model.StagingArea,
 	blockHash *externalapi.DomainHash) (externalapi.UTXODiff, externalapi.AcceptanceData, model.Multiset, error) {
 
+	pastUTXO, acceptanceData, multiset, _, err := csm.CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea, blockHash)
+	return pastUTXO, acceptanceData, multiset, err
+}
+
+func (csm *consensusStateManager) CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea *model.StagingArea,
+	blockHash *externalapi.DomainHash) (externalapi.UTXODiff, externalapi.AcceptanceData, model.Multiset, *atomicstate.State, error) {
+
 	onEnd := logger.LogAndMeasureExecutionTime(log, "CalculatePastUTXOAndAcceptanceData")
 	defer onEnd()
 
@@ -25,62 +33,81 @@ func (csm *consensusStateManager) CalculatePastUTXOAndAcceptanceData(stagingArea
 			"it has a predefined UTXO diff, empty acceptance data, and a predefined multiset", blockHash)
 		multiset, err := csm.multisetStore.Get(csm.databaseContext, stagingArea, blockHash)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		utxoDiff, err := csm.utxoDiffStore.UTXODiff(csm.databaseContext, stagingArea, blockHash)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
-		return utxoDiff, externalapi.AcceptanceData{}, multiset, nil
+		atomicState, err := csm.atomicStateStore.Get(csm.databaseContext, stagingArea, blockHash)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		return utxoDiff, externalapi.AcceptanceData{}, multiset, atomicState, nil
 	}
 
 	blockGHOSTDAGData, err := csm.ghostdagDataStore.Get(csm.databaseContext, stagingArea, blockHash, false)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	log.Debugf("Restoring the past UTXO of block %s with selectedParent %s",
 		blockHash, blockGHOSTDAGData.SelectedParent())
 	selectedParentPastUTXO, err := csm.restorePastUTXO(stagingArea, blockGHOSTDAGData.SelectedParent())
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	log.Debugf("Restored the past UTXO of block %s with selectedParent %s. "+
 		"Diff toAdd length: %d, toRemove length: %d", blockHash, blockGHOSTDAGData.SelectedParent(),
 		selectedParentPastUTXO.ToAdd().Len(), selectedParentPastUTXO.ToRemove().Len())
 
-	return csm.calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXO(stagingArea, blockHash, selectedParentPastUTXO)
+	return csm.calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXOAndAtomicState(stagingArea, blockHash, selectedParentPastUTXO)
 }
 
 func (csm *consensusStateManager) calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXO(stagingArea *model.StagingArea,
 	blockHash *externalapi.DomainHash, selectedParentPastUTXO externalapi.UTXODiff) (
 	externalapi.UTXODiff, externalapi.AcceptanceData, model.Multiset, error) {
 
+	pastUTXO, acceptanceData, multiset, _, err :=
+		csm.calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXOAndAtomicState(stagingArea, blockHash, selectedParentPastUTXO)
+	return pastUTXO, acceptanceData, multiset, err
+}
+
+func (csm *consensusStateManager) calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXOAndAtomicState(
+	stagingArea *model.StagingArea, blockHash *externalapi.DomainHash, selectedParentPastUTXO externalapi.UTXODiff) (
+	externalapi.UTXODiff, externalapi.AcceptanceData, model.Multiset, *atomicstate.State, error) {
+
 	blockGHOSTDAGData, err := csm.ghostdagDataStore.Get(csm.databaseContext, stagingArea, blockHash, false)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	daaScore, err := csm.daaBlocksStore.DAAScore(csm.databaseContext, stagingArea, blockHash)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
+	}
+
+	selectedParentAtomicState, err := csm.atomicStateStore.Get(csm.databaseContext, stagingArea, blockGHOSTDAGData.SelectedParent())
+	if err != nil {
+		return nil, nil, nil, nil, err
 	}
 
 	log.Debugf("Applying blue blocks to the selected parent past UTXO of block %s", blockHash)
-	acceptanceData, utxoDiff, err := csm.applyMergeSetBlocks(stagingArea, blockHash, selectedParentPastUTXO, daaScore)
+	acceptanceData, utxoDiff, atomicState, err :=
+		csm.applyMergeSetBlocks(stagingArea, blockHash, selectedParentPastUTXO, selectedParentAtomicState, daaScore)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	log.Debugf("Calculating the multiset of %s", blockHash)
 	multiset, err := csm.calculateMultiset(stagingArea, blockHash, acceptanceData, blockGHOSTDAGData, daaScore)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	log.Debugf("The multiset of block %s resolved to: %s", blockHash, multiset.Hash())
 
-	return utxoDiff.ToImmutable(), acceptanceData, multiset, nil
+	return utxoDiff.ToImmutable(), acceptanceData, multiset, atomicState, nil
 }
 
 func (csm *consensusStateManager) restorePastUTXO(
@@ -142,30 +169,31 @@ func (csm *consensusStateManager) restorePastUTXO(
 }
 
 func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.StagingArea, blockHash *externalapi.DomainHash,
-	selectedParentPastUTXODiff externalapi.UTXODiff, daaScore uint64) (
-	externalapi.AcceptanceData, externalapi.MutableUTXODiff, error) {
+	selectedParentPastUTXODiff externalapi.UTXODiff, selectedParentAtomicState *atomicstate.State, daaScore uint64) (
+	externalapi.AcceptanceData, externalapi.MutableUTXODiff, *atomicstate.State, error) {
 
 	log.Tracef("applyMergeSetBlocks start for block %s", blockHash)
 	defer log.Tracef("applyMergeSetBlocks end for block %s", blockHash)
 
 	mergeSetHashes, err := csm.ghostdagManager.GetSortedMergeSet(stagingArea, blockHash)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	log.Debugf("Merge set for block %s is %v", blockHash, mergeSetHashes)
 	mergeSetBlocks, err := csm.blockStore.Blocks(csm.databaseContext, stagingArea, mergeSetHashes)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	selectedParentMedianTime, err := csm.pastMedianTimeManager.PastMedianTime(stagingArea, blockHash)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	log.Tracef("The past median time for block %s is: %d", blockHash, selectedParentMedianTime)
 
 	multiblockAcceptanceData := make(externalapi.AcceptanceData, len(mergeSetBlocks))
 	accumulatedUTXODiff := selectedParentPastUTXODiff.CloneMutable()
+	accumulatedAtomicState := selectedParentAtomicState.Clone()
 	accumulatedMass := uint64(0)
 
 	for i, mergeSetBlock := range mergeSetBlocks {
@@ -185,9 +213,9 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 				transactionID, mergeSetBlockHash)
 
 			isAccepted, accumulatedMass, err = csm.maybeAcceptTransaction(stagingArea, transaction, blockHash,
-				isSelectedParent, accumulatedUTXODiff, accumulatedMass, selectedParentMedianTime, daaScore)
+				isSelectedParent, accumulatedUTXODiff, accumulatedAtomicState, accumulatedMass, selectedParentMedianTime, daaScore)
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, nil, err
 			}
 			log.Tracef("Transaction %s in block %s isAccepted: %t, fee: %d",
 				transactionID, mergeSetBlockHash, isAccepted, transaction.Fee)
@@ -210,12 +238,13 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 		multiblockAcceptanceData[i] = blockAcceptanceData
 	}
 
-	return multiblockAcceptanceData, accumulatedUTXODiff, nil
+	return multiblockAcceptanceData, accumulatedUTXODiff, accumulatedAtomicState, nil
 }
 
 func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.StagingArea,
 	transaction *externalapi.DomainTransaction, blockHash *externalapi.DomainHash, isSelectedParent bool,
-	accumulatedUTXODiff externalapi.MutableUTXODiff, accumulatedMassBefore uint64, selectedParentPastMedianTime int64,
+	accumulatedUTXODiff externalapi.MutableUTXODiff, accumulatedAtomicState *atomicstate.State,
+	accumulatedMassBefore uint64, selectedParentPastMedianTime int64,
 	blockDAAScore uint64) (isAccepted bool, accumulatedMassAfter uint64, err error) {
 
 	transactionID := consensushashing.TransactionID(transaction)
@@ -255,6 +284,12 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 			return false, accumulatedMassBefore, nil
 		}
 		log.Tracef("Validation passed for transaction %s in block %s", transactionID, blockHash)
+
+		err = atomicstate.ValidateAndApplyTransaction(transaction, blockDAAScore, csm.payloadHfActivationDAAScore, accumulatedAtomicState)
+		if err != nil {
+			log.Tracef("Atomic validation failed for transaction %s in block %s: %s", transactionID, blockHash, err)
+			return false, accumulatedMassBefore, nil
+		}
 	}
 
 	log.Tracef("Adding transaction %s in block %s to the accumulated diff", transactionID, blockHash)

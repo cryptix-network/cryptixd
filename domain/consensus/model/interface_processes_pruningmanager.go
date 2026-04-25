@@ -10,6 +10,7 @@ type PruningManager interface {
 	ArePruningPointsInValidChain(stagingArea *StagingArea) (bool, error)
 	ClearImportedPruningPointData() error
 	AppendImportedPruningPointUTXOs(outpointAndUTXOEntryPairs []*externalapi.OutpointAndUTXOEntryPair) error
+	AppendImportedPruningPointAtomicState(stateBytes []byte) error
 	UpdatePruningPointIfRequired() error
 	PruneAllBlocksBelow(stagingArea *StagingArea, pruningPointHash *externalapi.DomainHash) error
 	PruningPointAndItsAnticone() ([]*externalapi.DomainHash, error)

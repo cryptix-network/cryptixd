@@ -5,7 +5,9 @@ import "github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 // MsgPruningPointUTXOSetChunk represents a cryptix PruningPointUTXOSetChunk message
 type MsgPruningPointUTXOSetChunk struct {
 	baseMessage
-	OutpointAndUTXOEntryPairs []*OutpointAndUTXOEntryPair
+	OutpointAndUTXOEntryPairs    []*OutpointAndUTXOEntryPair
+	AtomicConsensusStateChunk    []byte
+	AtomicConsensusStateComplete bool
 }
 
 // Command returns the protocol command string for the message
@@ -17,6 +19,16 @@ func (msg *MsgPruningPointUTXOSetChunk) Command() MessageCommand {
 func NewMsgPruningPointUTXOSetChunk(outpointAndUTXOEntryPairs []*OutpointAndUTXOEntryPair) *MsgPruningPointUTXOSetChunk {
 	return &MsgPruningPointUTXOSetChunk{
 		OutpointAndUTXOEntryPairs: outpointAndUTXOEntryPairs,
+	}
+}
+
+func NewMsgPruningPointUTXOSetChunkWithAtomicState(outpointAndUTXOEntryPairs []*OutpointAndUTXOEntryPair,
+	atomicConsensusStateChunk []byte, atomicConsensusStateComplete bool) *MsgPruningPointUTXOSetChunk {
+
+	return &MsgPruningPointUTXOSetChunk{
+		OutpointAndUTXOEntryPairs:    outpointAndUTXOEntryPairs,
+		AtomicConsensusStateChunk:    atomicConsensusStateChunk,
+		AtomicConsensusStateComplete: atomicConsensusStateComplete,
 	}
 }
 

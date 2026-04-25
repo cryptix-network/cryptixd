@@ -179,6 +179,8 @@ message RequestPruningPointUTXOSetMessage{
 
 message PruningPointUtxoSetChunkMessage{
   repeated OutpointAndUtxoEntryPair outpointAndUtxoEntryPairs = 1;
+  bytes atomicConsensusStateChunk = 2;
+  bool atomicConsensusStateComplete = 3;
 }
 
 message OutpointAndUtxoEntryPair{

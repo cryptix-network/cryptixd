@@ -1,6 +1,9 @@
 package model
 
-import "github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
+)
 
 // ConsensusStateManager manages the node's consensus state
 type ConsensusStateManager interface {
@@ -10,6 +13,7 @@ type ConsensusStateManager interface {
 	ImportPruningPoints(stagingArea *StagingArea, pruningPoints []externalapi.BlockHeader) error
 	RestorePastUTXOSetIterator(stagingArea *StagingArea, blockHash *externalapi.DomainHash) (externalapi.ReadOnlyUTXOSetIterator, error)
 	CalculatePastUTXOAndAcceptanceData(stagingArea *StagingArea, blockHash *externalapi.DomainHash) (externalapi.UTXODiff, externalapi.AcceptanceData, Multiset, error)
+	CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea *StagingArea, blockHash *externalapi.DomainHash) (externalapi.UTXODiff, externalapi.AcceptanceData, Multiset, *atomicstate.State, error)
 	GetVirtualSelectedParentChainFromBlock(stagingArea *StagingArea, blockHash *externalapi.DomainHash) (*externalapi.SelectedChainPath, error)
 	RecoverUTXOIfRequired() error
 	ReverseUTXODiffs(tipHash *externalapi.DomainHash, reversalData *UTXODiffReversalData) error

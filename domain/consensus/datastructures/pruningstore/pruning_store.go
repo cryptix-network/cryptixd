@@ -2,7 +2,6 @@ package pruningstore
 
 import (
 	"encoding/binary"
-	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/binaryserialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
@@ -10,6 +9,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/lrucacheuint64tohash"
 	"github.com/cryptix-network/cryptixd/util/staging"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -26,27 +26,29 @@ type pruningStore struct {
 	currentPruningPointIndexCache *uint64
 	pruningPointCandidateCache    *externalapi.DomainHash
 
-	currentPruningPointIndexKey     model.DBKey
-	candidatePruningPointHashKey    model.DBKey
-	pruningPointUTXOSetBucket       model.DBBucket
-	updatingPruningPointUTXOSetKey  model.DBKey
-	importedPruningPointUTXOsBucket model.DBBucket
-	importedPruningPointMultisetKey model.DBKey
-	pruningPointByIndexBucket       model.DBBucket
+	currentPruningPointIndexKey        model.DBKey
+	candidatePruningPointHashKey       model.DBKey
+	pruningPointUTXOSetBucket          model.DBBucket
+	updatingPruningPointUTXOSetKey     model.DBKey
+	importedPruningPointUTXOsBucket    model.DBBucket
+	importedPruningPointMultisetKey    model.DBKey
+	importedPruningPointAtomicStateKey model.DBKey
+	pruningPointByIndexBucket          model.DBBucket
 }
 
 // New instantiates a new PruningStore
 func New(prefixBucket model.DBBucket, cacheSize int, preallocate bool) model.PruningStore {
 	return &pruningStore{
-		shardID:                         staging.GenerateShardingID(),
-		pruningPointByIndexCache:        lrucacheuint64tohash.New(cacheSize, preallocate),
-		currentPruningPointIndexKey:     prefixBucket.Key(currentPruningPointIndexKeyName),
-		candidatePruningPointHashKey:    prefixBucket.Key(candidatePruningPointHashKeyName),
-		pruningPointUTXOSetBucket:       prefixBucket.Bucket(pruningPointUTXOSetBucketName),
-		importedPruningPointUTXOsBucket: prefixBucket.Bucket(importedPruningPointUTXOsBucketName),
-		updatingPruningPointUTXOSetKey:  prefixBucket.Key(updatingPruningPointUTXOSetKeyName),
-		importedPruningPointMultisetKey: prefixBucket.Key(importedPruningPointMultisetKeyName),
-		pruningPointByIndexBucket:       prefixBucket.Bucket(pruningPointByIndexBucketName),
+		shardID:                            staging.GenerateShardingID(),
+		pruningPointByIndexCache:           lrucacheuint64tohash.New(cacheSize, preallocate),
+		currentPruningPointIndexKey:        prefixBucket.Key(currentPruningPointIndexKeyName),
+		candidatePruningPointHashKey:       prefixBucket.Key(candidatePruningPointHashKeyName),
+		pruningPointUTXOSetBucket:          prefixBucket.Bucket(pruningPointUTXOSetBucketName),
+		importedPruningPointUTXOsBucket:    prefixBucket.Bucket(importedPruningPointUTXOsBucketName),
+		updatingPruningPointUTXOSetKey:     prefixBucket.Key(updatingPruningPointUTXOSetKeyName),
+		importedPruningPointMultisetKey:    prefixBucket.Key(importedPruningPointMultisetKeyName),
+		importedPruningPointAtomicStateKey: prefixBucket.Key(importedPruningPointAtomicStateKeyName),
+		pruningPointByIndexBucket:          prefixBucket.Bucket(pruningPointByIndexBucketName),
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
@@ -47,9 +48,24 @@ func (csm *consensusStateManager) importPruningPointUTXOSet(stagingArea *model.S
 	log.Debugf("The UTXO commitment of the pruning point: %s",
 		newPruningPointHeader.UTXOCommitment())
 
-	if !newPruningPointHeader.UTXOCommitment().Equal(importedPruningPointMultiset.Hash()) {
+	importedPruningPointAtomicState := atomicstate.NewState()
+	payloadHFActive := newPruningPointHeader.DAAScore() >= csm.payloadHfActivationDAAScore
+	if payloadHFActive {
+		importedPruningPointAtomicStateBytes, err := csm.pruningStore.ImportedPruningPointAtomicState(csm.databaseContext)
+		if err != nil {
+			return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet,
+				"post-payload-HF pruning point %s is missing its Atomic consensus state", newPruningPoint)
+		}
+		importedPruningPointAtomicState, err = atomicstate.FromCanonicalBytes(importedPruningPointAtomicStateBytes)
+		if err != nil {
+			return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet,
+				"post-payload-HF pruning point %s has an invalid Atomic consensus state", newPruningPoint)
+		}
+	}
+	expectedUTXOCommitment := importedPruningPointAtomicState.HeaderCommitment(importedPruningPointMultiset.Hash(), payloadHFActive)
+	if !newPruningPointHeader.UTXOCommitment().Equal(expectedUTXOCommitment) {
 		return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet, "the expected multiset hash of the pruning "+
-			"point UTXO set is %s but got %s", newPruningPointHeader.UTXOCommitment(), *importedPruningPointMultiset.Hash())
+			"point UTXO set is %s but got %s", newPruningPointHeader.UTXOCommitment(), expectedUTXOCommitment)
 	}
 	log.Debugf("The new pruning point UTXO commitment validation passed")
 
@@ -118,6 +134,9 @@ func (csm *consensusStateManager) importPruningPointUTXOSet(stagingArea *model.S
 
 	log.Debugf("Staging the new pruning point multiset")
 	csm.multisetStore.Stage(stagingArea, newPruningPoint, importedPruningPointMultiset)
+
+	log.Debugf("Staging the new pruning point Atomic state")
+	csm.atomicStateStore.Stage(stagingArea, newPruningPoint, importedPruningPointAtomicState)
 
 	_, err = csm.difficultyManager.StageDAADataAndReturnRequiredDifficulty(stagingArea, model.VirtualBlockHash, false)
 	if err != nil {

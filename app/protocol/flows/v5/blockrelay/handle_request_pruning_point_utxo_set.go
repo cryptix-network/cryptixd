@@ -82,15 +82,32 @@ func (flow *handleRequestPruningPointUTXOSetFlow) sendPruningPointUTXOSet(
 
 	// Send the UTXO set in `step`-sized chunks
 	const step = 1000
+	const atomicStateChunkSize = 4 * 1024 * 1024
 	var fromOutpoint *externalapi.DomainOutpoint
+	atomicStateBytes, err := flow.Domain().Consensus().GetPruningPointAtomicState(
+		msgRequestPruningPointUTXOSet.PruningPointHash)
+	if err != nil {
+		if errors.Is(err, ruleerrors.ErrWrongPruningPointHash) {
+			return flow.outgoingRoute.Enqueue(appmessage.NewMsgUnexpectedPruningPoint())
+		}
+		return err
+	}
+	atomicStateOffset := 0
+	utxoSetDone := false
 	chunksSent := 0
 	for {
-		pruningPointUTXOs, err := flow.Domain().Consensus().GetPruningPointUTXOs(
-			msgRequestPruningPointUTXOSet.PruningPointHash, fromOutpoint, step)
-		if err != nil {
-			if errors.Is(err, ruleerrors.ErrWrongPruningPointHash) {
-				return flow.outgoingRoute.Enqueue(appmessage.NewMsgUnexpectedPruningPoint())
+		var pruningPointUTXOs []*externalapi.OutpointAndUTXOEntryPair
+		if !utxoSetDone {
+			pruningPointUTXOs, err = flow.Domain().Consensus().GetPruningPointUTXOs(
+				msgRequestPruningPointUTXOSet.PruningPointHash, fromOutpoint, step)
+			if err != nil {
+				if errors.Is(err, ruleerrors.ErrWrongPruningPointHash) {
+					return flow.outgoingRoute.Enqueue(appmessage.NewMsgUnexpectedPruningPoint())
+				}
+				return err
 			}
+
+			utxoSetDone = len(pruningPointUTXOs) < step
 		}
 
 		log.Debugf("Retrieved %d UTXOs for pruning block %s",
@@ -98,12 +115,22 @@ func (flow *handleRequestPruningPointUTXOSetFlow) sendPruningPointUTXOSet(
 
 		outpointAndUTXOEntryPairs :=
 			appmessage.DomainOutpointAndUTXOEntryPairsToOutpointAndUTXOEntryPairs(pruningPointUTXOs)
-		err = flow.outgoingRoute.Enqueue(appmessage.NewMsgPruningPointUTXOSetChunk(outpointAndUTXOEntryPairs))
+
+		atomicStateChunkEnd := atomicStateOffset + atomicStateChunkSize
+		if atomicStateChunkEnd > len(atomicStateBytes) {
+			atomicStateChunkEnd = len(atomicStateBytes)
+		}
+		atomicStateChunk := append([]byte(nil), atomicStateBytes[atomicStateOffset:atomicStateChunkEnd]...)
+		atomicStateOffset = atomicStateChunkEnd
+		atomicStateComplete := atomicStateOffset == len(atomicStateBytes)
+
+		err = flow.outgoingRoute.Enqueue(appmessage.NewMsgPruningPointUTXOSetChunkWithAtomicState(
+			outpointAndUTXOEntryPairs, atomicStateChunk, atomicStateComplete))
 		if err != nil {
 			return err
 		}
 
-		finished := len(pruningPointUTXOs) < step
+		finished := utxoSetDone && atomicStateComplete
 		if finished && chunksSent%ibdBatchSize != 0 {
 			log.Debugf("Finished sending UTXOs for pruning block %s",
 				msgRequestPruningPointUTXOSet.PruningPointHash)

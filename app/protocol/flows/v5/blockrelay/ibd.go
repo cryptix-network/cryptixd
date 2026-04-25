@@ -36,6 +36,8 @@ type handleIBDFlow struct {
 	peer                         *peerpkg.Peer
 }
 
+const maxImportedAtomicStateBytes = 1 << 30
+
 // HandleIBD handles IBD
 func HandleIBD(context IBDContext, incomingRoute *router.Route, outgoingRoute *router.Route,
 	peer *peerpkg.Peer) error {
@@ -575,6 +577,8 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 
 	receivedChunkCount := 0
 	receivedUTXOCount := 0
+	receivedAtomicStateComplete := false
+	atomicStateBytes := make([]byte, 0)
 	for {
 		message, err := flow.incomingRoute.DequeueWithTimeout(common.DefaultTimeout)
 		if err != nil {
@@ -583,6 +587,20 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 
 		switch message := message.(type) {
 		case *appmessage.MsgPruningPointUTXOSetChunk:
+			if !receivedAtomicStateComplete {
+				if len(atomicStateBytes)+len(message.AtomicConsensusStateChunk) > maxImportedAtomicStateBytes {
+					return false, protocolerrors.Errorf(true, "received pruning point Atomic state is too large")
+				}
+				atomicStateBytes = append(atomicStateBytes, message.AtomicConsensusStateChunk...)
+				if message.AtomicConsensusStateComplete {
+					err := consensus.AppendImportedPruningPointAtomicState(atomicStateBytes)
+					if err != nil {
+						return false, err
+					}
+					receivedAtomicStateComplete = true
+				}
+			}
+
 			receivedUTXOCount += len(message.OutpointAndUTXOEntryPairs)
 			domainOutpointAndUTXOEntryPairs :=
 				appmessage.OutpointAndUTXOEntryPairsToDomainOutpointAndUTXOEntryPairs(message.OutpointAndUTXOEntryPairs)
@@ -605,6 +623,17 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 			}
 
 		case *appmessage.MsgDonePruningPointUTXOSetChunks:
+			if !receivedAtomicStateComplete {
+				pruningPointHeader, err := consensus.GetBlockHeader(pruningPointHash)
+				if err != nil {
+					return false, err
+				}
+				if pruningPointHeader.DAAScore() >= flow.Config().NetParams().PayloadHfActivationDAAScore {
+					log.Infof("Peer %s did not provide the pruning point Atomic state for post-payload-HF pruning point %s",
+						flow.peer, pruningPointHash)
+					return false, nil
+				}
+			}
 			log.Infof("Finished receiving the UTXO set. Total UTXOs: %d", receivedUTXOCount)
 			return true, nil
 

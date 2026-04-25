@@ -1,8 +1,12 @@
 package pruningmanager
 
 import (
+	"bytes"
+	"sort"
+
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/multiset"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
@@ -11,8 +15,9 @@ import (
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/util/staging"
 	"github.com/pkg/errors"
-	"sort"
 )
+
+const maxImportedAtomicStateBytes = 1 << 30
 
 // pruningManager resolves and manages the current pruning point
 type pruningManager struct {
@@ -24,6 +29,7 @@ type pruningManager struct {
 	finalityManager       model.FinalityManager
 
 	consensusStateStore                 model.ConsensusStateStore
+	atomicStateStore                    model.AtomicStateStore
 	ghostdagDataStore                   model.GHOSTDAGDataStore
 	pruningStore                        model.PruningStore
 	blockStatusStore                    model.BlockStatusStore
@@ -42,6 +48,7 @@ type pruningManager struct {
 	finalityInterval                uint64
 	pruningDepth                    uint64
 	shouldSanityCheckPruningUTXOSet bool
+	payloadHfActivationDAAScore     uint64
 	k                               externalapi.KType
 	difficultyAdjustmentWindowSize  int
 
@@ -59,6 +66,7 @@ func New(
 	finalityManager model.FinalityManager,
 
 	consensusStateStore model.ConsensusStateStore,
+	atomicStateStore model.AtomicStateStore,
 	ghostdagDataStore model.GHOSTDAGDataStore,
 	pruningStore model.PruningStore,
 	blockStatusStore model.BlockStatusStore,
@@ -77,6 +85,7 @@ func New(
 	finalityInterval uint64,
 	pruningDepth uint64,
 	shouldSanityCheckPruningUTXOSet bool,
+	payloadHfActivationDAAScore uint64,
 	k externalapi.KType,
 	difficultyAdjustmentWindowSize int,
 ) model.PruningManager {
@@ -89,6 +98,7 @@ func New(
 		finalityManager:       finalityManager,
 
 		consensusStateStore:                 consensusStateStore,
+		atomicStateStore:                    atomicStateStore,
 		ghostdagDataStore:                   ghostdagDataStore,
 		pruningStore:                        pruningStore,
 		blockStatusStore:                    blockStatusStore,
@@ -107,6 +117,7 @@ func New(
 		pruningDepth:                    pruningDepth,
 		finalityInterval:                finalityInterval,
 		shouldSanityCheckPruningUTXOSet: shouldSanityCheckPruningUTXOSet,
+		payloadHfActivationDAAScore:     payloadHfActivationDAAScore,
 		k:                               k,
 		difficultyAdjustmentWindowSize:  difficultyAdjustmentWindowSize,
 	}
@@ -519,6 +530,7 @@ func (pm *pruningManager) deleteBlock(stagingArea *model.StagingArea, blockHash 
 	}
 
 	pm.multiSetStore.Delete(stagingArea, blockHash)
+	pm.atomicStateStore.Delete(stagingArea, blockHash)
 	pm.acceptanceDataStore.Delete(stagingArea, blockHash)
 	pm.blocksStore.Delete(stagingArea, blockHash)
 	pm.utxoDiffStore.Delete(stagingArea, blockHash)
@@ -722,15 +734,22 @@ func (pm *pruningManager) validateUTXOSetFitsCommitment(stagingArea *model.Stagi
 	if err != nil {
 		return err
 	}
-	expectedUTXOCommitment := header.UTXOCommitment()
+	pruningPointAtomicState := atomicstate.NewState()
+	if header.DAAScore() >= pm.payloadHfActivationDAAScore {
+		pruningPointAtomicState, err = pm.atomicStateStore.Get(pm.databaseContext, stagingArea, pruningPointHash)
+		if err != nil {
+			return err
+		}
+	}
+	expectedUTXOCommitment := pruningPointAtomicState.HeaderCommitment(utxoSetHash, header.DAAScore() >= pm.payloadHfActivationDAAScore)
 
-	if !expectedUTXOCommitment.Equal(utxoSetHash) {
+	if !expectedUTXOCommitment.Equal(header.UTXOCommitment()) {
 		return errors.Errorf("Calculated UTXOSet for next pruning point %s doesn't match it's UTXO commitment\n"+
 			"Calculated UTXOSet hash: %s. Commitment: %s",
-			pruningPointHash, utxoSetHash, expectedUTXOCommitment)
+			pruningPointHash, utxoSetHash, header.UTXOCommitment())
 	}
 
-	log.Debugf("Validated the pruning point %s UTXO commitment: %s", pruningPointHash, utxoSetHash)
+	log.Debugf("Validated the pruning point %s UTXO commitment: %s", pruningPointHash, expectedUTXOCommitment)
 
 	return nil
 }
@@ -928,6 +947,10 @@ func (pm *pruningManager) ClearImportedPruningPointData() error {
 	if err != nil {
 		return err
 	}
+	err = pm.pruningStore.ClearImportedPruningPointAtomicState(pm.databaseContext)
+	if err != nil {
+		return err
+	}
 	return pm.pruningStore.ClearImportedPruningPointUTXOs(pm.databaseContext)
 }
 
@@ -958,6 +981,32 @@ func (pm *pruningManager) AppendImportedPruningPointUTXOs(outpointAndUTXOEntryPa
 	}
 
 	err = pm.pruningStore.AppendImportedPruningPointUTXOs(dbTx, outpointAndUTXOEntryPairs)
+	if err != nil {
+		return err
+	}
+
+	return dbTx.Commit()
+}
+
+func (pm *pruningManager) AppendImportedPruningPointAtomicState(stateBytes []byte) error {
+	if len(stateBytes) > maxImportedAtomicStateBytes {
+		return errors.Errorf("imported pruning point Atomic state is too large: %d bytes", len(stateBytes))
+	}
+	state, err := atomicstate.FromCanonicalBytes(stateBytes)
+	if err != nil {
+		return err
+	}
+	if !bytes.Equal(state.CanonicalBytes(), stateBytes) {
+		return errors.Errorf("imported pruning point Atomic state is not canonically encoded")
+	}
+
+	dbTx, err := pm.databaseContext.Begin()
+	if err != nil {
+		return err
+	}
+	defer dbTx.RollbackUnlessClosed()
+
+	err = pm.pruningStore.UpdateImportedPruningPointAtomicState(dbTx, stateBytes)
 	if err != nil {
 		return err
 	}

@@ -10,6 +10,7 @@ import (
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
@@ -31,11 +32,13 @@ type blockBuilder struct {
 	pruningManager        model.PruningManager
 	blockParentBuilder    model.BlockParentBuilder
 
-	acceptanceDataStore model.AcceptanceDataStore
-	blockRelationStore  model.BlockRelationStore
-	multisetStore       model.MultisetStore
-	ghostdagDataStore   model.GHOSTDAGDataStore
-	daaBlocksStore      model.DAABlocksStore
+	acceptanceDataStore         model.AcceptanceDataStore
+	blockRelationStore          model.BlockRelationStore
+	multisetStore               model.MultisetStore
+	atomicStateStore            model.AtomicStateStore
+	ghostdagDataStore           model.GHOSTDAGDataStore
+	daaBlocksStore              model.DAABlocksStore
+	payloadHfActivationDAAScore uint64
 }
 
 // New creates a new instance of a BlockBuilder
@@ -56,8 +59,10 @@ func New(
 	acceptanceDataStore model.AcceptanceDataStore,
 	blockRelationStore model.BlockRelationStore,
 	multisetStore model.MultisetStore,
+	atomicStateStore model.AtomicStateStore,
 	ghostdagDataStore model.GHOSTDAGDataStore,
 	daaBlocksStore model.DAABlocksStore,
+	payloadHfActivationDAAScore uint64,
 ) model.BlockBuilder {
 
 	return &blockBuilder{
@@ -74,11 +79,13 @@ func New(
 		blockParentBuilder:    blockParentBuilder,
 		pruningManager:        pruningManager,
 
-		acceptanceDataStore: acceptanceDataStore,
-		blockRelationStore:  blockRelationStore,
-		multisetStore:       multisetStore,
-		ghostdagDataStore:   ghostdagDataStore,
-		daaBlocksStore:      daaBlocksStore,
+		acceptanceDataStore:         acceptanceDataStore,
+		blockRelationStore:          blockRelationStore,
+		multisetStore:               multisetStore,
+		atomicStateStore:            atomicStateStore,
+		ghostdagDataStore:           ghostdagDataStore,
+		daaBlocksStore:              daaBlocksStore,
+		payloadHfActivationDAAScore: payloadHfActivationDAAScore,
 	}
 }
 
@@ -127,9 +134,19 @@ func (bb *blockBuilder) buildBlock(stagingArea *model.StagingArea, coinbaseData 
 func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 	transactions []*externalapi.DomainTransaction) error {
 
+	virtualAtomicState, err := bb.atomicStateStore.Get(bb.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+	newBlockDAAScore, err := bb.newBlockDAAScore(stagingArea)
+	if err != nil {
+		return err
+	}
+
 	invalidTransactions := make([]ruleerrors.InvalidTransaction, 0)
 	for _, transaction := range transactions {
-		err := bb.validateTransaction(stagingArea, transaction)
+		transactionAtomicState := virtualAtomicState.Clone()
+		err := bb.validateTransaction(stagingArea, transaction, transactionAtomicState, newBlockDAAScore)
 		if err != nil {
 			ruleError := ruleerrors.RuleError{}
 			if !errors.As(err, &ruleError) {
@@ -137,7 +154,9 @@ func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 			}
 			invalidTransactions = append(invalidTransactions,
 				ruleerrors.InvalidTransaction{Transaction: transaction, Error: &ruleError})
+			continue
 		}
+		virtualAtomicState = transactionAtomicState
 	}
 
 	if len(invalidTransactions) > 0 {
@@ -148,7 +167,8 @@ func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 }
 
 func (bb *blockBuilder) validateTransaction(
-	stagingArea *model.StagingArea, transaction *externalapi.DomainTransaction) error {
+	stagingArea *model.StagingArea, transaction *externalapi.DomainTransaction,
+	virtualAtomicState *atomicstate.State, newBlockDAAScore uint64) error {
 
 	originalEntries := make([]externalapi.UTXOEntry, len(transaction.Inputs))
 	for i, input := range transaction.Inputs {
@@ -177,7 +197,16 @@ func (bb *blockBuilder) validateTransaction(
 		return err
 	}
 
-	return bb.transactionValidator.ValidateTransactionInContextAndPopulateFee(stagingArea, transaction, model.VirtualBlockHash)
+	err = bb.transactionValidator.ValidateTransactionInContextAndPopulateFee(stagingArea, transaction, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+
+	err = atomicstate.ValidateAndApplyTransaction(transaction, newBlockDAAScore, bb.payloadHfActivationDAAScore, virtualAtomicState)
+	if err != nil {
+		return errors.Wrapf(ruleerrors.ErrInvalidPayload, "atomic validation failed: %s", err)
+	}
+	return nil
 }
 
 func (bb *blockBuilder) newBlockCoinbaseTransaction(stagingArea *model.StagingArea,
@@ -317,8 +346,15 @@ func (bb *blockBuilder) newBlockUTXOCommitment(stagingArea *model.StagingArea) (
 	if err != nil {
 		return nil, err
 	}
-	newBlockUTXOCommitment := newBlockMultiset.Hash()
-	return newBlockUTXOCommitment, nil
+	newBlockDAAScore, err := bb.newBlockDAAScore(stagingArea)
+	if err != nil {
+		return nil, err
+	}
+	newBlockAtomicState, err := bb.atomicStateStore.Get(bb.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return nil, err
+	}
+	return newBlockAtomicState.HeaderCommitment(newBlockMultiset.Hash(), newBlockDAAScore >= bb.payloadHfActivationDAAScore), nil
 }
 
 func (bb *blockBuilder) newBlockDAAScore(stagingArea *model.StagingArea) (uint64, error) {

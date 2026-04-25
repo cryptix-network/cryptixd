@@ -1806,10 +1806,12 @@ func (x *RequestPruningPointUTXOSetMessage) GetPruningPointHash() *Hash {
 }
 
 type PruningPointUtxoSetChunkMessage struct {
-	state                     protoimpl.MessageState      `protogen:"open.v1"`
-	OutpointAndUtxoEntryPairs []*OutpointAndUtxoEntryPair `protobuf:"bytes,1,rep,name=outpointAndUtxoEntryPairs,proto3" json:"outpointAndUtxoEntryPairs,omitempty"`
-	unknownFields             protoimpl.UnknownFields
-	sizeCache                 protoimpl.SizeCache
+	state                        protoimpl.MessageState      `protogen:"open.v1"`
+	OutpointAndUtxoEntryPairs    []*OutpointAndUtxoEntryPair `protobuf:"bytes,1,rep,name=outpointAndUtxoEntryPairs,proto3" json:"outpointAndUtxoEntryPairs,omitempty"`
+	AtomicConsensusStateChunk    []byte                      `protobuf:"bytes,2,opt,name=atomicConsensusStateChunk,proto3" json:"atomicConsensusStateChunk,omitempty"`
+	AtomicConsensusStateComplete bool                        `protobuf:"varint,3,opt,name=atomicConsensusStateComplete,proto3" json:"atomicConsensusStateComplete,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
 }
 
 func (x *PruningPointUtxoSetChunkMessage) Reset() {
@@ -1847,6 +1849,20 @@ func (x *PruningPointUtxoSetChunkMessage) GetOutpointAndUtxoEntryPairs() []*Outp
 		return x.OutpointAndUtxoEntryPairs
 	}
 	return nil
+}
+
+func (x *PruningPointUtxoSetChunkMessage) GetAtomicConsensusStateChunk() []byte {
+	if x != nil {
+		return x.AtomicConsensusStateChunk
+	}
+	return nil
+}
+
+func (x *PruningPointUtxoSetChunkMessage) GetAtomicConsensusStateComplete() bool {
+	if x != nil {
+		return x.AtomicConsensusStateComplete
+	}
+	return false
 }
 
 type OutpointAndUtxoEntryPair struct {
@@ -3623,9 +3639,11 @@ const file_p2p_proto_rawDesc = "" +
 	"\rRejectMessage\x12\x16\n" +
 	"\x06reason\x18\x01 \x01(\tR\x06reason\"`\n" +
 	"!RequestPruningPointUTXOSetMessage\x12;\n" +
-	"\x10pruningPointHash\x18\x01 \x01(\v2\x0f.protowire.HashR\x10pruningPointHash\"\x84\x01\n" +
+	"\x10pruningPointHash\x18\x01 \x01(\v2\x0f.protowire.HashR\x10pruningPointHash\"\x86\x02\n" +
 	"\x1fPruningPointUtxoSetChunkMessage\x12a\n" +
-	"\x19outpointAndUtxoEntryPairs\x18\x01 \x03(\v2#.protowire.OutpointAndUtxoEntryPairR\x19outpointAndUtxoEntryPairs\"\x7f\n" +
+	"\x19outpointAndUtxoEntryPairs\x18\x01 \x03(\v2#.protowire.OutpointAndUtxoEntryPairR\x19outpointAndUtxoEntryPairs\x12<\n" +
+	"\x19atomicConsensusStateChunk\x18\x02 \x01(\fR\x19atomicConsensusStateChunk\x12B\n" +
+	"\x1catomicConsensusStateComplete\x18\x03 \x01(\bR\x1catomicConsensusStateComplete\"\x7f\n" +
 	"\x18OutpointAndUtxoEntryPair\x12/\n" +
 	"\boutpoint\x18\x01 \x01(\v2\x13.protowire.OutpointR\boutpoint\x122\n" +
 	"\tutxoEntry\x18\x02 \x01(\v2\x14.protowire.UtxoEntryR\tutxoEntry\"\xaf\x01\n" +

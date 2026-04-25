@@ -20,6 +20,7 @@ import (
 
 	consensusdatabase "github.com/cryptix-network/cryptixd/domain/consensus/database"
 	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/acceptancedatastore"
+	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/atomicstatestore"
 	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/blockheaderstore"
 	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/blockrelationstore"
 	"github.com/cryptix-network/cryptixd/domain/consensus/datastructures/blockstatusstore"
@@ -145,6 +146,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 
 	blockStatusStore := blockstatusstore.New(prefixBucket, pruningWindowSizePlusFinalityDepthForCache, preallocateCaches)
 	multisetStore := multisetstore.New(prefixBucket, 200, preallocateCaches)
+	atomicStateStore := atomicstatestore.New(prefixBucket, 200, preallocateCaches)
 	pruningStore := pruningstore.New(prefixBucket, 2, preallocateCaches)
 	utxoDiffStore := utxodiffstore.New(prefixBucket, 200, preallocateCaches)
 	consensusStateStore := consensusstatestore.New(prefixBucket, 10_000, preallocateCaches)
@@ -289,6 +291,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		config.MaxBlockParents,
 		config.MergeSetSizeLimit,
 		genesisHash,
+		config.PayloadHfActivationDAAScore,
 
 		ghostdagManager,
 		dagTopologyManager,
@@ -304,6 +307,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		ghostdagDataStore,
 		consensusStateStore,
 		multisetStore,
+		atomicStateStore,
 		blockStore,
 		utxoDiffStore,
 		blockRelationStore,
@@ -324,6 +328,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		finalityManager,
 
 		consensusStateStore,
+		atomicStateStore,
 		ghostdagDataStore,
 		pruningStore,
 		blockStatusStore,
@@ -342,6 +347,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		config.FinalityDepth(),
 		config.PruningDepth(),
 		config.EnableSanityCheckPruningUTXOSet,
+		config.PayloadHfActivationDAAScore,
 		config.K,
 		config.DifficultyAdjustmentWindowSize,
 	)
@@ -418,8 +424,10 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		acceptanceDataStore,
 		blockRelationStore,
 		multisetStore,
+		atomicStateStore,
 		ghostdagDataStore,
 		daaBlocksStore,
+		config.PayloadHfActivationDAAScore,
 	)
 
 	blockProcessor := blockprocessor.New(
@@ -443,6 +451,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		blockStatusStore,
 		blockRelationStore,
 		multisetStore,
+		atomicStateStore,
 		ghostdagDataStore,
 		consensusStateStore,
 		pruningStore,
@@ -516,6 +525,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		blockStatusStore:                    blockStatusStore,
 		blockRelationStores:                 blockRelationStores,
 		consensusStateStore:                 consensusStateStore,
+		atomicStateStore:                    atomicStateStore,
 		headersSelectedTipStore:             headersSelectedTipStore,
 		multisetStore:                       multisetStore,
 		reachabilityDataStore:               reachabilityDataStore,

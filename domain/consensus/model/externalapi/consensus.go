@@ -25,12 +25,14 @@ type Consensus interface {
 	GetAnticone(blockHash, contextHash *DomainHash, maxBlocks uint64) (hashes []*DomainHash, err error)
 	GetMissingBlockBodyHashes(highHash *DomainHash) ([]*DomainHash, error)
 	GetPruningPointUTXOs(expectedPruningPointHash *DomainHash, fromOutpoint *DomainOutpoint, limit int) ([]*OutpointAndUTXOEntryPair, error)
+	GetPruningPointAtomicState(expectedPruningPointHash *DomainHash) ([]byte, error)
 	GetVirtualUTXOs(expectedVirtualParents []*DomainHash, fromOutpoint *DomainOutpoint, limit int) ([]*OutpointAndUTXOEntryPair, error)
 	PruningPoint() (*DomainHash, error)
 	PruningPointHeaders() ([]BlockHeader, error)
 	PruningPointAndItsAnticone() ([]*DomainHash, error)
 	ClearImportedPruningPointData() error
 	AppendImportedPruningPointUTXOs(outpointAndUTXOEntryPairs []*OutpointAndUTXOEntryPair) error
+	AppendImportedPruningPointAtomicState(stateBytes []byte) error
 	ValidateAndInsertImportedPruningPoint(newPruningPoint *DomainHash) error
 	GetVirtualSelectedParent() (*DomainHash, error)
 	CreateBlockLocatorFromPruningPoint(highHash *DomainHash, limit uint32) (BlockLocator, error)

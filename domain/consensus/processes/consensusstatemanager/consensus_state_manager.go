@@ -7,10 +7,11 @@ import (
 
 // consensusStateManager manages the node's consensus state
 type consensusStateManager struct {
-	maxBlockParents   externalapi.KType
-	mergeSetSizeLimit uint64
-	genesisHash       *externalapi.DomainHash
-	databaseContext   model.DBManager
+	maxBlockParents             externalapi.KType
+	mergeSetSizeLimit           uint64
+	genesisHash                 *externalapi.DomainHash
+	databaseContext             model.DBManager
+	payloadHfActivationDAAScore uint64
 
 	ghostdagManager       model.GHOSTDAGManager
 	dagTopologyManager    model.DAGTopologyManager
@@ -27,6 +28,7 @@ type consensusStateManager struct {
 	ghostdagDataStore       model.GHOSTDAGDataStore
 	consensusStateStore     model.ConsensusStateStore
 	multisetStore           model.MultisetStore
+	atomicStateStore        model.AtomicStateStore
 	blockStore              model.BlockStore
 	utxoDiffStore           model.UTXODiffStore
 	blockRelationStore      model.BlockRelationStore
@@ -44,6 +46,7 @@ func New(
 	maxBlockParents externalapi.KType,
 	mergeSetSizeLimit uint64,
 	genesisHash *externalapi.DomainHash,
+	payloadHfActivationDAAScore uint64,
 
 	ghostdagManager model.GHOSTDAGManager,
 	dagTopologyManager model.DAGTopologyManager,
@@ -59,6 +62,7 @@ func New(
 	ghostdagDataStore model.GHOSTDAGDataStore,
 	consensusStateStore model.ConsensusStateStore,
 	multisetStore model.MultisetStore,
+	atomicStateStore model.AtomicStateStore,
 	blockStore model.BlockStore,
 	utxoDiffStore model.UTXODiffStore,
 	blockRelationStore model.BlockRelationStore,
@@ -69,9 +73,10 @@ func New(
 	daaBlocksStore model.DAABlocksStore) (model.ConsensusStateManager, error) {
 
 	csm := &consensusStateManager{
-		maxBlockParents:   maxBlockParents,
-		mergeSetSizeLimit: mergeSetSizeLimit,
-		genesisHash:       genesisHash,
+		maxBlockParents:             maxBlockParents,
+		mergeSetSizeLimit:           mergeSetSizeLimit,
+		genesisHash:                 genesisHash,
+		payloadHfActivationDAAScore: payloadHfActivationDAAScore,
 
 		databaseContext: databaseContext,
 
@@ -93,6 +98,7 @@ func New(
 		utxoDiffStore:           utxoDiffStore,
 		blockRelationStore:      blockRelationStore,
 		acceptanceDataStore:     acceptanceDataStore,
+		atomicStateStore:        atomicStateStore,
 		blockHeaderStore:        blockHeaderStore,
 		headersSelectedTipStore: headersSelectedTipStore,
 		pruningStore:            pruningStore,
@@ -105,6 +111,7 @@ func New(
 			blockStatusStore,
 			blockRelationStore,
 			multisetStore,
+			atomicStateStore,
 			ghostdagDataStore,
 			consensusStateStore,
 			utxoDiffStore,

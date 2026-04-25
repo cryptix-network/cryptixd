@@ -199,7 +199,7 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 	defer onEnd()
 
 	log.Tracef("Calculating pastUTXO and acceptance data and multiset for block %s", blockHash)
-	pastUTXOSet, acceptanceData, multiset, err := csm.calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXO(
+	pastUTXOSet, acceptanceData, multiset, atomicState, err := csm.calculatePastUTXOAndAcceptanceDataWithSelectedParentUTXOAndAtomicState(
 		stagingArea, blockHash, selectedParentPastUTXOSet)
 	if err != nil {
 		return 0, nil, err
@@ -214,7 +214,7 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 	}
 
 	log.Tracef("verifying the UTXO of block %s", blockHash)
-	err = csm.verifyUTXO(stagingArea, block, blockHash, pastUTXOSet, acceptanceData, multiset)
+	err = csm.verifyUTXO(stagingArea, block, blockHash, pastUTXOSet, acceptanceData, multiset, atomicState)
 	if err != nil {
 		if errors.As(err, &ruleerrors.RuleError{}) {
 			log.Debugf("UTXO verification for block %s failed: %s", blockHash, err)
@@ -226,6 +226,9 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 
 	log.Tracef("Staging the multiset of block %s", blockHash)
 	csm.multisetStore.Stage(stagingArea, blockHash, multiset)
+
+	log.Tracef("Staging the Atomic state of block %s", blockHash)
+	csm.atomicStateStore.Stage(stagingArea, blockHash, atomicState)
 
 	if csm.genesisHash.Equal(blockHash) {
 		log.Tracef("Staging the utxoDiff of genesis")

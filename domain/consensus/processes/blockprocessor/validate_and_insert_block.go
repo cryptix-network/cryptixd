@@ -7,6 +7,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/multiset"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
@@ -62,8 +63,8 @@ func (bp *blockProcessor) setBlockStatusAfterBlockValidation(
 }
 
 func (bp *blockProcessor) updateVirtualAcceptanceDataAfterImportingPruningPoint(stagingArea *model.StagingArea) error {
-	_, virtualAcceptanceData, virtualMultiset, err :=
-		bp.consensusStateManager.CalculatePastUTXOAndAcceptanceData(stagingArea, model.VirtualBlockHash)
+	_, virtualAcceptanceData, virtualMultiset, virtualAtomicState, err :=
+		bp.consensusStateManager.CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea, model.VirtualBlockHash)
 	if err != nil {
 		return err
 	}
@@ -73,6 +74,9 @@ func (bp *blockProcessor) updateVirtualAcceptanceDataAfterImportingPruningPoint(
 
 	log.Debugf("Staging virtual multiset after importing the pruning point")
 	bp.multisetStore.Stage(stagingArea, model.VirtualBlockHash, virtualMultiset)
+
+	log.Debugf("Staging virtual Atomic state after importing the pruning point")
+	bp.atomicStateStore.Stage(stagingArea, model.VirtualBlockHash, virtualAtomicState)
 	return nil
 }
 
@@ -236,6 +240,9 @@ func (bp *blockProcessor) loadUTXODataForGenesis(stagingArea *model.StagingArea,
 	bp.consensusStateStore.StageVirtualUTXODiff(stagingArea, utxo.NewUTXODiff())
 	bp.utxoDiffStore.Stage(stagingArea, blockHash, utxo.NewUTXODiff(), nil)
 	bp.multisetStore.Stage(stagingArea, blockHash, multiset.New())
+	bp.atomicStateStore.Stage(stagingArea, blockHash, atomicstate.NewState())
+	bp.atomicStateStore.Stage(stagingArea, model.VirtualBlockHash, atomicstate.NewState())
+	bp.atomicStateStore.Stage(stagingArea, model.VirtualGenesisBlockHash, atomicstate.NewState())
 }
 
 func isHeaderOnlyBlock(block *externalapi.DomainBlock) bool {

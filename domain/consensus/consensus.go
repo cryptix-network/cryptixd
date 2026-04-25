@@ -10,6 +10,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/util/staging"
 	"github.com/pkg/errors"
@@ -51,6 +52,7 @@ type consensus struct {
 	blockRelationStores                 []model.BlockRelationStore
 	blockStatusStore                    model.BlockStatusStore
 	consensusStateStore                 model.ConsensusStateStore
+	atomicStateStore                    model.AtomicStateStore
 	headersSelectedTipStore             model.HeaderSelectedTipStore
 	multisetStore                       model.MultisetStore
 	reachabilityDataStore               model.ReachabilityDataStore
@@ -113,6 +115,7 @@ func (s *consensus) Init(skipAddingGenesis bool) error {
 		}
 
 		s.consensusStateStore.StageTips(stagingArea, []*externalapi.DomainHash{model.VirtualGenesisBlockHash})
+		s.atomicStateStore.Stage(stagingArea, model.VirtualGenesisBlockHash, atomicstate.NewState())
 		for _, ghostdagDataStore := range s.ghostdagDataStores {
 			ghostdagDataStore.Stage(stagingArea, model.VirtualGenesisBlockHash, externalapi.NewBlockGHOSTDAGData(
 				0,
@@ -588,6 +591,30 @@ func (s *consensus) GetPruningPointUTXOs(expectedPruningPointHash *externalapi.D
 	return pruningPointUTXOs, nil
 }
 
+func (s *consensus) GetPruningPointAtomicState(expectedPruningPointHash *externalapi.DomainHash) ([]byte, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+
+	pruningPointHash, err := s.pruningStore.PruningPoint(s.databaseContext, stagingArea)
+	if err != nil {
+		return nil, err
+	}
+
+	if !expectedPruningPointHash.Equal(pruningPointHash) {
+		return nil, errors.Wrapf(ruleerrors.ErrWrongPruningPointHash, "expected pruning point %s but got %s",
+			expectedPruningPointHash,
+			pruningPointHash)
+	}
+
+	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, pruningPointHash)
+	if err != nil {
+		return nil, err
+	}
+	return atomicState.CanonicalBytes(), nil
+}
+
 func (s *consensus) GetVirtualUTXOs(expectedVirtualParents []*externalapi.DomainHash,
 	fromOutpoint *externalapi.DomainOutpoint, limit int) ([]*externalapi.OutpointAndUTXOEntryPair, error) {
 
@@ -664,6 +691,13 @@ func (s *consensus) AppendImportedPruningPointUTXOs(outpointAndUTXOEntryPairs []
 	defer s.lock.Unlock()
 
 	return s.pruningManager.AppendImportedPruningPointUTXOs(outpointAndUTXOEntryPairs)
+}
+
+func (s *consensus) AppendImportedPruningPointAtomicState(stateBytes []byte) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return s.pruningManager.AppendImportedPruningPointAtomicState(stateBytes)
 }
 
 func (s *consensus) ValidateAndInsertImportedPruningPoint(newPruningPoint *externalapi.DomainHash) error {

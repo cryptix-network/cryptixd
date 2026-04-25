@@ -12,18 +12,19 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/pkg/errors"
 )
 
 func (csm *consensusStateManager) verifyUTXO(stagingArea *model.StagingArea, block *externalapi.DomainBlock,
 	blockHash *externalapi.DomainHash, pastUTXODiff externalapi.UTXODiff, acceptanceData externalapi.AcceptanceData,
-	multiset model.Multiset) error {
+	multiset model.Multiset, atomicState *atomicstate.State) error {
 
 	log.Tracef("verifyUTXO start for block %s", blockHash)
 	defer log.Tracef("verifyUTXO end for block %s", blockHash)
 
 	log.Debugf("Validating UTXO commitment for block %s", blockHash)
-	err := csm.validateUTXOCommitment(block, blockHash, multiset)
+	err := csm.validateUTXOCommitment(block, blockHash, multiset, atomicState)
 	if err != nil {
 		return err
 	}
@@ -46,7 +47,7 @@ func (csm *consensusStateManager) verifyUTXO(stagingArea *model.StagingArea, blo
 	log.Debugf("Coinbase transaction validation passed for block %s", blockHash)
 
 	log.Debugf("Validating transactions against past UTXO for block %s", blockHash)
-	err = csm.validateBlockTransactionsAgainstPastUTXO(stagingArea, block, pastUTXODiff)
+	err = csm.validateBlockTransactionsAgainstPastUTXO(stagingArea, block, pastUTXODiff, atomicState)
 	if err != nil {
 		return err
 	}
@@ -56,7 +57,7 @@ func (csm *consensusStateManager) verifyUTXO(stagingArea *model.StagingArea, blo
 }
 
 func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagingArea *model.StagingArea,
-	block *externalapi.DomainBlock, pastUTXODiff externalapi.UTXODiff) error {
+	block *externalapi.DomainBlock, pastUTXODiff externalapi.UTXODiff, atomicState *atomicstate.State) error {
 
 	blockHash := consensushashing.BlockHash(block)
 	log.Tracef("validateBlockTransactionsAgainstPastUTXO start for block %s", blockHash)
@@ -67,6 +68,8 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 		return err
 	}
 	log.Tracef("The past median time of %s is %d", blockHash, selectedParentMedianTime)
+	blockDAAScore := block.Header.DAAScore()
+	accumulatedAtomicState := atomicState.Clone()
 
 	for i, transaction := range block.Transactions {
 		transactionID := consensushashing.TransactionID(transaction)
@@ -91,6 +94,12 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 		}
 		log.Tracef("Validation against the block's past UTXO "+
 			"passed for transaction %s in block %s", transactionID, blockHash)
+
+		err = atomicstate.ValidateAndApplyTransaction(transaction, blockDAAScore, csm.payloadHfActivationDAAScore, accumulatedAtomicState)
+		if err != nil {
+			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "atomic validation failed for transaction %s in block %s: %s",
+				transactionID, blockHash, err)
+		}
 	}
 	return nil
 }
@@ -112,7 +121,7 @@ func (csm *consensusStateManager) validateAcceptedIDMerkleRoot(block *externalap
 }
 
 func (csm *consensusStateManager) validateUTXOCommitment(
-	block *externalapi.DomainBlock, blockHash *externalapi.DomainHash, multiset model.Multiset) error {
+	block *externalapi.DomainBlock, blockHash *externalapi.DomainHash, multiset model.Multiset, atomicState *atomicstate.State) error {
 
 	log.Tracef("validateUTXOCommitment start for block %s", blockHash)
 	defer log.Tracef("validateUTXOCommitment end for block %s", blockHash)
@@ -122,9 +131,10 @@ func (csm *consensusStateManager) validateUTXOCommitment(
 	}
 
 	multisetHash := multiset.Hash()
-	if !block.Header.UTXOCommitment().Equal(multisetHash) {
+	expectedCommitment := atomicState.HeaderCommitment(multisetHash, block.Header.DAAScore() >= csm.payloadHfActivationDAAScore)
+	if !block.Header.UTXOCommitment().Equal(expectedCommitment) {
 		return errors.Wrapf(ruleerrors.ErrBadUTXOCommitment, "block %s UTXO commitment is invalid - block "+
-			"header indicates %s, but calculated value is %s", blockHash, block.Header.UTXOCommitment(), multisetHash)
+			"header indicates %s, but calculated value is %s", blockHash, block.Header.UTXOCommitment(), expectedCommitment)
 	}
 
 	return nil

@@ -18,7 +18,9 @@ func (x *CryptixdMessage_PruningPointUtxoSetChunk) toAppMessage() (appmessage.Me
 		outpointAndUTXOEntryPairs[i] = outpointEntryPairAppMessage
 	}
 	return &appmessage.MsgPruningPointUTXOSetChunk{
-		OutpointAndUTXOEntryPairs: outpointAndUTXOEntryPairs,
+		OutpointAndUTXOEntryPairs:    outpointAndUTXOEntryPairs,
+		AtomicConsensusStateChunk:    append([]byte(nil), x.PruningPointUtxoSetChunk.AtomicConsensusStateChunk...),
+		AtomicConsensusStateComplete: x.PruningPointUtxoSetChunk.AtomicConsensusStateComplete,
 	}, nil
 }
 
@@ -64,7 +66,9 @@ func (x *CryptixdMessage_PruningPointUtxoSetChunk) fromAppMessage(message *appme
 		}
 	}
 	x.PruningPointUtxoSetChunk = &PruningPointUtxoSetChunkMessage{
-		OutpointAndUtxoEntryPairs: outpointAndUTXOEntryPairs,
+		OutpointAndUtxoEntryPairs:    outpointAndUTXOEntryPairs,
+		AtomicConsensusStateChunk:    append([]byte(nil), message.AtomicConsensusStateChunk...),
+		AtomicConsensusStateComplete: message.AtomicConsensusStateComplete,
 	}
 	return nil
 }

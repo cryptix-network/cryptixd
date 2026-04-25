@@ -5,6 +5,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
@@ -113,7 +114,8 @@ func (bb *testBlockBuilder) buildUTXOInvalidHeader(stagingArea *model.StagingAre
 
 func (bb *testBlockBuilder) buildHeaderWithParents(stagingArea *model.StagingArea,
 	parentHashes []*externalapi.DomainHash, bits uint32, transactions []*externalapi.DomainTransaction,
-	acceptanceData externalapi.AcceptanceData, multiset model.Multiset, daaScore, blueScore uint64, blueWork *big.Int) (externalapi.BlockHeader, error) {
+	acceptanceData externalapi.AcceptanceData, multiset model.Multiset, atomicState *atomicstate.State,
+	daaScore, blueScore uint64, blueWork *big.Int) (externalapi.BlockHeader, error) {
 
 	header, err := bb.buildUTXOInvalidHeader(stagingArea, parentHashes, bits, daaScore, blueScore, blueWork, transactions)
 	if err != nil {
@@ -125,7 +127,7 @@ func (bb *testBlockBuilder) buildHeaderWithParents(stagingArea *model.StagingAre
 	if err != nil {
 		return nil, err
 	}
-	utxoCommitment := multiset.Hash()
+	utxoCommitment := atomicState.HeaderCommitment(multiset.Hash(), daaScore >= bb.payloadHfActivationDAAScore)
 
 	return blockheader.NewImmutableBlockHeader(
 		header.Version(),
@@ -192,8 +194,8 @@ func (bb *testBlockBuilder) buildBlockWithParents(stagingArea *model.StagingArea
 			ghostdagData.SelectedParent())
 	}
 
-	pastUTXO, acceptanceData, multiset, err :=
-		bb.consensusStateManager.CalculatePastUTXOAndAcceptanceData(stagingArea, tempBlockHash)
+	pastUTXO, acceptanceData, multiset, atomicState, err :=
+		bb.consensusStateManager.CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea, tempBlockHash)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -212,7 +214,7 @@ func (bb *testBlockBuilder) buildBlockWithParents(stagingArea *model.StagingArea
 	}
 
 	header, err := bb.buildHeaderWithParents(
-		stagingArea, parentHashes, bits, transactionsWithCoinbase, acceptanceData, multiset, daaScore, blueScore, blueWork)
+		stagingArea, parentHashes, bits, transactionsWithCoinbase, acceptanceData, multiset, atomicState, daaScore, blueScore, blueWork)
 	if err != nil {
 		return nil, nil, err
 	}

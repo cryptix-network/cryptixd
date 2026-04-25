@@ -3,6 +3,7 @@ package transactionvalidator
 import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
@@ -186,6 +187,9 @@ func (v *transactionValidator) checkTransactionPayload(tx *externalapi.DomainTra
 		if uint64(len(tx.Payload)) > v.payloadMaxLengthConsensus {
 			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "payload length %d exceeds max allowed %d",
 				len(tx.Payload), v.payloadMaxLengthConsensus)
+		}
+		if err := atomicstate.ValidatePayloadShape(tx.Payload); err != nil {
+			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "invalid CAT payload: %s", err)
 		}
 		return nil
 	}

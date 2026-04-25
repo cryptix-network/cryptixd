@@ -76,8 +76,8 @@ func (csm *consensusStateManager) updateVirtualWithParents(
 	}
 
 	log.Debugf("Calculating past UTXO, acceptance data, and multiset for the new virtual block")
-	virtualUTXODiff, virtualAcceptanceData, virtualMultiset, err :=
-		csm.CalculatePastUTXOAndAcceptanceData(stagingArea, model.VirtualBlockHash)
+	virtualUTXODiff, virtualAcceptanceData, virtualMultiset, virtualAtomicState, err :=
+		csm.CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea, model.VirtualBlockHash)
 	if err != nil {
 		return nil, err
 	}
@@ -91,6 +91,9 @@ func (csm *consensusStateManager) updateVirtualWithParents(
 
 	log.Debugf("Staging new multiset for the virtual block")
 	csm.multisetStore.Stage(stagingArea, model.VirtualBlockHash, virtualMultiset)
+
+	log.Debugf("Staging new Atomic state for the virtual block")
+	csm.atomicStateStore.Stage(stagingArea, model.VirtualBlockHash, virtualAtomicState)
 
 	log.Debugf("Staging new UTXO diff for the virtual block")
 	csm.consensusStateStore.StageVirtualUTXODiff(stagingArea, virtualUTXODiff)

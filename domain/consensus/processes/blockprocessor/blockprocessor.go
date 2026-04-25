@@ -35,6 +35,7 @@ type blockProcessor struct {
 	blockStatusStore                    model.BlockStatusStore
 	blockRelationStore                  model.BlockRelationStore
 	multisetStore                       model.MultisetStore
+	atomicStateStore                    model.AtomicStateStore
 	ghostdagDataStore                   model.GHOSTDAGDataStore
 	consensusStateStore                 model.ConsensusStateStore
 	pruningStore                        model.PruningStore
@@ -73,6 +74,7 @@ func New(
 	blockStatusStore model.BlockStatusStore,
 	blockRelationStore model.BlockRelationStore,
 	multisetStore model.MultisetStore,
+	atomicStateStore model.AtomicStateStore,
 	ghostdagDataStore model.GHOSTDAGDataStore,
 	consensusStateStore model.ConsensusStateStore,
 	pruningStore model.PruningStore,
@@ -108,6 +110,7 @@ func New(
 		blockStatusStore:                    blockStatusStore,
 		blockRelationStore:                  blockRelationStore,
 		multisetStore:                       multisetStore,
+		atomicStateStore:                    atomicStateStore,
 		ghostdagDataStore:                   ghostdagDataStore,
 		consensusStateStore:                 consensusStateStore,
 		pruningStore:                        pruningStore,
@@ -127,6 +130,7 @@ func New(
 			blockStatusStore,
 			blockRelationStore,
 			multisetStore,
+			atomicStateStore,
 			ghostdagDataStore,
 			consensusStateStore,
 			pruningStore,

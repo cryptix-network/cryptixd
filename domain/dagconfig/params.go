@@ -286,7 +286,7 @@ var MainnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             999999999991,
+	PayloadHfActivationDAAScore:             9999999991,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 	DisallowDirectBlocksOnTopOfGenesis:      true,
@@ -365,7 +365,7 @@ var TestnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             999999999991,
+	PayloadHfActivationDAAScore:             9999999991,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 
@@ -435,7 +435,7 @@ var SimnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             999999999991,
+	PayloadHfActivationDAAScore:             9999999991,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 
@@ -501,7 +501,7 @@ var DevnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             999999999991,
+	PayloadHfActivationDAAScore:             9999999991,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 
