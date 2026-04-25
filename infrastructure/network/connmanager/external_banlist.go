@@ -66,6 +66,18 @@ type externalBanlistSnapshot struct {
 	NodeIDs          map[string]struct{}
 }
 
+type persistedAntiFraudSnapshotV1 struct {
+	SchemaVersion    uint32   `json:"schema_version"`
+	Network          uint32   `json:"network"`
+	SnapshotSeq      uint64   `json:"snapshot_seq"`
+	GeneratedAtMs    uint64   `json:"generated_at_ms"`
+	SigningKeyID     uint32   `json:"signing_key_id"`
+	AntiFraudEnabled bool     `json:"antifraud_enabled"`
+	BannedIPs        []string `json:"banned_ips"`
+	BannedNodeIDs    []string `json:"banned_node_ids"`
+	Signature        string   `json:"signature"`
+}
+
 type normalizedAntiFraudSnapshot struct {
 	schemaVersion    uint8
 	network          uint8
@@ -1719,21 +1731,95 @@ func (c *ConnectionManager) loadPersistedSnapshotFile(path string) *externalBanl
 	if err != nil {
 		return nil
 	}
-	var message appmessage.MsgAntiFraudSnapshotV1
-	if err := json.Unmarshal(content, &message); err != nil {
-		c.quarantineInvalidPersistedSnapshotFile(path, fmt.Sprintf("invalid JSON: %s", err))
-		return nil
-	}
 	expectedNetwork, err := antiFraudNetworkFromName(c.cfg.NetParams().Name)
 	if err != nil {
 		return nil
 	}
-	snapshot, err := decodeExternalBanlistSnapshotFromMessage(&message, expectedNetwork)
-	if err != nil {
-		c.quarantineInvalidPersistedSnapshotFile(path, fmt.Sprintf("invalid snapshot semantics: %s", err))
-		return nil
+
+	snapshot, decodeErr := decodePersistedAntiFraudSnapshot(content, expectedNetwork)
+	if decodeErr == nil {
+		return snapshot
 	}
-	return snapshot
+	legacySnapshot, legacyErr := decodeLegacyPersistedAntiFraudSnapshot(content, expectedNetwork)
+	if legacyErr == nil {
+		return legacySnapshot
+	}
+
+	c.quarantineInvalidPersistedSnapshotFile(path, fmt.Sprintf("invalid snapshot semantics: %s; legacy: %s", decodeErr, legacyErr))
+	return nil
+}
+
+func decodePersistedAntiFraudSnapshot(content []byte, expectedNetwork uint8) (*externalBanlistSnapshot, error) {
+	var persisted persistedAntiFraudSnapshotV1
+	if err := json.Unmarshal(content, &persisted); err != nil {
+		return nil, errors.Wrap(err, "invalid JSON")
+	}
+	message, err := persisted.toAppMessage()
+	if err != nil {
+		return nil, err
+	}
+	return decodeExternalBanlistSnapshotFromMessage(message, expectedNetwork)
+}
+
+func decodeLegacyPersistedAntiFraudSnapshot(content []byte, expectedNetwork uint8) (*externalBanlistSnapshot, error) {
+	var message appmessage.MsgAntiFraudSnapshotV1
+	if err := json.Unmarshal(content, &message); err != nil {
+		return nil, errors.Wrap(err, "invalid legacy JSON")
+	}
+	return decodeExternalBanlistSnapshotFromMessage(&message, expectedNetwork)
+}
+
+func (persisted *persistedAntiFraudSnapshotV1) toAppMessage() (*appmessage.MsgAntiFraudSnapshotV1, error) {
+	if persisted == nil {
+		return nil, errors.New("persisted snapshot is nil")
+	}
+	if persisted.SchemaVersion == 0 {
+		return nil, errors.New("missing schema_version")
+	}
+	if persisted.BannedIPs == nil {
+		return nil, errors.New("missing banned_ips")
+	}
+	if persisted.BannedNodeIDs == nil {
+		return nil, errors.New("missing banned_node_ids")
+	}
+	signatureHex := strings.TrimSpace(persisted.Signature)
+	if len(signatureHex) != antiFraudSignatureHexLength {
+		return nil, errors.New("signature must be 64-byte hex")
+	}
+	signature, err := hex.DecodeString(signatureHex)
+	if err != nil {
+		return nil, errors.Wrap(err, "invalid signature hex")
+	}
+	if len(signature) != 64 {
+		return nil, errors.New("signature must be exactly 64 bytes")
+	}
+
+	ipEntries, _ := normalizeExternalBanlistIPEntries(persisted.BannedIPs)
+	if len(ipEntries) != len(persisted.BannedIPs) {
+		return nil, errors.New("invalid banned_ips entry")
+	}
+	nodeEntries, _ := normalizeExternalBanlistNodeIDEntries(persisted.BannedNodeIDs)
+	if len(nodeEntries) != len(persisted.BannedNodeIDs) {
+		return nil, errors.New("invalid banned_node_ids entry")
+	}
+	bannedNodeIDs := make([][]byte, 0, len(nodeEntries))
+	for _, entry := range nodeEntries {
+		copied := make([]byte, 32)
+		copy(copied, entry[:])
+		bannedNodeIDs = append(bannedNodeIDs, copied)
+	}
+
+	return &appmessage.MsgAntiFraudSnapshotV1{
+		SchemaVersion:    persisted.SchemaVersion,
+		Network:          persisted.Network,
+		SnapshotSeq:      persisted.SnapshotSeq,
+		GeneratedAtMs:    persisted.GeneratedAtMs,
+		SigningKeyID:     persisted.SigningKeyID,
+		AntiFraudEnabled: persisted.AntiFraudEnabled,
+		BannedIPs:        ipEntries,
+		BannedNodeIDs:    bannedNodeIDs,
+		Signature:        signature,
+	}, nil
 }
 
 func (c *ConnectionManager) quarantineInvalidPersistedSnapshotFile(path string, reason string) {
@@ -1773,7 +1859,11 @@ func writeAntiFraudSnapshotAtomic(path string, snapshot *appmessage.MsgAntiFraud
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	content, err := json.Marshal(snapshot)
+	persisted, err := persistedAntiFraudSnapshotFromMessage(snapshot)
+	if err != nil {
+		return err
+	}
+	content, err := json.MarshalIndent(persisted, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -1794,6 +1884,45 @@ func writeAntiFraudSnapshotAtomic(path string, snapshot *appmessage.MsgAntiFraud
 		return err
 	}
 	return os.Rename(tempPath, path)
+}
+
+func persistedAntiFraudSnapshotFromMessage(message *appmessage.MsgAntiFraudSnapshotV1) (*persistedAntiFraudSnapshotV1, error) {
+	if message == nil {
+		return nil, errors.New("anti-fraud snapshot is nil")
+	}
+	bannedIPs := make([]string, 0, len(message.BannedIPs))
+	for index, entry := range message.BannedIPs {
+		normalized, ok := normalizeIPBinaryEntry(entry)
+		if !ok {
+			return nil, errors.Errorf("invalid banned_ips[%d] entry", index)
+		}
+		canonical, ok := canonicalIPFromEntry(normalized)
+		if !ok {
+			return nil, errors.Errorf("invalid banned_ips[%d] entry", index)
+		}
+		bannedIPs = append(bannedIPs, canonical)
+	}
+	bannedNodeIDs := make([]string, 0, len(message.BannedNodeIDs))
+	for index, entry := range message.BannedNodeIDs {
+		if len(entry) != 32 {
+			return nil, errors.Errorf("invalid banned_node_ids[%d] entry", index)
+		}
+		bannedNodeIDs = append(bannedNodeIDs, hex.EncodeToString(entry))
+	}
+	if len(message.Signature) != 64 {
+		return nil, errors.New("signature must be exactly 64 bytes")
+	}
+	return &persistedAntiFraudSnapshotV1{
+		SchemaVersion:    message.SchemaVersion,
+		Network:          message.Network,
+		SnapshotSeq:      message.SnapshotSeq,
+		GeneratedAtMs:    message.GeneratedAtMs,
+		SigningKeyID:     message.SigningKeyID,
+		AntiFraudEnabled: message.AntiFraudEnabled,
+		BannedIPs:        bannedIPs,
+		BannedNodeIDs:    bannedNodeIDs,
+		Signature:        hex.EncodeToString(message.Signature),
+	}, nil
 }
 
 func canonicalIPString(ip net.IP) string {

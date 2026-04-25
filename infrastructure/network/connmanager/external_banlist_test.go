@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -101,6 +103,55 @@ func TestDecodeExternalBanlistPayload(t *testing.T) {
 	}
 	if _, ok := snapshot.NodeIDs["0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"]; !ok {
 		t.Fatalf("expected node ID to be present")
+	}
+}
+
+func TestPersistedAntiFraudSnapshotUsesReadableIPs(t *testing.T) {
+	source, err := decodeExternalBanlistPayload(buildSignedSnapshotPayload(t, true), 0)
+	if err != nil {
+		t.Fatalf("decodeExternalBanlistPayload unexpectedly failed: %s", err)
+	}
+	message := source.toAppMessage()
+	path := filepath.Join(t.TempDir(), antiFraudCurrentFile)
+	if err := writeAntiFraudSnapshotAtomic(path, message); err != nil {
+		t.Fatalf("writeAntiFraudSnapshotAtomic failed: %s", err)
+	}
+	content, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("ReadFile failed: %s", err)
+	}
+	var persisted persistedAntiFraudSnapshotV1
+	if err := json.Unmarshal(content, &persisted); err != nil {
+		t.Fatalf("json.Unmarshal failed: %s", err)
+	}
+	if len(persisted.BannedIPs) != 1 || persisted.BannedIPs[0] != "127.0.0.1" {
+		t.Fatalf("unexpected persisted banned IPs: %+v", persisted.BannedIPs)
+	}
+
+	loaded, err := decodePersistedAntiFraudSnapshot(content, 0)
+	if err != nil {
+		t.Fatalf("decodePersistedAntiFraudSnapshot failed: %s", err)
+	}
+	if _, ok := loaded.IPs["127.0.0.1"]; !ok {
+		t.Fatalf("expected readable persisted IPv4 loopback IP to load")
+	}
+}
+
+func TestLegacyPersistedAntiFraudSnapshotStillLoads(t *testing.T) {
+	source, err := decodeExternalBanlistPayload(buildSignedSnapshotPayload(t, true), 0)
+	if err != nil {
+		t.Fatalf("decodeExternalBanlistPayload unexpectedly failed: %s", err)
+	}
+	legacyContent, err := json.Marshal(source.toAppMessage())
+	if err != nil {
+		t.Fatalf("json.Marshal failed: %s", err)
+	}
+	loaded, err := decodeLegacyPersistedAntiFraudSnapshot(legacyContent, 0)
+	if err != nil {
+		t.Fatalf("decodeLegacyPersistedAntiFraudSnapshot failed: %s", err)
+	}
+	if _, ok := loaded.IPs["127.0.0.1"]; !ok {
+		t.Fatalf("expected legacy persisted IPv4 loopback IP to load")
 	}
 }
 
