@@ -62,6 +62,9 @@ func (f *FlowContext) BlockProducerClaimsForBlock(blockHash *externalapi.DomainH
 		var pubKey [32]byte
 		copy(pubKey[:], claim.NodePubkeyXOnly)
 		nodeID := netadapter.ComputeUnifiedNodeID(pubKey)
+		if nodeID != f.NetAdapter().UnifiedNodeID() {
+			continue
+		}
 		if f.ConnectionManager().IsUnifiedNodeIDBanned(nodeID) {
 			continue
 		}
@@ -87,6 +90,10 @@ func (f *FlowContext) HandleBlockProducerClaim(peer *peerpkg.Peer, message *appm
 	if err := f.refreshStrongNodeClaimsWindow(); err != nil {
 		log.Warnf("failed refreshing strong-node claim window before ingest: %s", err)
 	}
+	expectedNodeID := peer.UnifiedNodeID()
+	if f.IsPayloadHfActive() && expectedNodeID == nil {
+		return protocolerrors.New(true, "block producer claim peer has no verified unified node ID")
+	}
 
 	known := false
 	if len(message.BlockHash) == 32 {
@@ -97,13 +104,13 @@ func (f *FlowContext) HandleBlockProducerClaim(peer *peerpkg.Peer, message *appm
 		}
 	}
 
-	outcome := f.strongNodeClaims.IngestClaim(message, f.IsPayloadHfActive(), known)
+	outcome := f.strongNodeClaims.IngestClaim(message, f.IsPayloadHfActive(), known, expectedNodeID)
 	switch outcome.Status {
 	case strongnodeclaims.IngestIgnored, strongnodeclaims.IngestDropped:
 		return nil
 	case strongnodeclaims.IngestAccepted:
 		f.strongNodeClaims.MaybeFlush()
-		return f.broadcastBlockProducerClaim(message, peer)
+		return nil
 	case strongnodeclaims.IngestStrike:
 		if outcome.NodeID != nil && f.ConnectionManager().IsUnifiedNodeIDBanned(*outcome.NodeID) {
 			return protocolerrors.New(true, "claim references externally banned unified node ID")
@@ -149,7 +156,7 @@ func (f *FlowContext) BroadcastLocalBlockProducerClaim(blockHash *externalapi.Do
 		log.Warnf("failed building local block producer claim for %s: %s", blockHash, err)
 		return
 	}
-	outcome := f.strongNodeClaims.IngestClaim(claim, f.IsPayloadHfActive(), true)
+	outcome := f.strongNodeClaims.IngestClaim(claim, f.IsPayloadHfActive(), true, nil)
 	if outcome.Status == strongnodeclaims.IngestStrike {
 		log.Warnf("failed ingesting local block producer claim for %s: %s", blockHash, outcome.Reason)
 		return

@@ -76,6 +76,7 @@ func (na *NetAdapter) BuildBlockProducerClaim(networkName string, blockHash *ext
 
 	blockHashArray := *blockHash.ByteArray()
 	nodeID := computeUnifiedNodeID(na.unifiedNodeIdentity.PubKeyXOnly)
+	powNonce := na.unifiedNodeIdentity.PowNonce
 	claimDigest := ComputeBlockProducerClaimDigest(networkCode, blockHashArray, nodeID)
 	signature, err := signBlockProducerClaimDigest(na.unifiedNodeIdentity, claimDigest)
 	if err != nil {
@@ -87,6 +88,7 @@ func (na *NetAdapter) BuildBlockProducerClaim(networkName string, blockHash *ext
 		Network:         uint32(networkCode),
 		BlockHash:       append([]byte(nil), blockHashArray[:]...),
 		NodePubkeyXOnly: append([]byte(nil), na.unifiedNodeIdentity.PubKeyXOnly[:]...),
+		NodePowNonce:    &powNonce,
 		Signature:       append([]byte(nil), signature[:]...),
 	}, nil
 }

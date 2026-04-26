@@ -27,6 +27,9 @@ func TestLockedConstants(t *testing.T) {
 	if CLAIM_REORG_MARGIN_BLOCKS != 256 {
 		t.Fatalf("CLAIM_REORG_MARGIN_BLOCKS mismatch: got %d", CLAIM_REORG_MARGIN_BLOCKS)
 	}
+	if KNOWN_CLAIMS_PER_BLOCK_CAP != 64 {
+		t.Fatalf("KNOWN_CLAIMS_PER_BLOCK_CAP mismatch: got %d", KNOWN_CLAIMS_PER_BLOCK_CAP)
+	}
 	if PENDING_UNKNOWN_CLAIMS_CAP != 4096 {
 		t.Fatalf("PENDING_UNKNOWN_CLAIMS_CAP mismatch: got %d", PENDING_UNKNOWN_CLAIMS_CAP)
 	}

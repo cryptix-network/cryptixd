@@ -58,6 +58,7 @@ type claimRecord struct {
 	BlockHash    [32]byte
 	NodeID       [32]byte
 	PubKeyXOnly  [32]byte
+	PowNonce     uint64
 	Signature    [64]byte
 	ClaimID      [32]byte
 	ReceivedAtMs uint64
@@ -97,6 +98,7 @@ type claimDiskRecord struct {
 	BlockHash    string `json:"block_hash"`
 	NodeID       string `json:"node_id"`
 	PubKeyXOnly  string `json:"pubkey_xonly"`
+	PowNonce     uint64 `json:"pow_nonce,omitempty"`
 	Signature    string `json:"signature"`
 	ClaimID      string `json:"claim_id"`
 	ReceivedAtMs uint64 `json:"received_at_ms"`
@@ -122,7 +124,7 @@ func New(enabled bool, networkName string, appDir string) *Engine {
 
 	state := newEngineState()
 	if enabled {
-		if err := loadState(claimsDir, state); err != nil {
+		if err := loadState(claimsDir, state, networkCode); err != nil {
 			log.Warnf("strong-node-claims: failed loading persisted state: %s", err)
 		}
 		recomputeScores(state)
@@ -155,7 +157,12 @@ func (e *Engine) LastSink() (*externalapi.DomainHash, bool) {
 	return externalapi.NewDomainHashFromByteArray(&hash), true
 }
 
-func (e *Engine) IngestClaim(message *appmessage.MsgBlockProducerClaimV1, hardforkActive bool, blockKnown bool) IngestOutcome {
+func (e *Engine) IngestClaim(
+	message *appmessage.MsgBlockProducerClaimV1,
+	hardforkActive bool,
+	blockKnown bool,
+	expectedNodeID *[32]byte,
+) IngestOutcome {
 	if !e.enabled || !hardforkActive {
 		return IngestOutcome{Status: IngestIgnored}
 	}
@@ -168,6 +175,13 @@ func (e *Engine) IngestClaim(message *appmessage.MsgBlockProducerClaimV1, hardfo
 	if err != nil {
 		return IngestOutcome{Status: IngestStrike, Reason: err.Error()}
 	}
+	if expectedNodeID != nil && record.NodeID != *expectedNodeID {
+		return IngestOutcome{
+			Status: IngestStrike,
+			Reason: "claim node ID does not match peer handshake identity",
+			NodeID: &record.NodeID,
+		}
+	}
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -178,7 +192,9 @@ func (e *Engine) IngestClaim(message *appmessage.MsgBlockProducerClaimV1, hardfo
 	_, knownFromWindow := e.state.WindowSet[record.BlockHash]
 	known := blockKnown || knownFromRetention || knownFromWindow
 	if !known {
-		enqueuePendingUnknownClaim(e.state, record, nowMs)
+		if !enqueuePendingUnknownClaim(e.state, record, nowMs) {
+			return IngestOutcome{Status: IngestDropped}
+		}
 		e.state.Dirty = true
 		return IngestOutcome{Status: IngestAccepted, Pending: true}
 	}
@@ -408,6 +424,9 @@ func validateClaimMessage(message *appmessage.MsgBlockProducerClaimV1, expectedN
 	if len(message.NodePubkeyXOnly) != 32 {
 		return empty, errors.New("node pubkey x-only must be exactly 32 bytes")
 	}
+	if message.NodePowNonce == nil {
+		return empty, errors.New("node pow nonce is required")
+	}
 	if len(message.Signature) != 64 {
 		return empty, errors.New("claim signature must be exactly 64 bytes")
 	}
@@ -418,8 +437,12 @@ func validateClaimMessage(message *appmessage.MsgBlockProducerClaimV1, expectedN
 	copy(pubKey[:], message.NodePubkeyXOnly)
 	var signature [64]byte
 	copy(signature[:], message.Signature)
+	powNonce := *message.NodePowNonce
 
 	nodeID := netadapter.ComputeUnifiedNodeID(pubKey)
+	if !netadapter.IsValidUnifiedNodePoWNonce(expectedNetworkCode, pubKey, powNonce) {
+		return empty, errors.New("claim node identity proof-of-work is invalid")
+	}
 	claimID := netadapter.ComputeBlockProducerClaimDigest(expectedNetworkCode, blockHash, nodeID)
 	if !netadapter.VerifyBlockProducerClaimSignature(pubKey, claimID, signature) {
 		return empty, errors.New("claim signature verification failed")
@@ -429,6 +452,7 @@ func validateClaimMessage(message *appmessage.MsgBlockProducerClaimV1, expectedN
 		BlockHash:    blockHash,
 		NodeID:       nodeID,
 		PubKeyXOnly:  pubKey,
+		PowNonce:     powNonce,
 		Signature:    signature,
 		ClaimID:      claimID,
 		ReceivedAtMs: nowMs,
@@ -438,6 +462,9 @@ func validateClaimMessage(message *appmessage.MsgBlockProducerClaimV1, expectedN
 func claimRecordIsValid(record claimRecord, expectedNetworkCode uint8) bool {
 	nodeID := netadapter.ComputeUnifiedNodeID(record.PubKeyXOnly)
 	if nodeID != record.NodeID {
+		return false
+	}
+	if !netadapter.IsValidUnifiedNodePoWNonce(expectedNetworkCode, record.PubKeyXOnly, record.PowNonce) {
 		return false
 	}
 	claimID := netadapter.ComputeBlockProducerClaimDigest(expectedNetworkCode, record.BlockHash, record.NodeID)
@@ -484,11 +511,13 @@ func collectValidClaimRecordsForBlock(state *engineState, networkCode uint8, blo
 }
 
 func claimRecordToMessage(networkCode uint8, record claimRecord) *appmessage.MsgBlockProducerClaimV1 {
+	powNonce := record.PowNonce
 	return &appmessage.MsgBlockProducerClaimV1{
 		SchemaVersion:   claimSchemaVersion,
 		Network:         uint32(networkCode),
 		BlockHash:       append([]byte(nil), record.BlockHash[:]...),
 		NodePubkeyXOnly: append([]byte(nil), record.PubKeyXOnly[:]...),
+		NodePowNonce:    &powNonce,
 		Signature:       append([]byte(nil), record.Signature[:]...),
 	}
 }
@@ -501,6 +530,13 @@ func insertKnownClaim(state *engineState, record claimRecord) bool {
 	}
 	if _, exists := claimsForBlock[record.NodeID]; exists {
 		return false
+	}
+	if len(claimsForBlock) >= KNOWN_CLAIMS_PER_BLOCK_CAP {
+		evictNodeID, shouldInsert := knownClaimEvictionCandidate(claimsForBlock, record.NodeID)
+		if !shouldInsert {
+			return false
+		}
+		delete(claimsForBlock, evictNodeID)
 	}
 	claimsForBlock[record.NodeID] = record
 	if len(claimsForBlock) > 1 {
@@ -525,6 +561,24 @@ func insertKnownClaim(state *engineState, record claimRecord) bool {
 	return true
 }
 
+func knownClaimEvictionCandidate(claims map[[32]byte]claimRecord, incomingNodeID [32]byte) ([32]byte, bool) {
+	var largest [32]byte
+	found := false
+	for nodeID := range claims {
+		if !found || bytes.Compare(nodeID[:], largest[:]) > 0 {
+			largest = nodeID
+			found = true
+		}
+	}
+	if !found {
+		return largest, true
+	}
+	if bytes.Compare(incomingNodeID[:], largest[:]) >= 0 {
+		return largest, false
+	}
+	return largest, true
+}
+
 func selectWinner(claims map[[32]byte]claimRecord) claimRecord {
 	var winner claimRecord
 	hasWinner := false
@@ -537,15 +591,39 @@ func selectWinner(claims map[[32]byte]claimRecord) claimRecord {
 	return winner
 }
 
-func enqueuePendingUnknownClaim(state *engineState, record claimRecord, nowMs uint64) {
+func enqueuePendingUnknownClaim(state *engineState, record claimRecord, nowMs uint64) bool {
 	list := state.PendingUnknownClaims[record.BlockHash]
 	for _, existing := range list {
 		if existing.NodeID == record.NodeID {
-			return
+			return false
 		}
+	}
+	if len(list) >= KNOWN_CLAIMS_PER_BLOCK_CAP {
+		evictIndex, shouldInsert := pendingClaimEvictionIndex(list, record.NodeID)
+		if !shouldInsert {
+			return false
+		}
+		list = append(list[:evictIndex], list[evictIndex+1:]...)
 	}
 	state.PendingUnknownClaims[record.BlockHash] = append(list, record)
 	cleanupPendingUnknownClaims(state, nowMs)
+	return true
+}
+
+func pendingClaimEvictionIndex(claims []claimRecord, incomingNodeID [32]byte) (int, bool) {
+	largestIndex := -1
+	for i, record := range claims {
+		if largestIndex < 0 || bytes.Compare(record.NodeID[:], claims[largestIndex].NodeID[:]) > 0 {
+			largestIndex = i
+		}
+	}
+	if largestIndex < 0 {
+		return -1, true
+	}
+	if bytes.Compare(incomingNodeID[:], claims[largestIndex].NodeID[:]) >= 0 {
+		return largestIndex, false
+	}
+	return largestIndex, true
 }
 
 func promotePendingUnknownClaimsForBlock(state *engineState, blockHash [32]byte) bool {
@@ -677,7 +755,7 @@ func purgeClaimStateForBlock(state *engineState, blockHash [32]byte) bool {
 	return changed
 }
 
-func loadState(claimsDir string, state *engineState) error {
+func loadState(claimsDir string, state *engineState, networkCode uint8) error {
 	currentPath := filepath.Join(claimsDir, claimsCurrentFilename)
 	previousPath := filepath.Join(claimsDir, claimsPreviousFile)
 
@@ -698,7 +776,7 @@ func loadState(claimsDir string, state *engineState) error {
 		}
 	}
 
-	loadedState, err := decodeStateDisk(disk)
+	loadedState, err := decodeStateDisk(disk, networkCode)
 	if err != nil {
 		return err
 	}
@@ -714,7 +792,7 @@ func readStateDisk(path string) ([]byte, error) {
 	return bytes, nil
 }
 
-func decodeStateDisk(raw []byte) (*engineState, error) {
+func decodeStateDisk(raw []byte, networkCode uint8) (*engineState, error) {
 	disk := claimStateDisk{}
 	if err := json.Unmarshal(raw, &disk); err != nil {
 		return nil, errors.Wrap(err, "failed decoding claim state snapshot")
@@ -780,9 +858,13 @@ func decodeStateDisk(raw []byte) (*engineState, error) {
 			BlockHash:    blockHash,
 			NodeID:       nodeID,
 			PubKeyXOnly:  pubKeyXOnly,
+			PowNonce:     winner.PowNonce,
 			Signature:    signature,
 			ClaimID:      claimID,
 			ReceivedAtMs: winner.ReceivedAtMs,
+		}
+		if !claimRecordIsValid(record, networkCode) {
+			continue
 		}
 		state.WinningClaimByBlock[blockHash] = record
 		state.RecentClaimsByBlock[blockHash] = map[[32]byte]claimRecord{
@@ -831,6 +913,7 @@ func persistState(claimsDir string, state *engineState) error {
 			BlockHash:    hex.EncodeToString(winner.BlockHash[:]),
 			NodeID:       hex.EncodeToString(winner.NodeID[:]),
 			PubKeyXOnly:  hex.EncodeToString(winner.PubKeyXOnly[:]),
+			PowNonce:     winner.PowNonce,
 			Signature:    hex.EncodeToString(winner.Signature[:]),
 			ClaimID:      hex.EncodeToString(winner.ClaimID[:]),
 			ReceivedAtMs: winner.ReceivedAtMs,

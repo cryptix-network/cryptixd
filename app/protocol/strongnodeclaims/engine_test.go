@@ -13,15 +13,16 @@ import (
 
 func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 	tempDir := t.TempDir()
-	engine := New(true, "cryptix-mainnet", tempDir)
+	engine := New(true, "cryptix-devnet", tempDir)
 
 	const (
 		privKeyHex   = "9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2"
 		blockHashHex = "00112233445566778899aabbccddeeff00112233445566778899aabbccddeeff"
+		powNonce     = uint64(1588910)
 	)
-	claim := mustBuildSignedClaim(t, 0, privKeyHex, blockHashHex)
+	claim := mustBuildSignedClaim(t, 2, privKeyHex, blockHashHex, powNonce)
 
-	outcome := engine.IngestClaim(claim, true, false)
+	outcome := engine.IngestClaim(claim, true, false, nil)
 	if outcome.Status != IngestAccepted || !outcome.Pending {
 		t.Fatalf("expected pending accepted claim, got %+v", outcome)
 	}
@@ -62,7 +63,7 @@ func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 		t.Fatalf("expected promoted claim to remain discoverable, got %d", got)
 	}
 
-	reloaded := New(true, "cryptix-mainnet", tempDir)
+	reloaded := New(true, "cryptix-devnet", tempDir)
 	reloadedSnapshot := reloaded.Snapshot(true)
 	if len(reloadedSnapshot.Entries) != 1 {
 		t.Fatalf("expected one scored entry after reload, got %d", len(reloadedSnapshot.Entries))
@@ -77,19 +78,20 @@ func TestPendingClaimPromotionAndRestartRebuild(t *testing.T) {
 
 func TestApplyChainPathUpdateRemovesClaimStateForRemovedBlocks(t *testing.T) {
 	tempDir := t.TempDir()
-	engine := New(true, "cryptix-mainnet", tempDir)
+	engine := New(true, "cryptix-devnet", tempDir)
 
 	const (
 		privKeyHex   = "9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2"
 		blockHashHex = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+		powNonce     = uint64(1588910)
 	)
-	claim := mustBuildSignedClaim(t, 0, privKeyHex, blockHashHex)
+	claim := mustBuildSignedClaim(t, 2, privKeyHex, blockHashHex, powNonce)
 	blockHash, err := externalapi.NewDomainHashFromByteSlice(claim.BlockHash)
 	if err != nil {
 		t.Fatalf("invalid block hash in claim: %s", err)
 	}
 
-	outcome := engine.IngestClaim(claim, true, true)
+	outcome := engine.IngestClaim(claim, true, true, nil)
 	if outcome.Status != IngestAccepted || outcome.Pending {
 		t.Fatalf("expected accepted known claim, got %+v", outcome)
 	}
@@ -131,15 +133,16 @@ func TestApplyChainPathUpdateRemovesClaimStateForRemovedBlocks(t *testing.T) {
 
 func TestHardforkGatingIgnoresClaimsAndChainUpdatesPreHF(t *testing.T) {
 	tempDir := t.TempDir()
-	engine := New(true, "cryptix-mainnet", tempDir)
+	engine := New(true, "cryptix-devnet", tempDir)
 
 	const (
 		privKeyHex   = "9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2"
 		blockHashHex = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+		powNonce     = uint64(1588910)
 	)
-	claim := mustBuildSignedClaim(t, 0, privKeyHex, blockHashHex)
+	claim := mustBuildSignedClaim(t, 2, privKeyHex, blockHashHex, powNonce)
 
-	outcome := engine.IngestClaim(claim, false, true)
+	outcome := engine.IngestClaim(claim, false, true, nil)
 	if outcome.Status != IngestIgnored {
 		t.Fatalf("expected IngestIgnored before hardfork, got %+v", outcome)
 	}
@@ -205,7 +208,69 @@ func TestServiceBitAdvertisementIsHardforkGated(t *testing.T) {
 	}
 }
 
-func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex string) *appmessage.MsgBlockProducerClaimV1 {
+func TestClaimRequiresValidNodePoWNonce(t *testing.T) {
+	tempDir := t.TempDir()
+	engine := New(true, "cryptix-devnet", tempDir)
+
+	claim := mustBuildSignedClaim(
+		t,
+		2,
+		"9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2",
+		"cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+		1588910,
+	)
+	badNonce := uint64(0)
+	claim.NodePowNonce = &badNonce
+
+	outcome := engine.IngestClaim(claim, true, true, nil)
+	if outcome.Status != IngestStrike {
+		t.Fatalf("expected invalid pow nonce to strike, got %+v", outcome)
+	}
+}
+
+func TestClaimMustMatchExpectedPeerNodeID(t *testing.T) {
+	tempDir := t.TempDir()
+	engine := New(true, "cryptix-devnet", tempDir)
+
+	claim := mustBuildSignedClaim(
+		t,
+		2,
+		"9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2",
+		"dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+		1588910,
+	)
+	wrongNodeID := [32]byte{0xff}
+
+	outcome := engine.IngestClaim(claim, true, true, &wrongNodeID)
+	if outcome.Status != IngestStrike {
+		t.Fatalf("expected peer identity mismatch to strike, got %+v", outcome)
+	}
+}
+
+func TestKnownAndPendingClaimsAreCappedPerBlock(t *testing.T) {
+	var blockHash [32]byte
+	state := newEngineState()
+	for i := 0; i < KNOWN_CLAIMS_PER_BLOCK_CAP+16; i++ {
+		nodeID := [32]byte{byte(255 - i)}
+		insertKnownClaim(state, claimRecord{BlockHash: blockHash, NodeID: nodeID})
+		if enqueuePendingUnknownClaim(state, claimRecord{BlockHash: blockHash, NodeID: nodeID}, uint64(i)) {
+			state.Dirty = true
+		}
+	}
+
+	if got := len(state.RecentClaimsByBlock[blockHash]); got != KNOWN_CLAIMS_PER_BLOCK_CAP {
+		t.Fatalf("known claims cap mismatch: got %d expected %d", got, KNOWN_CLAIMS_PER_BLOCK_CAP)
+	}
+	if got := len(state.PendingUnknownClaims[blockHash]); got != KNOWN_CLAIMS_PER_BLOCK_CAP {
+		t.Fatalf("pending per-block claims cap mismatch: got %d expected %d", got, KNOWN_CLAIMS_PER_BLOCK_CAP)
+	}
+	largestNodeID := [32]byte{255}
+	if _, exists := state.RecentClaimsByBlock[blockHash][largestNodeID]; exists {
+		t.Fatalf("expected lexicographically largest known claim to be evicted")
+	}
+}
+
+func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex string, powNonce uint64) *appmessage.MsgBlockProducerClaimV1 {
 	t.Helper()
 	var privKey [32]byte
 	privRaw, err := hex.DecodeString(privKeyHex)
@@ -236,6 +301,9 @@ func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex 
 
 	var pubKeyXOnly [32]byte
 	copy(pubKeyXOnly[:], pubSerialized[:])
+	if !netadapter.IsValidUnifiedNodePoWNonce(network, pubKeyXOnly, powNonce) {
+		t.Fatalf("pow nonce %d is invalid for network %d and pubkey %x", powNonce, network, pubKeyXOnly)
+	}
 	nodeID := netadapter.ComputeUnifiedNodeID(pubKeyXOnly)
 	claimDigest := netadapter.ComputeBlockProducerClaimDigest(network, blockHash, nodeID)
 
@@ -252,6 +320,7 @@ func mustBuildSignedClaim(t *testing.T, network uint8, privKeyHex, blockHashHex 
 		Network:         uint32(network),
 		BlockHash:       append([]byte(nil), blockHash[:]...),
 		NodePubkeyXOnly: append([]byte(nil), pubKeyXOnly[:]...),
+		NodePowNonce:    &powNonce,
 		Signature:       append([]byte(nil), signatureSerialized[:]...),
 	}
 }

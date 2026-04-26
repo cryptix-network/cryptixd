@@ -14,11 +14,17 @@ func (x *CryptixdMessage_BlockProducerClaimV1) toAppMessage() (appmessage.Messag
 	}
 
 	msg := x.BlockProducerClaimV1
+	var nodePowNonce *uint64
+	if msg.NodePowNonce != nil {
+		value := *msg.NodePowNonce
+		nodePowNonce = &value
+	}
 	return &appmessage.MsgBlockProducerClaimV1{
 		SchemaVersion:   msg.SchemaVersion,
 		Network:         msg.Network,
 		BlockHash:       append([]byte(nil), msg.BlockHash...),
 		NodePubkeyXOnly: append([]byte(nil), msg.NodePubkeyXonly...),
+		NodePowNonce:    nodePowNonce,
 		Signature:       append([]byte(nil), msg.Signature...),
 	}, nil
 }
@@ -27,12 +33,18 @@ func (x *CryptixdMessage_BlockProducerClaimV1) fromAppMessage(message *appmessag
 	if message == nil {
 		return errors.Wrapf(errorNil, "MsgBlockProducerClaimV1 is nil")
 	}
+	var nodePowNonce *uint64
+	if message.NodePowNonce != nil {
+		value := *message.NodePowNonce
+		nodePowNonce = &value
+	}
 
 	x.BlockProducerClaimV1 = &BlockProducerClaimV1Message{
 		SchemaVersion:   message.SchemaVersion,
 		Network:         message.Network,
 		BlockHash:       append([]byte(nil), message.BlockHash...),
 		NodePubkeyXonly: append([]byte(nil), message.NodePubkeyXOnly...),
+		NodePowNonce:    nodePowNonce,
 		Signature:       append([]byte(nil), message.Signature...),
 	}
 	return nil

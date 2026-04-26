@@ -8,6 +8,7 @@ type MsgBlockProducerClaimV1 struct {
 	Network         uint32
 	BlockHash       []byte
 	NodePubkeyXOnly []byte
+	NodePowNonce    *uint64
 	Signature       []byte
 }
 

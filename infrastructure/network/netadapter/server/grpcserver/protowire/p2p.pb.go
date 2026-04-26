@@ -3448,6 +3448,7 @@ type BlockProducerClaimV1Message struct {
 	BlockHash       []byte                 `protobuf:"bytes,3,opt,name=blockHash,proto3" json:"blockHash,omitempty"`
 	NodePubkeyXonly []byte                 `protobuf:"bytes,4,opt,name=nodePubkeyXonly,proto3" json:"nodePubkeyXonly,omitempty"`
 	Signature       []byte                 `protobuf:"bytes,5,opt,name=signature,proto3" json:"signature,omitempty"`
+	NodePowNonce    *uint64                `protobuf:"varint,6,opt,name=nodePowNonce,proto3,oneof" json:"nodePowNonce,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -3515,6 +3516,13 @@ func (x *BlockProducerClaimV1Message) GetSignature() []byte {
 		return x.Signature
 	}
 	return nil
+}
+
+func (x *BlockProducerClaimV1Message) GetNodePowNonce() uint64 {
+	if x != nil && x.NodePowNonce != nil {
+		return *x.NodePowNonce
+	}
+	return 0
 }
 
 var File_p2p_proto protoreflect.FileDescriptor
@@ -3733,13 +3741,15 @@ const file_p2p_proto_rawDesc = "" +
 	"\x06maxFee\x18\x05 \x01(\x04R\x06maxFee\"r\n" +
 	"\x15FastMicroblockMessage\x12*\n" +
 	"\x10microblockTimeMs\x18\x01 \x01(\x04R\x10microblockTimeMs\x12-\n" +
-	"\tintentIds\x18\x02 \x03(\v2\x0f.protowire.HashR\tintentIds\"\xc3\x01\n" +
+	"\tintentIds\x18\x02 \x03(\v2\x0f.protowire.HashR\tintentIds\"\xfd\x01\n" +
 	"\x1bBlockProducerClaimV1Message\x12$\n" +
 	"\rschemaVersion\x18\x01 \x01(\rR\rschemaVersion\x12\x18\n" +
 	"\anetwork\x18\x02 \x01(\rR\anetwork\x12\x1c\n" +
 	"\tblockHash\x18\x03 \x01(\fR\tblockHash\x12(\n" +
 	"\x0fnodePubkeyXonly\x18\x04 \x01(\fR\x0fnodePubkeyXonly\x12\x1c\n" +
-	"\tsignature\x18\x05 \x01(\fR\tsignatureB/Z-github.com/cryptix-network/cryptixd/protowireb\x06proto3"
+	"\tsignature\x18\x05 \x01(\fR\tsignature\x12'\n" +
+	"\fnodePowNonce\x18\x06 \x01(\x04H\x00R\fnodePowNonce\x88\x01\x01B\x0f\n" +
+	"\r_nodePowNonceB/Z-github.com/cryptix-network/cryptixd/protowireb\x06proto3"
 
 var (
 	file_p2p_proto_rawDescOnce sync.Once
@@ -3902,6 +3912,7 @@ func file_p2p_proto_init() {
 		return
 	}
 	file_p2p_proto_msgTypes[27].OneofWrappers = []any{}
+	file_p2p_proto_msgTypes[65].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

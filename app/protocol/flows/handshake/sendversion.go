@@ -91,10 +91,9 @@ func (flow *sendVersionFlow) start() error {
 	// Advertise support for post-HF PQ handshake fallback negotiation.
 	msg.Services |= appmessage.SFNodeQuantumHandshakeFallback
 	if hardforkActive {
+		msg.Services |= appmessage.SFNodeCryptixAtomic
 		msg.Services |= appmessage.SFNodeStrongNodeClaims
 	}
-	// Go cryptixd intentionally remains a minimal/non-SC runtime and therefore
-	// does not advertise SFNodeCryptixAtomic or SFNodeHFAFastchain.
 	if flow.Config().IsArchivalNode {
 		msg.Services |= appmessage.SFNodeArchival
 	}

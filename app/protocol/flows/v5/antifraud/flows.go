@@ -15,7 +15,7 @@ const (
 	snapshotRequestTimeout  = 5 * time.Second
 	modeRecheckInterval     = 1 * time.Second
 	modeMismatchThreshold   = 5
-	hardforkProtocolVersion = uint32(8)
+	hardforkProtocolVersion = uint32(9)
 )
 
 func shouldDisconnectOnConsecutiveMismatch(streak *int, mismatch bool) bool {
@@ -92,13 +92,14 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 				modeMismatchStreak = 0
 				continue
 			}
-			missingStrongNodeClaimsService := peer.Services()&appmessage.SFNodeStrongNodeClaims == 0
-			if shouldDisconnectOnConsecutiveMismatch(&serviceMismatchStreak, missingStrongNodeClaimsService) {
-				log.Warnf("Peer %s is missing mandatory strong-node-claims service bit after hardfork; reconnecting to renegotiate post-HF capabilities", peer)
+			missingMandatoryService := peer.Services()&appmessage.SFNodeCryptixAtomic == 0 ||
+				peer.Services()&appmessage.SFNodeStrongNodeClaims == 0
+			if shouldDisconnectOnConsecutiveMismatch(&serviceMismatchStreak, missingMandatoryService) {
+				log.Warnf("Peer %s is missing mandatory post-HF service bits; reconnecting to renegotiate post-HF capabilities", peer)
 				peer.Connection().Disconnect()
 				return nil
 			}
-			if missingStrongNodeClaimsService {
+			if missingMandatoryService {
 				modeMismatchStreak = 0
 				continue
 			}

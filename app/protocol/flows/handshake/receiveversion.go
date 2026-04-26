@@ -82,6 +82,9 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 			minAcceptableProtocolVersion)
 	}
 	hardforkActive := minAcceptableProtocolVersion >= hardforkProtocolVersion
+	if hardforkActive && !msgVersion.HasService(appmessage.SFNodeCryptixAtomic) {
+		return nil, protocolerrors.New(false, "peer missing mandatory atomic service bit after hardfork")
+	}
 	if hardforkActive && !msgVersion.HasService(appmessage.SFNodeStrongNodeClaims) {
 		return nil, protocolerrors.New(false, "peer missing mandatory strong-node-claims service bit after hardfork")
 	}
