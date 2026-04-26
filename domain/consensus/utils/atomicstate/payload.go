@@ -28,6 +28,11 @@ const (
 	maxLiquidityFeeRecipients  = 2
 	minLiquidityFeeBPS         = 10
 	maxLiquidityFeeBPS         = 1000
+	liquidityTokenDecimals     = byte(0)
+	minLiquiditySupplyRaw      = uint64(1_000)
+	maxLiquiditySupplyRaw      = uint64(1_000_000)
+	minLiquiditySeedReserve    = constants.SompiPerCryptix
+	maxLiquidityFinalReserve   = constants.MaxSompi
 )
 
 type PayloadSupplyMode byte
@@ -339,15 +344,16 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 	if !ok {
 		return nil, fmt.Errorf("truncated CAT decimals")
 	}
-	if decimals > catMaxDecimals {
-		return nil, fmt.Errorf("decimals `%d` above max `%d`", decimals, catMaxDecimals)
+	if decimals != liquidityTokenDecimals {
+		return nil, fmt.Errorf("liquidity asset decimals must be `%d`", liquidityTokenDecimals)
 	}
 	maxSupply, ok := takeUint128LE(payload, cursor)
 	if !ok {
 		return nil, fmt.Errorf("truncated CAT max_supply")
 	}
-	if maxSupply.IsZero() {
-		return nil, fmt.Errorf("liquidity asset max_supply must be non-zero")
+	if maxSupply.Compare(Uint128FromUint64(minLiquiditySupplyRaw)) < 0 ||
+		maxSupply.Compare(Uint128FromUint64(maxLiquiditySupplyRaw)) > 0 {
+		return nil, fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquiditySupplyRaw, maxLiquiditySupplyRaw)
 	}
 	name, symbol, metadata, err := parseStringFields(payload, cursor)
 	if err != nil {
@@ -356,6 +362,9 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 	seedReserveSompi, ok := takeUint64LE(payload, cursor)
 	if !ok {
 		return nil, fmt.Errorf("truncated CAT seed reserve")
+	}
+	if err := validateLiquidityCreateParams(decimals, maxSupply, seedReserveSompi); err != nil {
+		return nil, err
 	}
 	feeBPS, ok := takeUint16LE(payload, cursor)
 	if !ok {

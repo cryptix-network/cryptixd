@@ -338,8 +338,8 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	if _, ok := state.Assets[assetID]; ok {
 		return fmt.Errorf("asset `%x` already exists", assetID)
 	}
-	if op.SeedReserveSompi == 0 {
-		return fmt.Errorf("liquidity asset seed_reserve_sompi must be > 0")
+	if err := validateLiquidityCreateParams(op.Decimals, op.MaxSupply, op.SeedReserveSompi); err != nil {
+		return err
 	}
 	vaultOutputIndex, vaultOutputValue, err := resolveCreateLiquidityVaultOutput(tx)
 	if err != nil {
@@ -845,6 +845,9 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 	if err := validateCurveReserveAgainstOutstandingSupply(assetID, asset.TotalSupply, pool.CurveReserveSompi); err != nil {
 		return err
 	}
+	if err := validateLiquidityCurveReachability(pool.RemainingPoolSupply, pool.CurveReserveSompi); err != nil {
+		return err
+	}
 	expectedVault, ok := checkedAddUint64(pool.CurveReserveSompi, pool.UnclaimedFeeTotalSompi)
 	if !ok {
 		return fmt.Errorf("vault invariant overflow")
@@ -865,6 +868,35 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 func validateCurveReserveAgainstOutstandingSupply(assetID [externalapi.DomainHashSize]byte, totalSupply Uint128, curveReserveSompi uint64) error {
 	if !totalSupply.IsZero() && curveReserveSompi == 0 {
 		return fmt.Errorf("curve reserve exhausted for liquidity asset `%x` while tokens remain outstanding", assetID)
+	}
+	return nil
+}
+
+func validateLiquidityCreateParams(decimals byte, maxSupply Uint128, seedReserveSompi uint64) error {
+	if decimals != liquidityTokenDecimals {
+		return fmt.Errorf("liquidity asset decimals must be `%d`", liquidityTokenDecimals)
+	}
+	if maxSupply.Compare(Uint128FromUint64(minLiquiditySupplyRaw)) < 0 ||
+		maxSupply.Compare(Uint128FromUint64(maxLiquiditySupplyRaw)) > 0 {
+		return fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquiditySupplyRaw, maxLiquiditySupplyRaw)
+	}
+	if seedReserveSompi < minLiquiditySeedReserve {
+		return fmt.Errorf("liquidity asset seed_reserve_sompi must be at least `%d`", minLiquiditySeedReserve)
+	}
+	return validateLiquidityCurveReachability(maxSupply, seedReserveSompi)
+}
+
+func validateLiquidityCurveReachability(remainingPoolSupply Uint128, curveReserveSompi uint64) error {
+	if remainingPoolSupply.IsZero() {
+		return nil
+	}
+	y, ok := remainingPoolSupply.Add(Uint128FromUint64(curveFloorToken))
+	if !ok {
+		return fmt.Errorf("liquidity curve reachability y overflow")
+	}
+	requiredFinalReserve := new(big.Int).Mul(new(big.Int).SetUint64(curveReserveSompi), y.Big())
+	if requiredFinalReserve.Cmp(new(big.Int).SetUint64(maxLiquidityFinalReserve)) > 0 {
+		return fmt.Errorf("liquidity curve final reserve `%s` exceeds MaxSompi `%d`", requiredFinalReserve.String(), maxLiquidityFinalReserve)
 	}
 	return nil
 }
