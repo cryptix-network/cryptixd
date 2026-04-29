@@ -410,10 +410,10 @@ func TestHandleExternalBanlistRefreshFailureEscalatesToPeerFallback(t *testing.T
 	}
 }
 
-func TestAntiFraudPeerFallbackAllowedByNoDNSSeed(t *testing.T) {
+func TestAntiFraudPeerFallbackNotAllowedByNoDNSSeed(t *testing.T) {
 	manager := &ConnectionManager{cfg: &config.Config{Flags: &config.Flags{DisableDNSSeed: true}}}
-	if !manager.antiFraudPeerFallbackAllowed() {
-		t.Fatalf("expected --nodnsseed to imply anti-fraud peer fallback permission")
+	if manager.antiFraudPeerFallbackAllowed() {
+		t.Fatalf("expected --nodnsseed to leave anti-fraud peer fallback disabled")
 	}
 }
 

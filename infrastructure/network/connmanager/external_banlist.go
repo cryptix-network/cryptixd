@@ -134,7 +134,7 @@ func (c *ConnectionManager) externalBanlistEnabled() bool {
 }
 
 func (c *ConnectionManager) antiFraudPeerFallbackAllowed() bool {
-	return c != nil && c.cfg != nil && (c.cfg.AllowAntiFraudPeerFallback || c.cfg.DisableDNSSeed)
+	return c != nil && c.cfg != nil && c.cfg.AllowAntiFraudPeerFallback
 }
 
 func (c *ConnectionManager) IsAntiFraudRuntimeEnabled() bool {
@@ -357,7 +357,6 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, ex
 	}
 
 	primaryResult, primaryErr := c.fetchExternalBanlistFromEndpoint("primary", defaultExternalBanlistPrimaryURL, expectedNetwork)
-	secondaryResult, secondaryErr := c.fetchExternalBanlistFromEndpoint("secondary", defaultExternalBanlistSeedURL, expectedNetwork)
 
 	endpointResults := make([]*endpointAntiFraudSnapshotResult, 0, 2)
 	endpointErrors := make([]string, 0, 2)
@@ -366,10 +365,13 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, ex
 	} else if primaryResult != nil {
 		endpointResults = append(endpointResults, primaryResult)
 	}
-	if secondaryErr != nil {
-		endpointErrors = append(endpointErrors, errors.Wrap(secondaryErr, "secondary endpoint unavailable").Error())
-	} else if secondaryResult != nil {
-		endpointResults = append(endpointResults, secondaryResult)
+	if c.cfg.AntiFraudGuard {
+		secondaryResult, secondaryErr := c.fetchExternalBanlistFromEndpoint("secondary", defaultExternalBanlistSeedURL, expectedNetwork)
+		if secondaryErr != nil {
+			endpointErrors = append(endpointErrors, errors.Wrap(secondaryErr, "secondary endpoint unavailable").Error())
+		} else if secondaryResult != nil {
+			endpointResults = append(endpointResults, secondaryResult)
+		}
 	}
 
 	disabledResults := make([]*endpointAntiFraudSnapshotResult, 0, len(endpointResults))

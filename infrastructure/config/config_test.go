@@ -55,6 +55,13 @@ func TestCreateDefaultConfigFile(t *testing.T) {
 	}
 }
 
+func TestDefaultAntiFraudGuardDisabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if cfg.AntiFraudGuard {
+		t.Fatalf("expected optional AntiFraud guard mirror to be disabled by default")
+	}
+}
+
 // TestConstants makes sure that all constants hard-coded into the help text were not modified.
 func TestConstants(t *testing.T) {
 	zero := externalapi.DomainSubnetworkID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
