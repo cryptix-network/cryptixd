@@ -7,6 +7,7 @@ import (
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
 )
@@ -112,6 +113,17 @@ func opAllowsLiquidityVaultOutput(op PayloadOp) bool {
 	}
 }
 
+func liquiditySellLocked(pool LiquidityPoolState) bool {
+	return pool.UnlockTargetSompi > 0 && !pool.Unlocked
+}
+
+func validateLiquidityUnlockTargetForState(unlockTargetSompi uint64) error {
+	if unlockTargetSompi > constants.MaxSompi {
+		return fmt.Errorf("liquidity unlock target `%d` exceeds MaxSompi `%d`", unlockTargetSompi, constants.MaxSompi)
+	}
+	return nil
+}
+
 func resolveOwnerFromPopulatedTx(tx *externalapi.DomainTransaction, authInputIndex uint16) ([externalapi.DomainHashSize]byte, error) {
 	index := int(authInputIndex)
 	if index >= len(tx.Inputs) || tx.Inputs[index].UTXOEntry == nil {
@@ -200,6 +212,7 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 			SupplyMode:           payloadSupplyModeToState(op.SupplyMode),
 			MaxSupply:            op.MaxSupply,
 			TotalSupply:          Uint128{},
+			PlatformTag:          op.PlatformTag,
 			Liquidity:            nil,
 		})
 
@@ -228,6 +241,7 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 			SupplyMode:           supplyMode,
 			MaxSupply:            op.MaxSupply,
 			TotalSupply:          totalSupply,
+			PlatformTag:          op.PlatformTag,
 			Liquidity:            nil,
 		})
 
@@ -341,6 +355,9 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	if err := validateLiquidityCreateParams(op.Decimals, op.MaxSupply, op.SeedReserveSompi); err != nil {
 		return err
 	}
+	if err := validateLiquidityUnlockTargetForState(op.UnlockTargetSompi); err != nil {
+		return err
+	}
 	vaultOutputIndex, vaultOutputValue, err := resolveCreateLiquidityVaultOutput(tx)
 	if err != nil {
 		return err
@@ -398,12 +415,14 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	}
 
 	txID := consensushashing.TransactionID(tx)
+	unlocked := op.UnlockTargetSompi == 0 || curveReserveSompi >= op.UnlockTargetSompi
 	asset := AssetState{
 		AssetClass:           AssetClassLiquidity,
 		MintAuthorityOwnerID: [externalapi.DomainHashSize]byte{},
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            op.MaxSupply,
 		TotalSupply:          totalSupply,
+		PlatformTag:          op.PlatformTag,
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:              1,
 			RemainingPoolSupply:    remainingPoolSupply,
@@ -415,7 +434,9 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 				TransactionID: *txID,
 				Index:         vaultOutputIndex,
 			},
-			VaultValueSompi: vaultOutputValue,
+			VaultValueSompi:   vaultOutputValue,
+			UnlockTargetSompi: op.UnlockTargetSompi,
+			Unlocked:          unlocked,
 		},
 	}
 	if err := validateLiquidityInvariants(assetID, asset); err != nil {
@@ -467,6 +488,9 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 	}
 	pool.RemainingPoolSupply = newRemainingPoolSupply
 	pool.CurveReserveSompi = newCurveReserveSompi
+	if pool.UnlockTargetSompi > 0 && pool.CurveReserveSompi >= pool.UnlockTargetSompi {
+		pool.Unlocked = true
+	}
 	if err := applyFeeToPool(pool.FeeRecipients, &pool.UnclaimedFeeTotalSompi, feeTrade); err != nil {
 		return err
 	}
@@ -506,6 +530,9 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 	pool := *asset.Liquidity
 	if pool.PoolNonce != op.ExpectedPoolNonce {
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
+	}
+	if liquiditySellLocked(pool) {
+		return fmt.Errorf("liquidity sell locked for asset `%x` until curve reserve reaches `%d` sompi", op.AssetID, pool.UnlockTargetSompi)
 	}
 	senderKey := BalanceKey{AssetID: op.AssetID, OwnerID: ownerID}
 	senderAfter, ok := state.Balances[senderKey].Sub(op.TokenIn)
@@ -590,6 +617,9 @@ func applyClaimLiquidityFees(tx *externalapi.DomainTransaction, ownerID [externa
 	pool := *asset.Liquidity
 	if pool.PoolNonce != op.ExpectedPoolNonce {
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
+	}
+	if liquiditySellLocked(pool) {
+		return fmt.Errorf("liquidity fee claim locked for asset `%x` until curve reserve reaches `%d` sompi", op.AssetID, pool.UnlockTargetSompi)
 	}
 	if op.ClaimAmountSompi < liquidityMinPayoutSompi {
 		return fmt.Errorf("claim amount below liquidity_min_payout_sompi")
@@ -842,6 +872,15 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 		return fmt.Errorf("liquidity assets must always use capped supply mode")
 	}
 	pool := asset.Liquidity
+	if err := validateLiquidityUnlockTargetForState(pool.UnlockTargetSompi); err != nil {
+		return err
+	}
+	if pool.UnlockTargetSompi == 0 && !pool.Unlocked {
+		return fmt.Errorf("liquidity lock disabled pools must be marked unlocked")
+	}
+	if pool.UnlockTargetSompi > 0 && !pool.Unlocked && pool.CurveReserveSompi >= pool.UnlockTargetSompi {
+		return fmt.Errorf("liquidity lock target reached for asset `%x` but pool is still locked", assetID)
+	}
 	if err := validateCurveReserveAgainstOutstandingSupply(assetID, asset.TotalSupply, pool.CurveReserveSompi); err != nil {
 		return err
 	}

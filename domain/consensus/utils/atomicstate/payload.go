@@ -24,6 +24,7 @@ const (
 	catMaxNameLen              = 32
 	catMaxSymbolLen            = 10
 	catMaxMetadataLen          = 256
+	catMaxPlatformTagLen       = 50
 	catMaxDecimals             = 18
 	maxLiquidityFeeRecipients  = 2
 	minLiquidityFeeBPS         = 10
@@ -59,6 +60,7 @@ type CreateAssetOp struct {
 	Name                 []byte
 	Symbol               []byte
 	Metadata             []byte
+	PlatformTag          []byte
 }
 
 func (CreateAssetOp) isPayloadOp() {}
@@ -96,6 +98,7 @@ type CreateAssetWithMintOp struct {
 	Metadata             []byte
 	InitialMintAmount    Uint128
 	InitialMintToOwnerID [externalapi.DomainHashSize]byte
+	PlatformTag          []byte
 }
 
 func (CreateAssetWithMintOp) isPayloadOp() {}
@@ -111,6 +114,8 @@ type CreateLiquidityAssetOp struct {
 	Recipients           []PayloadRecipientAddress
 	LaunchBuySompi       uint64
 	LaunchBuyMinTokenOut Uint128
+	PlatformTag          []byte
+	UnlockTargetSompi    uint64
 }
 
 func (CreateLiquidityAssetOp) isPayloadOp() {}
@@ -242,6 +247,10 @@ func parseCreateAsset(payload []byte, cursor *int) (PayloadOp, error) {
 	if err != nil {
 		return nil, err
 	}
+	platformTag, err := parseOptionalPlatformTagTail(payload, cursor)
+	if err != nil {
+		return nil, err
+	}
 	return CreateAssetOp{
 		Decimals:             decimals,
 		SupplyMode:           supplyMode,
@@ -250,6 +259,7 @@ func parseCreateAsset(payload []byte, cursor *int) (PayloadOp, error) {
 		Name:                 name,
 		Symbol:               symbol,
 		Metadata:             metadata,
+		PlatformTag:          platformTag,
 	}, nil
 }
 
@@ -326,6 +336,10 @@ func parseCreateAssetWithMint(payload []byte, cursor *int) (PayloadOp, error) {
 	if !initialMintAmount.IsZero() && initialMintToOwnerID == zero {
 		return nil, fmt.Errorf("initial_mint_to_owner_id must be non-zero when initial_mint_amount is non-zero")
 	}
+	platformTag, err := parseOptionalPlatformTagTail(payload, cursor)
+	if err != nil {
+		return nil, err
+	}
 	return CreateAssetWithMintOp{
 		Decimals:             decimals,
 		SupplyMode:           supplyMode,
@@ -336,6 +350,7 @@ func parseCreateAssetWithMint(payload []byte, cursor *int) (PayloadOp, error) {
 		Metadata:             metadata,
 		InitialMintAmount:    initialMintAmount,
 		InitialMintToOwnerID: initialMintToOwnerID,
+		PlatformTag:          platformTag,
 	}, nil
 }
 
@@ -417,6 +432,10 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 	if launchBuySompi > 0 && launchBuyMinTokenOut.IsZero() {
 		return nil, fmt.Errorf("launch_buy_min_token_out must be >0 when launch_buy_sompi is >0")
 	}
+	platformTag, unlockTargetSompi, err := parseOptionalLiquidityCreateTail(payload, cursor)
+	if err != nil {
+		return nil, err
+	}
 	return CreateLiquidityAssetOp{
 		Decimals:             decimals,
 		MaxSupply:            maxSupply,
@@ -428,6 +447,8 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 		Recipients:           recipients,
 		LaunchBuySompi:       launchBuySompi,
 		LaunchBuyMinTokenOut: launchBuyMinTokenOut,
+		PlatformTag:          platformTag,
+		UnlockTargetSompi:    unlockTargetSompi,
 	}, nil
 }
 
@@ -578,6 +599,56 @@ func parseCreateAssetCommon(payload []byte, cursor *int) (
 		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("uncapped assets must encode max_supply=0")
 	}
 	return decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, nil
+}
+
+func parseOptionalPlatformTagTail(payload []byte, cursor *int) ([]byte, error) {
+	if *cursor == len(payload) {
+		return nil, nil
+	}
+	return parsePlatformTag(payload, cursor)
+}
+
+func parseOptionalLiquidityCreateTail(payload []byte, cursor *int) ([]byte, uint64, error) {
+	if *cursor == len(payload) {
+		return nil, 0, nil
+	}
+	platformTag, err := parsePlatformTag(payload, cursor)
+	if err != nil {
+		return nil, 0, err
+	}
+	unlockTargetSompi, ok := takeUint64LE(payload, cursor)
+	if !ok {
+		return nil, 0, fmt.Errorf("truncated CAT liquidity unlock target")
+	}
+	if err := validateLiquidityUnlockTarget(unlockTargetSompi); err != nil {
+		return nil, 0, err
+	}
+	return platformTag, unlockTargetSompi, nil
+}
+
+func parsePlatformTag(payload []byte, cursor *int) ([]byte, error) {
+	platformTagLen, ok := takeByte(payload, cursor)
+	if !ok {
+		return nil, fmt.Errorf("truncated CAT platform tag length")
+	}
+	if int(platformTagLen) > catMaxPlatformTagLen {
+		return nil, fmt.Errorf("platform tag length exceeds max `%d`", catMaxPlatformTagLen)
+	}
+	platformTag, ok := takeVec(payload, cursor, int(platformTagLen))
+	if !ok {
+		return nil, fmt.Errorf("truncated CAT platform tag")
+	}
+	if !utf8.Valid(platformTag) {
+		return nil, fmt.Errorf("platform tag must be valid utf-8")
+	}
+	return platformTag, nil
+}
+
+func validateLiquidityUnlockTarget(unlockTargetSompi uint64) error {
+	if unlockTargetSompi > constants.MaxSompi {
+		return fmt.Errorf("liquidity unlock target `%d` exceeds MaxSompi `%d`", unlockTargetSompi, constants.MaxSompi)
+	}
+	return nil
 }
 
 func parseStringFields(payload []byte, cursor *int) ([]byte, []byte, []byte, error) {

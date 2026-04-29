@@ -5,14 +5,15 @@ import (
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"unicode/utf8"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"golang.org/x/crypto/blake2b"
 )
 
 var (
-	atomicConsensusStateMagic      = []byte("CATCS001")
-	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v1")
+	atomicConsensusStateMagic      = []byte("CATCS002")
+	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v2")
 	atomicStateCommitmentDomain    = []byte("cryptix-utxo-atomic-state-commitment-v1")
 )
 
@@ -51,6 +52,8 @@ type LiquidityPoolState struct {
 	FeeRecipients          []LiquidityFeeRecipientState
 	VaultOutpoint          externalapi.DomainOutpoint
 	VaultValueSompi        uint64
+	UnlockTargetSompi      uint64
+	Unlocked               bool
 }
 
 type AssetState struct {
@@ -59,6 +62,7 @@ type AssetState struct {
 	SupplyMode           SupplyMode
 	MaxSupply            Uint128
 	TotalSupply          Uint128
+	PlatformTag          []byte
 	Liquidity            *LiquidityPoolState
 }
 
@@ -105,6 +109,7 @@ func (s *State) Clone() *State {
 
 func (a AssetState) clone() AssetState {
 	out := a
+	out.PlatformTag = append([]byte(nil), a.PlatformTag...)
 	if a.Liquidity != nil {
 		pool := *a.Liquidity
 		pool.FeeRecipients = make([]LiquidityFeeRecipientState, len(a.Liquidity.FeeRecipients))
@@ -360,6 +365,8 @@ func writeAsset(out *[]byte, asset AssetState) {
 	*out = append(*out, byte(asset.SupplyMode))
 	writeUint128(out, asset.MaxSupply)
 	writeUint128(out, asset.TotalSupply)
+	writeLen(out, len(asset.PlatformTag))
+	*out = append(*out, asset.PlatformTag...)
 	if asset.Liquidity == nil {
 		*out = append(*out, 0)
 		return
@@ -385,6 +392,12 @@ func writeLiquidityPool(out *[]byte, pool LiquidityPoolState) {
 	*out = append(*out, pool.VaultOutpoint.TransactionID.ByteSlice()...)
 	writeUint32(out, pool.VaultOutpoint.Index)
 	writeUint64(out, pool.VaultValueSompi)
+	writeUint64(out, pool.UnlockTargetSompi)
+	if pool.Unlocked {
+		*out = append(*out, 1)
+	} else {
+		*out = append(*out, 0)
+	}
 }
 
 type atomicStateReader struct {
@@ -498,6 +511,23 @@ func (r *atomicStateReader) readAsset() (AssetState, error) {
 	if err != nil {
 		return AssetState{}, err
 	}
+	platformTagLen, err := r.readLen()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if platformTagLen > catMaxPlatformTagLen {
+		return AssetState{}, fmt.Errorf("atomic platform tag length `%d` exceeds max", platformTagLen)
+	}
+	if platformTagLen > uint64(len(r.bytes)-r.cursor) {
+		return AssetState{}, fmt.Errorf("truncated atomic consensus state")
+	}
+	platformTag, err := r.readBytes(int(platformTagLen))
+	if err != nil {
+		return AssetState{}, err
+	}
+	if !utf8.Valid(platformTag) {
+		return AssetState{}, fmt.Errorf("atomic platform tag must be valid utf-8")
+	}
 	presence, err := r.readByte()
 	if err != nil {
 		return AssetState{}, err
@@ -520,6 +550,7 @@ func (r *atomicStateReader) readAsset() (AssetState, error) {
 		SupplyMode:           supplyMode,
 		MaxSupply:            maxSupply,
 		TotalSupply:          totalSupply,
+		PlatformTag:          append([]byte(nil), platformTag...),
 		Liquidity:            liquidity,
 	}, nil
 }
@@ -597,6 +628,23 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 	if err != nil {
 		return LiquidityPoolState{}, err
 	}
+	unlockTargetSompi, err := r.readUint64()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	unlockedRaw, err := r.readByte()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	var unlocked bool
+	switch unlockedRaw {
+	case 0:
+		unlocked = false
+	case 1:
+		unlocked = true
+	default:
+		return LiquidityPoolState{}, fmt.Errorf("invalid atomic liquidity unlocked flag `%d`", unlockedRaw)
+	}
 	return LiquidityPoolState{
 		PoolNonce:              poolNonce,
 		RemainingPoolSupply:    remainingPoolSupply,
@@ -608,7 +656,9 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 			TransactionID: *txID,
 			Index:         index,
 		},
-		VaultValueSompi: vaultValueSompi,
+		VaultValueSompi:   vaultValueSompi,
+		UnlockTargetSompi: unlockTargetSompi,
+		Unlocked:          unlocked,
 	}, nil
 }
 

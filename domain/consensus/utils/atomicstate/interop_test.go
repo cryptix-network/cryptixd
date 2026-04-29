@@ -104,6 +104,7 @@ func atomicInteropVectorState(t *testing.T) *State {
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            liquidityMaxSupply,
 		TotalSupply:          liquidityTotal,
+		PlatformTag:          nil,
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:              17,
 			RemainingPoolSupply:    liquidityRemaining,
@@ -124,8 +125,10 @@ func atomicInteropVectorState(t *testing.T) *State {
 					UnclaimedSompi: 20,
 				},
 			},
-			VaultOutpoint:   *externalapi.NewDomainOutpoint(externalapi.NewDomainTransactionIDFromByteArray(&vaultTransactionID), 3),
-			VaultValueSompi: 123_456_819,
+			VaultOutpoint:     *externalapi.NewDomainOutpoint(externalapi.NewDomainTransactionIDFromByteArray(&vaultTransactionID), 3),
+			VaultValueSompi:   123_456_819,
+			UnlockTargetSompi: 0,
+			Unlocked:          true,
 		},
 	}
 	state.Assets[standardAssetID] = AssetState{
@@ -134,6 +137,7 @@ func atomicInteropVectorState(t *testing.T) *State {
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            uint128Words(0x0200, 9_999),
 		TotalSupply:          standardTotal,
+		PlatformTag:          nil,
 	}
 	state.Balances[BalanceKey{AssetID: standardAssetID, OwnerID: bytes32(0xB1)}] = standardBalanceB
 	state.Balances[BalanceKey{AssetID: liquidityAssetID, OwnerID: bytes32(0xC0)}] = liquidityTotal
