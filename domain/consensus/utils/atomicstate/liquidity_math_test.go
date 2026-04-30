@@ -28,20 +28,15 @@ func buyAcceptedForTest(realTokenReserves Uint128, virtualCPayReserves uint64, v
 }
 
 func maxBuyInSompiForTest(realTokenReserves Uint128, virtualCPayReserves uint64, virtualTokenReserves Uint128, feeBPS uint16) uint64 {
-	if realTokenReserves.Compare(Uint128FromUint64(minRealTokenReserve)) <= 0 {
+	tokenOut, ok := realTokenReserves.Sub(Uint128FromUint64(minRealTokenReserve))
+	if !ok || tokenOut.IsZero() {
 		return 0
 	}
-	low := uint64(0)
-	high := constants.MaxSompi
-	for low < high {
-		mid := low + (high-low+1)/2
-		if buyAcceptedForTest(realTokenReserves, virtualCPayReserves, virtualTokenReserves, mid, feeBPS) {
-			low = mid
-		} else {
-			high = mid - 1
-		}
+	max, err := minGrossInputForTokenOut(realTokenReserves, virtualCPayReserves, virtualTokenReserves, tokenOut, feeBPS)
+	if err != nil {
+		panic(err)
 	}
-	return low
+	return max
 }
 
 func TestCPMMBuyStopsBeforeFinalRealToken(t *testing.T) {
@@ -109,6 +104,97 @@ func TestInitialVirtualTokenReservesScaleWithSupply(t *testing.T) {
 	}
 	if _, err := initialVirtualTokenReservesForMaxSupply(Uint128FromUint64(maxLiquidityTokenSupplyRaw + 1)); err == nil {
 		t.Fatal("expected above-max supply to fail")
+	}
+}
+
+func TestMinGrossInputForTokenOutRemovesIntegerOverpay(t *testing.T) {
+	budget := uint64(10 * constants.SompiPerCryptix)
+	tokenOut, _, _, _, err := cpmmBuy(
+		Uint128FromUint64(liquidityTokenSupplyRaw),
+		initialVirtualCPayReserves,
+		Uint128FromUint64(initialVirtualTokenReserve),
+		budget,
+	)
+	if err != nil {
+		t.Fatalf("budget buy failed: %v", err)
+	}
+	if tokenOut.Compare(Uint128FromUint64(4)) != 0 {
+		t.Fatalf("budget tokenOut got %s want 4", tokenOut.Big().String())
+	}
+	canonical, err := minGrossInputForTokenOut(
+		Uint128FromUint64(liquidityTokenSupplyRaw),
+		initialVirtualCPayReserves,
+		Uint128FromUint64(initialVirtualTokenReserve),
+		tokenOut,
+		0,
+	)
+	if err != nil {
+		t.Fatalf("canonical input failed: %v", err)
+	}
+	if canonical != 833_336_112 {
+		t.Fatalf("canonical input got %d want 833336112", canonical)
+	}
+	if canonical >= budget {
+		t.Fatalf("canonical input should be below budget: canonical=%d budget=%d", canonical, budget)
+	}
+	previousTokenOut, _, _, _, err := cpmmBuy(
+		Uint128FromUint64(liquidityTokenSupplyRaw),
+		initialVirtualCPayReserves,
+		Uint128FromUint64(initialVirtualTokenReserve),
+		canonical-1,
+	)
+	if err != nil {
+		t.Fatalf("previous buy failed: %v", err)
+	}
+	if previousTokenOut.Compare(Uint128FromUint64(3)) != 0 {
+		t.Fatalf("previous tokenOut got %s want 3", previousTokenOut.Big().String())
+	}
+}
+
+func TestMinGrossInputForTokenOutAccountsForFeeFlooring(t *testing.T) {
+	budget := uint64(1_000 * constants.SompiPerCryptix)
+	feeBPS := uint16(100)
+	fee, err := calculateTradeFee(budget, feeBPS)
+	if err != nil {
+		t.Fatalf("fee failed: %v", err)
+	}
+	tokenOut, _, _, _, err := cpmmBuy(
+		Uint128FromUint64(liquidityTokenSupplyRaw),
+		initialVirtualCPayReserves,
+		Uint128FromUint64(initialVirtualTokenReserve),
+		budget-fee,
+	)
+	if err != nil {
+		t.Fatalf("budget buy failed: %v", err)
+	}
+	canonical, err := minGrossInputForTokenOut(
+		Uint128FromUint64(liquidityTokenSupplyRaw),
+		initialVirtualCPayReserves,
+		Uint128FromUint64(initialVirtualTokenReserve),
+		tokenOut,
+		feeBPS,
+	)
+	if err != nil {
+		t.Fatalf("canonical input failed: %v", err)
+	}
+	if canonical >= budget {
+		t.Fatalf("canonical input should be below budget: canonical=%d budget=%d", canonical, budget)
+	}
+	canonicalFee, err := calculateTradeFee(canonical, feeBPS)
+	if err != nil {
+		t.Fatalf("canonical fee failed: %v", err)
+	}
+	canonicalTokenOut, _, _, _, err := cpmmBuy(
+		Uint128FromUint64(liquidityTokenSupplyRaw),
+		initialVirtualCPayReserves,
+		Uint128FromUint64(initialVirtualTokenReserve),
+		canonical-canonicalFee,
+	)
+	if err != nil {
+		t.Fatalf("canonical buy failed: %v", err)
+	}
+	if canonicalTokenOut.Compare(tokenOut) != 0 {
+		t.Fatalf("canonical tokenOut got %s want %s", canonicalTokenOut.Big().String(), tokenOut.Big().String())
 	}
 }
 
@@ -299,9 +385,9 @@ func TestMaxBuyInSompiIsGrossAndEnforcesExactBoundary(t *testing.T) {
 		feeBPS               uint16
 		expectedMax          uint64
 	}{
-		{Uint128FromUint64(liquidityTokenSupplyRaw), initialVirtualCPayReserves, Uint128FromUint64(initialVirtualTokenReserve), 0, 1_249_999_999_999_999},
-		{Uint128FromUint64(liquidityTokenSupplyRaw), initialVirtualCPayReserves, Uint128FromUint64(initialVirtualTokenReserve), 100, 1_262_626_262_626_261},
-		{Uint128FromUint64(500_000), 1_234_567_890_123, Uint128FromUint64(987_654), 250, 1_298_280_622_171},
+		{Uint128FromUint64(liquidityTokenSupplyRaw), initialVirtualCPayReserves, Uint128FromUint64(initialVirtualTokenReserve), 0, 1_249_992_500_037_500},
+		{Uint128FromUint64(liquidityTokenSupplyRaw), initialVirtualCPayReserves, Uint128FromUint64(initialVirtualTokenReserve), 100, 1_262_618_686_906_565},
+		{Uint128FromUint64(500_000), 1_234_567_890_123, Uint128FromUint64(987_654), 250, 1_298_275_363_323},
 	}
 	for _, test := range tests {
 		max := maxBuyInSompiForTest(test.realTokenReserves, test.virtualCPayReserves, test.virtualTokenReserves, test.feeBPS)
@@ -311,8 +397,33 @@ func TestMaxBuyInSompiIsGrossAndEnforcesExactBoundary(t *testing.T) {
 		if !buyAcceptedForTest(test.realTokenReserves, test.virtualCPayReserves, test.virtualTokenReserves, max, test.feeBPS) {
 			t.Fatalf("max buy %d should be accepted", max)
 		}
-		if buyAcceptedForTest(test.realTokenReserves, test.virtualCPayReserves, test.virtualTokenReserves, max+1, test.feeBPS) {
-			t.Fatalf("max buy + 1 should be rejected")
+		fee, err := calculateTradeFee(max, test.feeBPS)
+		if err != nil {
+			t.Fatalf("fee failed: %v", err)
+		}
+		tokenOut, realTokens, _, _, err := cpmmBuy(test.realTokenReserves, test.virtualCPayReserves, test.virtualTokenReserves, max-fee)
+		if err != nil {
+			t.Fatalf("max buy should quote: %v", err)
+		}
+		if realTokens.Compare(Uint128FromUint64(minRealTokenReserve)) != 0 {
+			t.Fatalf("max buy real tokens got %s want %d", realTokens.Big().String(), minRealTokenReserve)
+		}
+		over := max + 1
+		overFee, err := calculateTradeFee(over, test.feeBPS)
+		if err != nil {
+			t.Fatalf("over fee failed: %v", err)
+		}
+		if overTokenOut, _, _, _, err := cpmmBuy(test.realTokenReserves, test.virtualCPayReserves, test.virtualTokenReserves, over-overFee); err == nil {
+			if overTokenOut.Compare(tokenOut) != 0 {
+				t.Fatalf("over tokenOut got %s want %s", overTokenOut.Big().String(), tokenOut.Big().String())
+			}
+			canonical, err := minGrossInputForTokenOut(test.realTokenReserves, test.virtualCPayReserves, test.virtualTokenReserves, overTokenOut, test.feeBPS)
+			if err != nil {
+				t.Fatalf("over canonical failed: %v", err)
+			}
+			if canonical == over {
+				t.Fatalf("max buy + 1 should not be canonical")
+			}
 		}
 	}
 }

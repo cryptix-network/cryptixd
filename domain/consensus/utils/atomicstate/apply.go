@@ -402,6 +402,13 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		if tokenOut.Compare(op.LaunchBuyMinTokenOut) < 0 {
 			return fmt.Errorf("launch buy min_token_out violated")
 		}
+		canonicalLaunchBuy, err := minGrossInputForTokenOut(realTokenReserves, virtualCPayReserves, virtualTokenReserves, tokenOut, op.FeeBPS)
+		if err != nil {
+			return err
+		}
+		if op.LaunchBuySompi != canonicalLaunchBuy {
+			return fmt.Errorf("launch buy CPAY input is not canonical: expected `%d`, got `%d`", canonicalLaunchBuy, op.LaunchBuySompi)
+		}
 		if tokenOut.IsZero() {
 			return fmt.Errorf("launch buy produced zero token_out")
 		}
@@ -495,6 +502,13 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 	}
 	if tokenOut.Compare(op.MinTokenOut) < 0 {
 		return fmt.Errorf("buy min_token_out violated")
+	}
+	canonicalCPayIn, err := minGrossInputForTokenOut(pool.RealTokenReserves, pool.VirtualCPayReserves, pool.VirtualTokenReserves, tokenOut, pool.FeeBPS)
+	if err != nil {
+		return err
+	}
+	if op.CPayInSompi != canonicalCPayIn {
+		return fmt.Errorf("buy CPAY input is not canonical: expected `%d`, got `%d`", canonicalCPayIn, op.CPayInSompi)
 	}
 	if tokenOut.IsZero() {
 		return fmt.Errorf("buy produced zero token_out")
@@ -988,6 +1002,90 @@ func calculateTradeFee(amount uint64, feeBPS uint16) (uint64, error) {
 		return 0, fmt.Errorf("fee does not fit into u64")
 	}
 	return fee.Uint64(), nil
+}
+
+func minGrossInputForNetInput(netIn uint64, feeBPS uint16) (uint64, error) {
+	if netIn == 0 || feeBPS >= 10_000 {
+		return 0, fmt.Errorf("canonical buy net input or fee_bps is invalid")
+	}
+	if feeBPS == 0 {
+		return netIn, nil
+	}
+	feeDenominator := 10_000 - uint64(feeBPS)
+	gross := new(big.Int).SetUint64(netIn - 1)
+	gross.Mul(gross, big.NewInt(10_000))
+	gross.Div(gross, new(big.Int).SetUint64(feeDenominator))
+	gross.Add(gross, big.NewInt(1))
+	if !gross.IsUint64() {
+		return 0, fmt.Errorf("canonical buy gross input does not fit u64")
+	}
+	grossIn := gross.Uint64()
+	for grossIn > 1 {
+		previous := grossIn - 1
+		previousFee, err := calculateTradeFee(previous, feeBPS)
+		if err != nil {
+			return 0, err
+		}
+		if previous-previousFee < netIn {
+			break
+		}
+		grossIn = previous
+	}
+	for {
+		fee, err := calculateTradeFee(grossIn, feeBPS)
+		if err != nil {
+			return 0, err
+		}
+		if grossIn-fee >= netIn {
+			break
+		}
+		if grossIn == math.MaxUint64 {
+			return 0, fmt.Errorf("canonical buy gross input overflow")
+		}
+		grossIn++
+	}
+	return grossIn, nil
+}
+
+func minGrossInputForTokenOut(realTokenReserves Uint128, virtualCPayReserves uint64, virtualTokenReserves Uint128, tokenOut Uint128, feeBPS uint16) (uint64, error) {
+	if tokenOut.IsZero() || virtualCPayReserves == 0 || virtualTokenReserves.IsZero() {
+		return 0, fmt.Errorf("canonical buy target token_out is invalid")
+	}
+	spendableTokens, ok := realTokenReserves.Sub(Uint128FromUint64(minRealTokenReserve))
+	if !ok || tokenOut.Compare(spendableTokens) > 0 {
+		return 0, fmt.Errorf("canonical buy token_out drains final token")
+	}
+	yAfter, ok := virtualTokenReserves.Sub(tokenOut)
+	if !ok || yAfter.IsZero() {
+		return 0, fmt.Errorf("canonical buy y_after is invalid")
+	}
+	xBefore := new(big.Int).SetUint64(virtualCPayReserves)
+	k := new(big.Int).Mul(xBefore, virtualTokenReserves.Big())
+	xAfter := ceilDivBig(k, yAfter.Big())
+	if xAfter.Cmp(xBefore) <= 0 {
+		return 0, fmt.Errorf("canonical buy produced zero net input")
+	}
+	netInBig := new(big.Int).Sub(xAfter, xBefore)
+	if !netInBig.IsUint64() {
+		return 0, fmt.Errorf("canonical buy net input does not fit u64")
+	}
+	grossIn, err := minGrossInputForNetInput(netInBig.Uint64(), feeBPS)
+	if err != nil {
+		return 0, err
+	}
+	fee, err := calculateTradeFee(grossIn, feeBPS)
+	if err != nil {
+		return 0, err
+	}
+	netIn := grossIn - fee
+	actualTokenOut, _, _, _, err := cpmmBuy(realTokenReserves, virtualCPayReserves, virtualTokenReserves, netIn)
+	if err != nil {
+		return 0, err
+	}
+	if actualTokenOut.Compare(tokenOut) < 0 {
+		return 0, fmt.Errorf("canonical buy verification failed")
+	}
+	return grossIn, nil
 }
 
 func cpmmBuy(realTokenReserves Uint128, virtualCPayReserves uint64, virtualTokenReserves Uint128, cpayNetIn uint64) (Uint128, Uint128, uint64, Uint128, error) {
