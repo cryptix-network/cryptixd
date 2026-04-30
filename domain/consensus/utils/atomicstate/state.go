@@ -45,8 +45,10 @@ type LiquidityFeeRecipientState struct {
 
 type LiquidityPoolState struct {
 	PoolNonce              uint64
-	RemainingPoolSupply    Uint128
-	CurveReserveSompi      uint64
+	RealCPayReservesSompi  uint64
+	RealTokenReserves      Uint128
+	VirtualCPayReserves    uint64
+	VirtualTokenReserves   Uint128
 	UnclaimedFeeTotalSompi uint64
 	FeeBPS                 uint16
 	FeeRecipients          []LiquidityFeeRecipientState
@@ -377,8 +379,10 @@ func writeAsset(out *[]byte, asset AssetState) {
 
 func writeLiquidityPool(out *[]byte, pool LiquidityPoolState) {
 	writeUint64(out, pool.PoolNonce)
-	writeUint128(out, pool.RemainingPoolSupply)
-	writeUint64(out, pool.CurveReserveSompi)
+	writeUint64(out, pool.RealCPayReservesSompi)
+	writeUint128(out, pool.RealTokenReserves)
+	writeUint64(out, pool.VirtualCPayReserves)
+	writeUint128(out, pool.VirtualTokenReserves)
 	writeUint64(out, pool.UnclaimedFeeTotalSompi)
 	writeUint16(out, pool.FeeBPS)
 	writeLen(out, len(pool.FeeRecipients))
@@ -560,11 +564,19 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 	if err != nil {
 		return LiquidityPoolState{}, err
 	}
-	remainingPoolSupply, err := r.readUint128()
+	realCPayReservesSompi, err := r.readUint64()
 	if err != nil {
 		return LiquidityPoolState{}, err
 	}
-	curveReserveSompi, err := r.readUint64()
+	realTokenReserves, err := r.readUint128()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	virtualCPayReserves, err := r.readUint64()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	virtualTokenReserves, err := r.readUint128()
 	if err != nil {
 		return LiquidityPoolState{}, err
 	}
@@ -647,8 +659,10 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 	}
 	return LiquidityPoolState{
 		PoolNonce:              poolNonce,
-		RemainingPoolSupply:    remainingPoolSupply,
-		CurveReserveSompi:      curveReserveSompi,
+		RealCPayReservesSompi:  realCPayReservesSompi,
+		RealTokenReserves:      realTokenReserves,
+		VirtualCPayReserves:    virtualCPayReserves,
+		VirtualTokenReserves:   virtualTokenReserves,
 		UnclaimedFeeTotalSompi: unclaimedFeeTotalSompi,
 		FeeBPS:                 feeBPS,
 		FeeRecipients:          feeRecipients,

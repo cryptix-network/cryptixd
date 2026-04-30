@@ -107,8 +107,10 @@ func atomicInteropVectorState(t *testing.T) *State {
 		PlatformTag:          nil,
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:              17,
-			RemainingPoolSupply:    liquidityRemaining,
-			CurveReserveSompi:      123_456_789,
+			RealCPayReservesSompi:  123_456_789,
+			RealTokenReserves:      liquidityRemaining,
+			VirtualCPayReserves:    1_000_000_000_000,
+			VirtualTokenReserves:   Uint128FromUint64(1_300_000),
 			UnclaimedFeeTotalSompi: 30,
 			FeeBPS:                 250,
 			FeeRecipients: []LiquidityFeeRecipientState{

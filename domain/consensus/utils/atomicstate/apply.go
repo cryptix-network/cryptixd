@@ -14,7 +14,6 @@ import (
 
 const (
 	liquidityMinPayoutSompi = uint64(1)
-	curveFloorToken         = uint64(1)
 )
 
 const liquidityVaultTy txscript.ScriptClass = 4
@@ -377,8 +376,13 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		return fmt.Errorf("fee_bps > 0 requires at least one recipient")
 	}
 
-	remainingPoolSupply := op.MaxSupply
-	curveReserveSompi := op.SeedReserveSompi
+	realCPayReservesSompi := uint64(initialRealCPayReserves)
+	realTokenReserves := op.MaxSupply
+	virtualCPayReserves := initialVirtualCPayReserves
+	virtualTokenReserves, err := initialVirtualTokenReservesForMaxSupply(op.MaxSupply)
+	if err != nil {
+		return err
+	}
 	unclaimedFeeTotalSompi := uint64(0)
 	totalSupply := Uint128{}
 	if op.LaunchBuySompi > 0 {
@@ -390,7 +394,8 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		if !ok {
 			return fmt.Errorf("launch buy fee underflow")
 		}
-		tokenOut, newRemainingPoolSupply, newCurveReserveSompi, err := cpmmBuy(remainingPoolSupply, curveReserveSompi, launchBuyNet)
+		tokenOut, newRealTokenReserves, newVirtualCPayReserves, newVirtualTokenReserves, err :=
+			cpmmBuy(realTokenReserves, virtualCPayReserves, virtualTokenReserves, launchBuyNet)
 		if err != nil {
 			return err
 		}
@@ -400,8 +405,13 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		if tokenOut.IsZero() {
 			return fmt.Errorf("launch buy produced zero token_out")
 		}
-		remainingPoolSupply = newRemainingPoolSupply
-		curveReserveSompi = newCurveReserveSompi
+		realCPayReservesSompi, ok = checkedAddUint64(realCPayReservesSompi, launchBuyNet)
+		if !ok {
+			return fmt.Errorf("real_cpay_reserves overflow on launch buy")
+		}
+		realTokenReserves = newRealTokenReserves
+		virtualCPayReserves = newVirtualCPayReserves
+		virtualTokenReserves = newVirtualTokenReserves
 		if err := applyFeeToPool(feeRecipients, &unclaimedFeeTotalSompi, feeTrade); err != nil {
 			return err
 		}
@@ -415,7 +425,7 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	}
 
 	txID := consensushashing.TransactionID(tx)
-	unlocked := op.UnlockTargetSompi == 0 || curveReserveSompi >= op.UnlockTargetSompi
+	unlocked := op.UnlockTargetSompi == 0 || realCPayReservesSompi >= op.UnlockTargetSompi
 	asset := AssetState{
 		AssetClass:           AssetClassLiquidity,
 		MintAuthorityOwnerID: [externalapi.DomainHashSize]byte{},
@@ -425,8 +435,10 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		PlatformTag:          op.PlatformTag,
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:              1,
-			RemainingPoolSupply:    remainingPoolSupply,
-			CurveReserveSompi:      curveReserveSompi,
+			RealCPayReservesSompi:  realCPayReservesSompi,
+			RealTokenReserves:      realTokenReserves,
+			VirtualCPayReserves:    virtualCPayReserves,
+			VirtualTokenReserves:   virtualTokenReserves,
 			UnclaimedFeeTotalSompi: unclaimedFeeTotalSompi,
 			FeeBPS:                 op.FeeBPS,
 			FeeRecipients:          feeRecipients,
@@ -476,7 +488,8 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 	if !ok {
 		return fmt.Errorf("buy fee underflow")
 	}
-	tokenOut, newRemainingPoolSupply, newCurveReserveSompi, err := cpmmBuy(pool.RemainingPoolSupply, pool.CurveReserveSompi, netIn)
+	tokenOut, newRealTokenReserves, newVirtualCPayReserves, newVirtualTokenReserves, err :=
+		cpmmBuy(pool.RealTokenReserves, pool.VirtualCPayReserves, pool.VirtualTokenReserves, netIn)
 	if err != nil {
 		return err
 	}
@@ -486,9 +499,14 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 	if tokenOut.IsZero() {
 		return fmt.Errorf("buy produced zero token_out")
 	}
-	pool.RemainingPoolSupply = newRemainingPoolSupply
-	pool.CurveReserveSompi = newCurveReserveSompi
-	if pool.UnlockTargetSompi > 0 && pool.CurveReserveSompi >= pool.UnlockTargetSompi {
+	pool.RealCPayReservesSompi, ok = checkedAddUint64(pool.RealCPayReservesSompi, netIn)
+	if !ok {
+		return fmt.Errorf("real_cpay_reserves overflow while buying liquidity asset `%x`", op.AssetID)
+	}
+	pool.RealTokenReserves = newRealTokenReserves
+	pool.VirtualCPayReserves = newVirtualCPayReserves
+	pool.VirtualTokenReserves = newVirtualTokenReserves
+	if pool.UnlockTargetSompi > 0 && pool.RealCPayReservesSompi >= pool.UnlockTargetSompi {
 		pool.Unlocked = true
 	}
 	if err := applyFeeToPool(pool.FeeRecipients, &pool.UnclaimedFeeTotalSompi, feeTrade); err != nil {
@@ -532,7 +550,7 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
 	}
 	if liquiditySellLocked(pool) {
-		return fmt.Errorf("liquidity sell locked for asset `%x` until curve reserve reaches `%d` sompi", op.AssetID, pool.UnlockTargetSompi)
+		return fmt.Errorf("liquidity sell locked for asset `%x` until real CPAY reserve reaches `%d` sompi", op.AssetID, pool.UnlockTargetSompi)
 	}
 	senderKey := BalanceKey{AssetID: op.AssetID, OwnerID: ownerID}
 	senderAfter, ok := state.Balances[senderKey].Sub(op.TokenIn)
@@ -543,7 +561,8 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 	if !ok {
 		return fmt.Errorf("total_supply underflow while selling liquidity asset `%x`", op.AssetID)
 	}
-	grossOut, newRemainingPoolSupply, newCurveReserveSompi, err := cpmmSell(pool.RemainingPoolSupply, pool.CurveReserveSompi, op.TokenIn)
+	grossOut, newRealCPayReservesSompi, newVirtualCPayReserves, newVirtualTokenReserves, err :=
+		cpmmSell(pool.RealCPayReservesSompi, pool.VirtualCPayReserves, pool.VirtualTokenReserves, op.TokenIn)
 	if err != nil {
 		return err
 	}
@@ -564,9 +583,6 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 	if cpayOut < liquidityMinPayoutSompi {
 		return fmt.Errorf("sell payout below liquidity_min_payout_sompi")
 	}
-	if err := validateCurveReserveAgainstOutstandingSupply(op.AssetID, supplyAfter, newCurveReserveSompi); err != nil {
-		return err
-	}
 	if err := validatePayoutOutput(tx, op.CPayReceiveOutputIndex, cpayOut, nil); err != nil {
 		return err
 	}
@@ -581,8 +597,13 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 	if vaultDelta != cpayOut {
 		return fmt.Errorf("sell vault delta mismatch: expected `%d`, got `%d`", cpayOut, vaultDelta)
 	}
-	pool.RemainingPoolSupply = newRemainingPoolSupply
-	pool.CurveReserveSompi = newCurveReserveSompi
+	pool.RealCPayReservesSompi = newRealCPayReservesSompi
+	pool.RealTokenReserves, ok = pool.RealTokenReserves.Add(op.TokenIn)
+	if !ok {
+		return fmt.Errorf("real_token_reserves overflow while selling liquidity asset `%x`", op.AssetID)
+	}
+	pool.VirtualCPayReserves = newVirtualCPayReserves
+	pool.VirtualTokenReserves = newVirtualTokenReserves
 	if err := applyFeeToPool(pool.FeeRecipients, &pool.UnclaimedFeeTotalSompi, feeTrade); err != nil {
 		return err
 	}
@@ -619,7 +640,7 @@ func applyClaimLiquidityFees(tx *externalapi.DomainTransaction, ownerID [externa
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
 	}
 	if liquiditySellLocked(pool) {
-		return fmt.Errorf("liquidity fee claim locked for asset `%x` until curve reserve reaches `%d` sompi", op.AssetID, pool.UnlockTargetSompi)
+		return fmt.Errorf("liquidity fee claim locked for asset `%x` until real CPAY reserve reaches `%d` sompi", op.AssetID, pool.UnlockTargetSompi)
 	}
 	if op.ClaimAmountSompi < liquidityMinPayoutSompi {
 		return fmt.Errorf("claim amount below liquidity_min_payout_sompi")
@@ -878,23 +899,26 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 	if pool.UnlockTargetSompi == 0 && !pool.Unlocked {
 		return fmt.Errorf("liquidity lock disabled pools must be marked unlocked")
 	}
-	if pool.UnlockTargetSompi > 0 && !pool.Unlocked && pool.CurveReserveSompi >= pool.UnlockTargetSompi {
+	if pool.UnlockTargetSompi > 0 && !pool.Unlocked && pool.RealCPayReservesSompi >= pool.UnlockTargetSompi {
 		return fmt.Errorf("liquidity lock target reached for asset `%x` but pool is still locked", assetID)
 	}
-	if err := validateCurveReserveAgainstOutstandingSupply(assetID, asset.TotalSupply, pool.CurveReserveSompi); err != nil {
-		return err
+	if pool.RealCPayReservesSompi < minCPayReserve {
+		return fmt.Errorf("real CPAY reserve below floor for liquidity asset `%x`", assetID)
 	}
-	if err := validateLiquidityCurveReachability(pool.RemainingPoolSupply, pool.CurveReserveSompi); err != nil {
-		return err
+	if pool.RealTokenReserves.Compare(Uint128FromUint64(minRealTokenReserve)) < 0 {
+		return fmt.Errorf("real token reserve below floor for liquidity asset `%x`", assetID)
 	}
-	expectedVault, ok := checkedAddUint64(pool.CurveReserveSompi, pool.UnclaimedFeeTotalSompi)
+	if pool.VirtualCPayReserves == 0 || pool.VirtualTokenReserves.IsZero() {
+		return fmt.Errorf("virtual reserves must be non-zero for liquidity asset `%x`", assetID)
+	}
+	expectedVault, ok := checkedAddUint64(pool.RealCPayReservesSompi, pool.UnclaimedFeeTotalSompi)
 	if !ok {
 		return fmt.Errorf("vault invariant overflow")
 	}
 	if pool.VaultValueSompi != expectedVault {
 		return fmt.Errorf("vault invariant violation for asset `%x`", assetID)
 	}
-	expectedTotal, ok := asset.TotalSupply.Add(pool.RemainingPoolSupply)
+	expectedTotal, ok := asset.TotalSupply.Add(pool.RealTokenReserves)
 	if !ok {
 		return fmt.Errorf("supply invariant overflow")
 	}
@@ -904,40 +928,33 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 	return nil
 }
 
-func validateCurveReserveAgainstOutstandingSupply(assetID [externalapi.DomainHashSize]byte, totalSupply Uint128, curveReserveSompi uint64) error {
-	if !totalSupply.IsZero() && curveReserveSompi == 0 {
-		return fmt.Errorf("curve reserve exhausted for liquidity asset `%x` while tokens remain outstanding", assetID)
-	}
-	return nil
-}
-
 func validateLiquidityCreateParams(decimals byte, maxSupply Uint128, seedReserveSompi uint64) error {
 	if decimals != liquidityTokenDecimals {
 		return fmt.Errorf("liquidity asset decimals must be `%d`", liquidityTokenDecimals)
 	}
-	if maxSupply.Compare(Uint128FromUint64(minLiquiditySupplyRaw)) < 0 ||
-		maxSupply.Compare(Uint128FromUint64(maxLiquiditySupplyRaw)) > 0 {
-		return fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquiditySupplyRaw, maxLiquiditySupplyRaw)
+	if !isLiquidityMaxSupplyAllowed(maxSupply) {
+		return fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquidityTokenSupplyRaw, maxLiquidityTokenSupplyRaw)
 	}
-	if seedReserveSompi < minLiquiditySeedReserve {
-		return fmt.Errorf("liquidity asset seed_reserve_sompi must be at least `%d`", minLiquiditySeedReserve)
-	}
-	return validateLiquidityCurveReachability(maxSupply, seedReserveSompi)
-}
-
-func validateLiquidityCurveReachability(remainingPoolSupply Uint128, curveReserveSompi uint64) error {
-	if remainingPoolSupply.IsZero() {
-		return nil
-	}
-	y, ok := remainingPoolSupply.Add(Uint128FromUint64(curveFloorToken))
-	if !ok {
-		return fmt.Errorf("liquidity curve reachability y overflow")
-	}
-	requiredFinalReserve := new(big.Int).Mul(new(big.Int).SetUint64(curveReserveSompi), y.Big())
-	if requiredFinalReserve.Cmp(new(big.Int).SetUint64(maxLiquidityFinalReserve)) > 0 {
-		return fmt.Errorf("liquidity curve final reserve `%s` exceeds MaxSompi `%d`", requiredFinalReserve.String(), maxLiquidityFinalReserve)
+	if seedReserveSompi != minLiquiditySeedReserve {
+		return fmt.Errorf("liquidity asset seed_reserve_sompi must be exactly `%d`", minLiquiditySeedReserve)
 	}
 	return nil
+}
+
+func isLiquidityMaxSupplyAllowed(maxSupply Uint128) bool {
+	value, ok := maxSupply.Uint64()
+	if !ok {
+		return false
+	}
+	return value >= minLiquidityTokenSupplyRaw && value <= maxLiquidityTokenSupplyRaw
+}
+
+func initialVirtualTokenReservesForMaxSupply(maxSupply Uint128) (Uint128, error) {
+	value, ok := maxSupply.Uint64()
+	if !ok || value < minLiquidityTokenSupplyRaw || value > maxLiquidityTokenSupplyRaw {
+		return Uint128{}, fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquidityTokenSupplyRaw, maxLiquidityTokenSupplyRaw)
+	}
+	return Uint128FromUint64(value * 6 / 5), nil
 }
 
 func validatePayoutOutput(tx *externalapi.DomainTransaction, outputIndex uint16, expectedValue uint64, expectedOwnerID *[externalapi.DomainHashSize]byte) error {
@@ -973,77 +990,91 @@ func calculateTradeFee(amount uint64, feeBPS uint16) (uint64, error) {
 	return fee.Uint64(), nil
 }
 
-func cpmmBuy(remainingPoolSupply Uint128, curveReserveSompi uint64, cpayNetIn uint64) (Uint128, Uint128, uint64, error) {
-	yBefore, ok := remainingPoolSupply.Add(Uint128FromUint64(curveFloorToken))
-	if !ok {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM y_before overflow")
+func cpmmBuy(realTokenReserves Uint128, virtualCPayReserves uint64, virtualTokenReserves Uint128, cpayNetIn uint64) (Uint128, Uint128, uint64, Uint128, error) {
+	if cpayNetIn == 0 {
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy net input cannot be zero")
 	}
-	xAfter, ok := checkedAddUint64(curveReserveSompi, cpayNetIn)
+	spendableTokens, ok := realTokenReserves.Sub(Uint128FromUint64(minRealTokenReserve))
+	if !ok || spendableTokens.IsZero() {
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy real token reserve floor reached")
+	}
+	yBefore := virtualTokenReserves
+	xAfter, ok := checkedAddUint64(virtualCPayReserves, cpayNetIn)
 	if !ok {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM x_after overflow")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM x_after overflow")
 	}
 	if xAfter == 0 {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy x_after cannot be zero")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy x_after cannot be zero")
 	}
-	k := new(big.Int).Mul(new(big.Int).SetUint64(curveReserveSompi), yBefore.Big())
+	k := new(big.Int).Mul(new(big.Int).SetUint64(virtualCPayReserves), yBefore.Big())
 	yAfterBig := ceilDivBig(k, new(big.Int).SetUint64(xAfter))
 	yAfter, ok := uint128FromBig(yAfterBig)
 	if !ok {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy y_after conversion overflow")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy y_after conversion overflow")
 	}
 	if yAfter.IsZero() {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy y_after cannot be zero")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy y_after cannot be zero")
 	}
 	if yAfter.Compare(yBefore) > 0 {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy would increase y_after")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy would increase y_after")
 	}
 	tokenOut, ok := yBefore.Sub(yAfter)
 	if !ok {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy token_out underflow")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy token_out underflow")
 	}
 	if tokenOut.IsZero() {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy produced zero token_out")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy produced zero token_out")
 	}
-	newRemainingPoolSupply, ok := yAfter.Sub(Uint128FromUint64(curveFloorToken))
+	if tokenOut.Compare(spendableTokens) > 0 {
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy would drain final real token")
+	}
+	newRealTokenReserves, ok := realTokenReserves.Sub(tokenOut)
 	if !ok {
-		return Uint128{}, Uint128{}, 0, fmt.Errorf("CPMM buy remaining supply underflow")
+		return Uint128{}, Uint128{}, 0, Uint128{}, fmt.Errorf("CPMM buy real token reserve underflow")
 	}
-	return tokenOut, newRemainingPoolSupply, xAfter, nil
+	return tokenOut, newRealTokenReserves, xAfter, yAfter, nil
 }
 
-func cpmmSell(remainingPoolSupply Uint128, curveReserveSompi uint64, tokenIn Uint128) (uint64, Uint128, uint64, error) {
-	yBefore, ok := remainingPoolSupply.Add(Uint128FromUint64(curveFloorToken))
-	if !ok {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM y_before overflow")
+func cpmmSell(realCPayReservesSompi uint64, virtualCPayReserves uint64, virtualTokenReserves Uint128, tokenIn Uint128) (uint64, uint64, uint64, Uint128, error) {
+	if tokenIn.IsZero() {
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell token input cannot be zero")
 	}
+	yBefore := virtualTokenReserves
 	yAfter, ok := yBefore.Add(tokenIn)
 	if !ok {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM y_after overflow")
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM y_after overflow")
 	}
 	if yAfter.IsZero() {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM sell y_after cannot be zero")
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell y_after cannot be zero")
 	}
-	k := new(big.Int).Mul(new(big.Int).SetUint64(curveReserveSompi), yBefore.Big())
+	k := new(big.Int).Mul(new(big.Int).SetUint64(virtualCPayReserves), yBefore.Big())
 	xAfterBig := new(big.Int).Div(k, yAfter.Big())
 	if !xAfterBig.IsUint64() {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM sell x_after does not fit u64")
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell x_after does not fit u64")
 	}
 	xAfter := xAfterBig.Uint64()
-	if xAfter > curveReserveSompi {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM sell x_after exceeds x_before")
+	if xAfter > virtualCPayReserves {
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell x_after exceeds x_before")
 	}
-	grossOut, ok := checkedSubUint64(curveReserveSompi, xAfter)
+	grossOut, ok := checkedSubUint64(virtualCPayReserves, xAfter)
 	if !ok {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM sell gross_out underflow")
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell gross_out underflow")
 	}
 	if grossOut == 0 {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM sell produced zero gross_out")
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell produced zero gross_out")
 	}
-	newRemainingPoolSupply, ok := remainingPoolSupply.Add(tokenIn)
+	spendableCPay, ok := checkedSubUint64(realCPayReservesSompi, minCPayReserve)
 	if !ok {
-		return 0, Uint128{}, 0, fmt.Errorf("CPMM sell remaining supply overflow")
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell real CPAY reserve below floor")
 	}
-	return grossOut, newRemainingPoolSupply, xAfter, nil
+	if grossOut > spendableCPay {
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell would drain final real sompi")
+	}
+	newRealCPayReserves, ok := checkedSubUint64(realCPayReservesSompi, grossOut)
+	if !ok {
+		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell real CPAY reserve underflow")
+	}
+	return grossOut, newRealCPayReserves, xAfter, yAfter, nil
 }
 
 func ceilDivBig(numerator, denominator *big.Int) *big.Int {

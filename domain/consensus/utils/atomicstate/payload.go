@@ -30,10 +30,16 @@ const (
 	minLiquidityFeeBPS         = 10
 	maxLiquidityFeeBPS         = 1000
 	liquidityTokenDecimals     = byte(0)
-	minLiquiditySupplyRaw      = uint64(1_000)
-	maxLiquiditySupplyRaw      = uint64(1_000_000)
+	minLiquidityTokenSupplyRaw = uint64(100_000)
+	liquidityTokenSupplyRaw    = uint64(1_000_000)
+	defaultLiquiditySupplyRaw  = liquidityTokenSupplyRaw
+	maxLiquidityTokenSupplyRaw = uint64(10_000_000)
 	minLiquiditySeedReserve    = constants.SompiPerCryptix
-	maxLiquidityFinalReserve   = constants.MaxSompi
+	initialRealCPayReserves    = constants.SompiPerCryptix
+	minCPayReserve             = uint64(1)
+	minRealTokenReserve        = uint64(1)
+	initialVirtualCPayReserves = uint64(250_000_000_000_000)
+	initialVirtualTokenReserve = defaultLiquiditySupplyRaw * 6 / 5
 )
 
 type PayloadSupplyMode byte
@@ -366,9 +372,8 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 	if !ok {
 		return nil, fmt.Errorf("truncated CAT max_supply")
 	}
-	if maxSupply.Compare(Uint128FromUint64(minLiquiditySupplyRaw)) < 0 ||
-		maxSupply.Compare(Uint128FromUint64(maxLiquiditySupplyRaw)) > 0 {
-		return nil, fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquiditySupplyRaw, maxLiquiditySupplyRaw)
+	if !isLiquidityMaxSupplyAllowed(maxSupply) {
+		return nil, fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquidityTokenSupplyRaw, maxLiquidityTokenSupplyRaw)
 	}
 	name, symbol, metadata, err := parseStringFields(payload, cursor)
 	if err != nil {
