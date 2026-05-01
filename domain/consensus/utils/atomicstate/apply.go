@@ -365,6 +365,12 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	if err := validateStateLiquidityCurveVersion(op.CurveVersion); err != nil {
 		return err
 	}
+	if err := validateLiquidityCurveMode(op.CurveMode); err != nil {
+		return err
+	}
+	if err := validateLiquidityCurveParameters(op.CurveMode, op.IndividualVirtualCPayReservesSompi, op.IndividualVirtualTokenMultiplierBPS); err != nil {
+		return err
+	}
 	if err := validateLiquidityCreateParams(op.Decimals, op.MaxSupply, op.SeedReserveSompi); err != nil {
 		return err
 	}
@@ -392,8 +398,11 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 
 	realCPayReservesSompi := uint64(initialRealCPayReserves)
 	realTokenReserves := op.MaxSupply
-	virtualCPayReserves := initialVirtualCPayReserves
-	virtualTokenReserves, err := initialVirtualTokenReservesForMaxSupply(op.MaxSupply)
+	virtualCPayReserves, err := initialVirtualCPayReservesForCurve(op.CurveMode, op.IndividualVirtualCPayReservesSompi)
+	if err != nil {
+		return err
+	}
+	virtualTokenReserves, err := initialVirtualTokenReservesForMaxSupplyAndCurve(op.MaxSupply, op.CurveMode, op.IndividualVirtualTokenMultiplierBPS)
 	if err != nil {
 		return err
 	}
@@ -456,15 +465,18 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		TotalSupply:          totalSupply,
 		PlatformTag:          op.PlatformTag,
 		Liquidity: &LiquidityPoolState{
-			PoolNonce:              1,
-			CurveVersion:           op.CurveVersion,
-			RealCPayReservesSompi:  realCPayReservesSompi,
-			RealTokenReserves:      realTokenReserves,
-			VirtualCPayReserves:    virtualCPayReserves,
-			VirtualTokenReserves:   virtualTokenReserves,
-			UnclaimedFeeTotalSompi: unclaimedFeeTotalSompi,
-			FeeBPS:                 op.FeeBPS,
-			FeeRecipients:          feeRecipients,
+			PoolNonce:                           1,
+			CurveVersion:                        op.CurveVersion,
+			CurveMode:                           op.CurveMode,
+			IndividualVirtualCPayReservesSompi:  op.IndividualVirtualCPayReservesSompi,
+			IndividualVirtualTokenMultiplierBPS: op.IndividualVirtualTokenMultiplierBPS,
+			RealCPayReservesSompi:               realCPayReservesSompi,
+			RealTokenReserves:                   realTokenReserves,
+			VirtualCPayReserves:                 virtualCPayReserves,
+			VirtualTokenReserves:                virtualTokenReserves,
+			UnclaimedFeeTotalSompi:              unclaimedFeeTotalSompi,
+			FeeBPS:                              op.FeeBPS,
+			FeeRecipients:                       feeRecipients,
 			VaultOutpoint: externalapi.DomainOutpoint{
 				TransactionID: *txID,
 				Index:         vaultOutputIndex,
@@ -929,6 +941,12 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 	if err := validateStateLiquidityCurveVersion(pool.CurveVersion); err != nil {
 		return err
 	}
+	if err := validateLiquidityCurveMode(pool.CurveMode); err != nil {
+		return err
+	}
+	if err := validateLiquidityCurveParameters(pool.CurveMode, pool.IndividualVirtualCPayReservesSompi, pool.IndividualVirtualTokenMultiplierBPS); err != nil {
+		return err
+	}
 	if err := validateLiquidityUnlockTargetForState(pool.UnlockTargetSompi); err != nil {
 		return err
 	}
@@ -986,11 +1004,65 @@ func isLiquidityMaxSupplyAllowed(maxSupply Uint128) bool {
 }
 
 func initialVirtualTokenReservesForMaxSupply(maxSupply Uint128) (Uint128, error) {
+	return initialVirtualTokenReservesForMaxSupplyAndMode(maxSupply, defaultLiquidityCurveMode)
+}
+
+func initialVirtualCPayReservesForMode(mode byte) (uint64, error) {
+	switch mode {
+	case liquidityCurveModeBasic:
+		return initialVirtualCPayReserves, nil
+	case liquidityCurveModeAggressive:
+		return aggressiveVirtualCPayReserve, nil
+	default:
+		return 0, fmt.Errorf("unsupported CAT liquidity curve mode `%d`", mode)
+	}
+}
+
+func initialVirtualCPayReservesForCurve(mode byte, individualVirtualCPayReservesSompi uint64) (uint64, error) {
+	switch mode {
+	case liquidityCurveModeIndividual:
+		if err := validateIndividualLiquidityCurveParams(individualVirtualCPayReservesSompi, individualMinMultiplierBPS); err != nil {
+			return 0, err
+		}
+		return individualVirtualCPayReservesSompi, nil
+	case liquidityCurveModeBasic, liquidityCurveModeAggressive:
+		return initialVirtualCPayReservesForMode(mode)
+	default:
+		return 0, fmt.Errorf("unsupported CAT liquidity curve mode `%d`", mode)
+	}
+}
+
+func initialVirtualTokenReservesForMaxSupplyAndMode(maxSupply Uint128, mode byte) (Uint128, error) {
 	value, ok := maxSupply.Uint64()
 	if !ok || value < minLiquidityTokenSupplyRaw || value > maxLiquidityTokenSupplyRaw {
 		return Uint128{}, fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquidityTokenSupplyRaw, maxLiquidityTokenSupplyRaw)
 	}
-	return Uint128FromUint64(value * 6 / 5), nil
+	switch mode {
+	case liquidityCurveModeBasic:
+		return Uint128FromUint64(value * 6 / 5), nil
+	case liquidityCurveModeAggressive:
+		return Uint128FromUint64(value * 21 / 20), nil
+	default:
+		return Uint128{}, fmt.Errorf("unsupported CAT liquidity curve mode `%d`", mode)
+	}
+}
+
+func initialVirtualTokenReservesForMaxSupplyAndCurve(maxSupply Uint128, mode byte, individualVirtualTokenMultiplierBPS uint16) (Uint128, error) {
+	value, ok := maxSupply.Uint64()
+	if !ok || value < minLiquidityTokenSupplyRaw || value > maxLiquidityTokenSupplyRaw {
+		return Uint128{}, fmt.Errorf("liquidity asset max_supply must be in `%d..=%d`", minLiquidityTokenSupplyRaw, maxLiquidityTokenSupplyRaw)
+	}
+	switch mode {
+	case liquidityCurveModeIndividual:
+		if err := validateIndividualLiquidityCurveParams(individualMinVirtualCPay, individualVirtualTokenMultiplierBPS); err != nil {
+			return Uint128{}, err
+		}
+		return Uint128FromUint64(value * uint64(individualVirtualTokenMultiplierBPS) / uint64(multiplierBPSDenominator)), nil
+	case liquidityCurveModeBasic, liquidityCurveModeAggressive:
+		return initialVirtualTokenReservesForMaxSupplyAndMode(maxSupply, mode)
+	default:
+		return Uint128{}, fmt.Errorf("unsupported CAT liquidity curve mode `%d`", mode)
+	}
 }
 
 func validatePayoutOutput(tx *externalapi.DomainTransaction, outputIndex uint16, expectedValue uint64, expectedOwnerID *[externalapi.DomainHashSize]byte) error {

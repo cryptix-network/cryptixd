@@ -51,19 +51,22 @@ type LiquidityFeeRecipientState struct {
 }
 
 type LiquidityPoolState struct {
-	PoolNonce              uint64
-	CurveVersion           byte
-	RealCPayReservesSompi  uint64
-	RealTokenReserves      Uint128
-	VirtualCPayReserves    uint64
-	VirtualTokenReserves   Uint128
-	UnclaimedFeeTotalSompi uint64
-	FeeBPS                 uint16
-	FeeRecipients          []LiquidityFeeRecipientState
-	VaultOutpoint          externalapi.DomainOutpoint
-	VaultValueSompi        uint64
-	UnlockTargetSompi      uint64
-	Unlocked               bool
+	PoolNonce                           uint64
+	CurveVersion                        byte
+	CurveMode                           byte
+	IndividualVirtualCPayReservesSompi  uint64
+	IndividualVirtualTokenMultiplierBPS uint16
+	RealCPayReservesSompi               uint64
+	RealTokenReserves                   Uint128
+	VirtualCPayReserves                 uint64
+	VirtualTokenReserves                Uint128
+	UnclaimedFeeTotalSompi              uint64
+	FeeBPS                              uint16
+	FeeRecipients                       []LiquidityFeeRecipientState
+	VaultOutpoint                       externalapi.DomainOutpoint
+	VaultValueSompi                     uint64
+	UnlockTargetSompi                   uint64
+	Unlocked                            bool
 }
 
 type AssetState struct {
@@ -390,6 +393,9 @@ func writeAsset(out *[]byte, asset AssetState) {
 func writeLiquidityPool(out *[]byte, pool LiquidityPoolState) {
 	writeUint64(out, pool.PoolNonce)
 	*out = append(*out, pool.CurveVersion)
+	*out = append(*out, pool.CurveMode)
+	writeUint64(out, pool.IndividualVirtualCPayReservesSompi)
+	writeUint16(out, pool.IndividualVirtualTokenMultiplierBPS)
 	writeUint64(out, pool.RealCPayReservesSompi)
 	writeUint128(out, pool.RealTokenReserves)
 	writeUint64(out, pool.VirtualCPayReserves)
@@ -604,6 +610,24 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 	if err := validateStateLiquidityCurveVersion(curveVersion); err != nil {
 		return LiquidityPoolState{}, err
 	}
+	curveMode, err := r.readByte()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	if err := validateLiquidityCurveMode(curveMode); err != nil {
+		return LiquidityPoolState{}, err
+	}
+	individualVirtualCPayReservesSompi, err := r.readUint64()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	individualVirtualTokenMultiplierBPS, err := r.readUint16()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	if err := validateLiquidityCurveParameters(curveMode, individualVirtualCPayReservesSompi, individualVirtualTokenMultiplierBPS); err != nil {
+		return LiquidityPoolState{}, err
+	}
 	realCPayReservesSompi, err := r.readUint64()
 	if err != nil {
 		return LiquidityPoolState{}, err
@@ -698,15 +722,18 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 		return LiquidityPoolState{}, fmt.Errorf("invalid atomic liquidity unlocked flag `%d`", unlockedRaw)
 	}
 	return LiquidityPoolState{
-		PoolNonce:              poolNonce,
-		CurveVersion:           curveVersion,
-		RealCPayReservesSompi:  realCPayReservesSompi,
-		RealTokenReserves:      realTokenReserves,
-		VirtualCPayReserves:    virtualCPayReserves,
-		VirtualTokenReserves:   virtualTokenReserves,
-		UnclaimedFeeTotalSompi: unclaimedFeeTotalSompi,
-		FeeBPS:                 feeBPS,
-		FeeRecipients:          feeRecipients,
+		PoolNonce:                           poolNonce,
+		CurveVersion:                        curveVersion,
+		CurveMode:                           curveMode,
+		IndividualVirtualCPayReservesSompi:  individualVirtualCPayReservesSompi,
+		IndividualVirtualTokenMultiplierBPS: individualVirtualTokenMultiplierBPS,
+		RealCPayReservesSompi:               realCPayReservesSompi,
+		RealTokenReserves:                   realTokenReserves,
+		VirtualCPayReserves:                 virtualCPayReserves,
+		VirtualTokenReserves:                virtualTokenReserves,
+		UnclaimedFeeTotalSompi:              unclaimedFeeTotalSompi,
+		FeeBPS:                              feeBPS,
+		FeeRecipients:                       feeRecipients,
 		VaultOutpoint: externalapi.DomainOutpoint{
 			TransactionID: *txID,
 			Index:         index,

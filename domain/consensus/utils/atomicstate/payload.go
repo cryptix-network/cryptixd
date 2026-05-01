@@ -17,33 +17,46 @@ var (
 )
 
 const (
-	catVersion                   = byte(1)
-	currentTokenVersion          = byte(1)
-	currentLiquidityCurveVersion = byte(1)
-	maxTokenVersion              = byte(99)
-	maxLiquidityCurveVersion     = byte(99)
-	ownerAuthSchemePubKey        = byte(0)
-	ownerAuthSchemePubKeyECDSA   = byte(1)
-	ownerAuthSchemeScriptHash    = byte(2)
-	catMaxNameLen                = 32
-	catMaxSymbolLen              = 10
-	catMaxMetadataLen            = 256
-	catMaxPlatformTagLen         = 50
-	catMaxDecimals               = 18
-	maxLiquidityFeeRecipients    = 2
-	minLiquidityFeeBPS           = 10
-	maxLiquidityFeeBPS           = 1000
-	liquidityTokenDecimals       = byte(0)
-	minLiquidityTokenSupplyRaw   = uint64(100_000)
-	liquidityTokenSupplyRaw      = uint64(1_000_000)
-	defaultLiquiditySupplyRaw    = liquidityTokenSupplyRaw
-	maxLiquidityTokenSupplyRaw   = uint64(10_000_000)
-	minLiquiditySeedReserve      = constants.SompiPerCryptix
-	initialRealCPayReserves      = constants.SompiPerCryptix
-	minCPayReserve               = uint64(1)
-	minRealTokenReserve          = uint64(1)
-	initialVirtualCPayReserves   = uint64(250_000_000_000_000)
-	initialVirtualTokenReserve   = defaultLiquiditySupplyRaw * 6 / 5
+	catVersion                    = byte(1)
+	currentTokenVersion           = byte(1)
+	currentLiquidityCurveVersion  = byte(1)
+	liquidityCurveModeBasic       = byte(0)
+	liquidityCurveModeAggressive  = byte(1)
+	liquidityCurveModeIndividual  = byte(2)
+	defaultLiquidityCurveMode     = liquidityCurveModeBasic
+	individualMinVirtualCPay      = uint64(100_000_000_000_000)
+	individualMaxVirtualCPay      = uint64(800_000_000_000_000)
+	individualVirtualCPayStep     = uint64(10_000_000_000_000)
+	individualMinMultiplierBPS    = uint16(10_100)
+	individualMaxMultiplierBPS    = uint16(20_000)
+	individualMultiplierStepBPS   = uint16(100)
+	multiplierBPSDenominator      = uint16(10_000)
+	maxTokenVersion               = byte(99)
+	maxLiquidityCurveVersion      = byte(99)
+	ownerAuthSchemePubKey         = byte(0)
+	ownerAuthSchemePubKeyECDSA    = byte(1)
+	ownerAuthSchemeScriptHash     = byte(2)
+	catMaxNameLen                 = 32
+	catMaxSymbolLen               = 10
+	catMaxMetadataLen             = 256
+	catMaxPlatformTagLen          = 50
+	catMaxDecimals                = 18
+	maxLiquidityFeeRecipients     = 2
+	minLiquidityFeeBPS            = 10
+	maxLiquidityFeeBPS            = 1000
+	liquidityTokenDecimals        = byte(0)
+	minLiquidityTokenSupplyRaw    = uint64(100_000)
+	liquidityTokenSupplyRaw       = uint64(1_000_000)
+	defaultLiquiditySupplyRaw     = liquidityTokenSupplyRaw
+	maxLiquidityTokenSupplyRaw    = uint64(10_000_000)
+	minLiquiditySeedReserve       = constants.SompiPerCryptix
+	initialRealCPayReserves       = constants.SompiPerCryptix
+	minCPayReserve                = uint64(1)
+	minRealTokenReserve           = uint64(1)
+	initialVirtualCPayReserves    = uint64(250_000_000_000_000)
+	initialVirtualTokenReserve    = defaultLiquiditySupplyRaw * 6 / 5
+	aggressiveVirtualCPayReserve  = uint64(200_000_000_000_000)
+	aggressiveVirtualTokenReserve = defaultLiquiditySupplyRaw * 21 / 20
 )
 
 type PayloadSupplyMode byte
@@ -116,20 +129,23 @@ type CreateAssetWithMintOp struct {
 func (CreateAssetWithMintOp) isPayloadOp() {}
 
 type CreateLiquidityAssetOp struct {
-	TokenVersion         byte
-	CurveVersion         byte
-	Decimals             byte
-	MaxSupply            Uint128
-	Name                 []byte
-	Symbol               []byte
-	Metadata             []byte
-	SeedReserveSompi     uint64
-	FeeBPS               uint16
-	Recipients           []PayloadRecipientAddress
-	LaunchBuySompi       uint64
-	LaunchBuyMinTokenOut Uint128
-	PlatformTag          []byte
-	UnlockTargetSompi    uint64
+	TokenVersion                        byte
+	CurveVersion                        byte
+	CurveMode                           byte
+	IndividualVirtualCPayReservesSompi  uint64
+	IndividualVirtualTokenMultiplierBPS uint16
+	Decimals                            byte
+	MaxSupply                           Uint128
+	Name                                []byte
+	Symbol                              []byte
+	Metadata                            []byte
+	SeedReserveSompi                    uint64
+	FeeBPS                              uint16
+	Recipients                          []PayloadRecipientAddress
+	LaunchBuySompi                      uint64
+	LaunchBuyMinTokenOut                Uint128
+	PlatformTag                         []byte
+	UnlockTargetSompi                   uint64
 }
 
 func (CreateLiquidityAssetOp) isPayloadOp() {}
@@ -462,25 +478,28 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 	if launchBuySompi > 0 && launchBuyMinTokenOut.IsZero() {
 		return nil, fmt.Errorf("launch_buy_min_token_out must be >0 when launch_buy_sompi is >0")
 	}
-	platformTag, unlockTargetSompi, err := parseOptionalLiquidityCreateTail(payload, cursor)
+	platformTag, unlockTargetSompi, curveMode, individualVirtualCPayReservesSompi, individualVirtualTokenMultiplierBPS, err := parseOptionalLiquidityCreateTail(payload, cursor)
 	if err != nil {
 		return nil, err
 	}
 	return CreateLiquidityAssetOp{
-		TokenVersion:         tokenVersion,
-		CurveVersion:         curveVersion,
-		Decimals:             decimals,
-		MaxSupply:            maxSupply,
-		Name:                 name,
-		Symbol:               symbol,
-		Metadata:             metadata,
-		SeedReserveSompi:     seedReserveSompi,
-		FeeBPS:               feeBPS,
-		Recipients:           recipients,
-		LaunchBuySompi:       launchBuySompi,
-		LaunchBuyMinTokenOut: launchBuyMinTokenOut,
-		PlatformTag:          platformTag,
-		UnlockTargetSompi:    unlockTargetSompi,
+		TokenVersion:                        tokenVersion,
+		CurveVersion:                        curveVersion,
+		CurveMode:                           curveMode,
+		IndividualVirtualCPayReservesSompi:  individualVirtualCPayReservesSompi,
+		IndividualVirtualTokenMultiplierBPS: individualVirtualTokenMultiplierBPS,
+		Decimals:                            decimals,
+		MaxSupply:                           maxSupply,
+		Name:                                name,
+		Symbol:                              symbol,
+		Metadata:                            metadata,
+		SeedReserveSompi:                    seedReserveSompi,
+		FeeBPS:                              feeBPS,
+		Recipients:                          recipients,
+		LaunchBuySompi:                      launchBuySompi,
+		LaunchBuyMinTokenOut:                launchBuyMinTokenOut,
+		PlatformTag:                         platformTag,
+		UnlockTargetSompi:                   unlockTargetSompi,
 	}, nil
 }
 
@@ -648,22 +667,52 @@ func parseOptionalPlatformTagTail(payload []byte, cursor *int) ([]byte, error) {
 	return parsePlatformTag(payload, cursor)
 }
 
-func parseOptionalLiquidityCreateTail(payload []byte, cursor *int) ([]byte, uint64, error) {
+func parseOptionalLiquidityCreateTail(payload []byte, cursor *int) ([]byte, uint64, byte, uint64, uint16, error) {
 	if *cursor == len(payload) {
-		return nil, 0, nil
+		return nil, 0, defaultLiquidityCurveMode, 0, 0, nil
 	}
 	platformTag, err := parsePlatformTag(payload, cursor)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, 0, 0, err
 	}
 	unlockTargetSompi, ok := takeUint64LE(payload, cursor)
 	if !ok {
-		return nil, 0, fmt.Errorf("truncated CAT liquidity unlock target")
+		return nil, 0, 0, 0, 0, fmt.Errorf("truncated CAT liquidity unlock target")
 	}
 	if err := validateLiquidityUnlockTarget(unlockTargetSompi); err != nil {
-		return nil, 0, err
+		return nil, 0, 0, 0, 0, err
 	}
-	return platformTag, unlockTargetSompi, nil
+	curveMode := defaultLiquidityCurveMode
+	individualVirtualCPayReservesSompi := uint64(0)
+	individualVirtualTokenMultiplierBPS := uint16(0)
+	if *cursor != len(payload) {
+		mode, ok := takeByte(payload, cursor)
+		if !ok {
+			return nil, 0, 0, 0, 0, fmt.Errorf("truncated CAT liquidity curve mode")
+		}
+		if err := validateLiquidityCurveMode(mode); err != nil {
+			return nil, 0, 0, 0, 0, err
+		}
+		curveMode = mode
+		if mode == liquidityCurveModeIndividual {
+			fixedCPay, ok := takeUint64LE(payload, cursor)
+			if !ok {
+				return nil, 0, 0, 0, 0, fmt.Errorf("truncated CAT individual liquidity fixed CPAY")
+			}
+			multiplier, ok := takeUint16LE(payload, cursor)
+			if !ok {
+				return nil, 0, 0, 0, 0, fmt.Errorf("truncated CAT individual liquidity multiplier")
+			}
+			if err := validateLiquidityCurveParameters(mode, fixedCPay, multiplier); err != nil {
+				return nil, 0, 0, 0, 0, err
+			}
+			individualVirtualCPayReservesSompi = fixedCPay
+			individualVirtualTokenMultiplierBPS = multiplier
+		} else if err := validateLiquidityCurveParameters(mode, 0, 0); err != nil {
+			return nil, 0, 0, 0, 0, err
+		}
+	}
+	return platformTag, unlockTargetSompi, curveMode, individualVirtualCPayReservesSompi, individualVirtualTokenMultiplierBPS, nil
 }
 
 func parsePlatformTag(payload []byte, cursor *int) ([]byte, error) {
@@ -689,6 +738,45 @@ func validateLiquidityUnlockTarget(unlockTargetSompi uint64) error {
 		return fmt.Errorf("liquidity unlock target `%d` exceeds MaxSompi `%d`", unlockTargetSompi, constants.MaxSompi)
 	}
 	return nil
+}
+
+func validateLiquidityCurveMode(mode byte) error {
+	switch mode {
+	case liquidityCurveModeBasic, liquidityCurveModeAggressive, liquidityCurveModeIndividual:
+		return nil
+	default:
+		return fmt.Errorf("unsupported CAT liquidity curve mode `%d`", mode)
+	}
+}
+
+func validateIndividualLiquidityCurveParams(virtualCPayReservesSompi uint64, virtualTokenMultiplierBPS uint16) error {
+	if virtualCPayReservesSompi < individualMinVirtualCPay || virtualCPayReservesSompi > individualMaxVirtualCPay {
+		return fmt.Errorf("individual liquidity fixed CPAY `%d` is outside allowed range", virtualCPayReservesSompi)
+	}
+	if virtualCPayReservesSompi%individualVirtualCPayStep != 0 {
+		return fmt.Errorf("individual liquidity fixed CPAY `%d` is not on the allowed step", virtualCPayReservesSompi)
+	}
+	if virtualTokenMultiplierBPS < individualMinMultiplierBPS || virtualTokenMultiplierBPS > individualMaxMultiplierBPS {
+		return fmt.Errorf("individual liquidity multiplier `%d` is outside allowed range", virtualTokenMultiplierBPS)
+	}
+	if virtualTokenMultiplierBPS%individualMultiplierStepBPS != 0 {
+		return fmt.Errorf("individual liquidity multiplier `%d` is not on the allowed step", virtualTokenMultiplierBPS)
+	}
+	return nil
+}
+
+func validateLiquidityCurveParameters(mode byte, individualVirtualCPayReservesSompi uint64, individualVirtualTokenMultiplierBPS uint16) error {
+	switch mode {
+	case liquidityCurveModeBasic, liquidityCurveModeAggressive:
+		if individualVirtualCPayReservesSompi == 0 && individualVirtualTokenMultiplierBPS == 0 {
+			return nil
+		}
+		return fmt.Errorf("non-individual liquidity curve must not encode individual parameters")
+	case liquidityCurveModeIndividual:
+		return validateIndividualLiquidityCurveParams(individualVirtualCPayReservesSompi, individualVirtualTokenMultiplierBPS)
+	default:
+		return fmt.Errorf("unsupported CAT liquidity curve mode `%d`", mode)
+	}
 }
 
 func validatePayloadVersion(version byte, current byte, max byte, label string) error {

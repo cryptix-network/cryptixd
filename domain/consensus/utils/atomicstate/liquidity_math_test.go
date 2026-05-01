@@ -107,6 +107,166 @@ func TestInitialVirtualTokenReservesScaleWithSupply(t *testing.T) {
 	}
 }
 
+func TestAggressiveModeUsesSmallerVirtualReserves(t *testing.T) {
+	virtualCPay, err := initialVirtualCPayReservesForMode(liquidityCurveModeAggressive)
+	if err != nil {
+		t.Fatalf("aggressive virtual cpay failed: %v", err)
+	}
+	if virtualCPay != aggressiveVirtualCPayReserve {
+		t.Fatalf("aggressive virtual cpay got %d want %d", virtualCPay, aggressiveVirtualCPayReserve)
+	}
+	tests := []struct {
+		maxSupply uint64
+		expected  uint64
+	}{
+		{minLiquidityTokenSupplyRaw, 105_000},
+		{liquidityTokenSupplyRaw, 1_050_000},
+		{maxLiquidityTokenSupplyRaw, 10_500_000},
+	}
+	for _, test := range tests {
+		got, err := initialVirtualTokenReservesForMaxSupplyAndMode(Uint128FromUint64(test.maxSupply), liquidityCurveModeAggressive)
+		if err != nil {
+			t.Fatalf("maxSupply %d failed: %v", test.maxSupply, err)
+		}
+		if got.Compare(Uint128FromUint64(test.expected)) != 0 {
+			t.Fatalf("maxSupply %d got %s want %d", test.maxSupply, got.Big().String(), test.expected)
+		}
+	}
+	if err := validateLiquidityCurveMode(99); err == nil {
+		t.Fatal("expected invalid curve mode to fail")
+	}
+}
+
+func TestIndividualModeUsesStrictIntegerCurveParams(t *testing.T) {
+	if err := validateLiquidityCurveParameters(liquidityCurveModeIndividual, aggressiveVirtualCPayReserve, 10_500); err != nil {
+		t.Fatalf("valid individual params failed: %v", err)
+	}
+	if err := validateLiquidityCurveParameters(liquidityCurveModeIndividual, individualMaxVirtualCPay, 20_000); err != nil {
+		t.Fatalf("valid individual max params failed: %v", err)
+	}
+	virtualCPay, err := initialVirtualCPayReservesForCurve(liquidityCurveModeIndividual, aggressiveVirtualCPayReserve)
+	if err != nil {
+		t.Fatalf("individual virtual cpay failed: %v", err)
+	}
+	if virtualCPay != aggressiveVirtualCPayReserve {
+		t.Fatalf("individual virtual cpay got %d want %d", virtualCPay, aggressiveVirtualCPayReserve)
+	}
+	virtualTokens, err := initialVirtualTokenReservesForMaxSupplyAndCurve(Uint128FromUint64(liquidityTokenSupplyRaw), liquidityCurveModeIndividual, 10_500)
+	if err != nil {
+		t.Fatalf("individual virtual tokens failed: %v", err)
+	}
+	if virtualTokens.Compare(Uint128FromUint64(1_050_000)) != 0 {
+		t.Fatalf("individual virtual tokens got %s want 1050000", virtualTokens.Big().String())
+	}
+	if err := validateLiquidityCurveParameters(liquidityCurveModeBasic, aggressiveVirtualCPayReserve, 10_500); err == nil {
+		t.Fatal("expected non-individual mode with individual params to fail")
+	}
+	if err := validateLiquidityCurveParameters(liquidityCurveModeIndividual, individualMinVirtualCPay+1, 10_500); err == nil {
+		t.Fatal("expected fixed CPAY step violation to fail")
+	}
+	if err := validateLiquidityCurveParameters(liquidityCurveModeIndividual, aggressiveVirtualCPayReserve, 10_550); err == nil {
+		t.Fatal("expected multiplier step violation to fail")
+	}
+}
+
+func TestIndividualModeTradeVectorsAreExactAcrossRange(t *testing.T) {
+	buyTests := []struct {
+		name                  string
+		maxSupply             uint64
+		fixedCPay             uint64
+		multiplierBPS         uint16
+		grossIn               uint64
+		feeBPS                uint16
+		expectedFee           uint64
+		expectedNet           uint64
+		expectedTokenOut      uint64
+		expectedRealTokens    uint64
+		expectedVirtualCPay   uint64
+		expectedVirtualTokens uint64
+	}{
+		{"individual_min_buy_1000_cpay_100bps", liquidityTokenSupplyRaw, individualMinVirtualCPay, 10_100, 1_000 * constants.SompiPerCryptix, 100, 1_000_000_000, 99_000_000_000, 998, 999_002, 100_099_000_000_000, 1_009_002},
+		{"individual_default_buy_1000_cpay_100bps", liquidityTokenSupplyRaw, aggressiveVirtualCPayReserve, 10_500, 1_000 * constants.SompiPerCryptix, 100, 1_000_000_000, 99_000_000_000, 519, 999_481, 200_099_000_000_000, 1_049_481},
+		{"individual_max_buy_1000_cpay_100bps", liquidityTokenSupplyRaw, individualMaxVirtualCPay, 20_000, 1_000 * constants.SompiPerCryptix, 100, 1_000_000_000, 99_000_000_000, 247, 999_753, 800_099_000_000_000, 1_999_753},
+		{"individual_custom_buy_12345_cpay_40bps", 5_000_000, 330_000_000_000_000, 14_600, 12_345 * constants.SompiPerCryptix, 40, 4_938_000_000, 1_229_562_000_000, 27_098, 4_972_902, 331_229_562_000_000, 7_272_902},
+	}
+	for _, test := range buyTests {
+		virtualCPay, err := initialVirtualCPayReservesForCurve(liquidityCurveModeIndividual, test.fixedCPay)
+		if err != nil {
+			t.Fatalf("%s virtual cpay failed: %v", test.name, err)
+		}
+		virtualTokens, err := initialVirtualTokenReservesForMaxSupplyAndCurve(Uint128FromUint64(test.maxSupply), liquidityCurveModeIndividual, test.multiplierBPS)
+		if err != nil {
+			t.Fatalf("%s virtual tokens failed: %v", test.name, err)
+		}
+		fee, net, tokenOut, realTokens, newVirtualCPay, newVirtualTokens, err := buyWithGrossForTest(
+			Uint128FromUint64(test.maxSupply),
+			virtualCPay,
+			virtualTokens,
+			test.grossIn,
+			test.feeBPS,
+		)
+		if err != nil {
+			t.Fatalf("%s failed: %v", test.name, err)
+		}
+		if fee != test.expectedFee || net != test.expectedNet || newVirtualCPay != test.expectedVirtualCPay {
+			t.Fatalf("%s mismatch fee/net/vcpay: got %d/%d/%d", test.name, fee, net, newVirtualCPay)
+		}
+		if tokenOut.Compare(Uint128FromUint64(test.expectedTokenOut)) != 0 {
+			t.Fatalf("%s tokenOut got %s want %d", test.name, tokenOut.Big().String(), test.expectedTokenOut)
+		}
+		if realTokens.Compare(Uint128FromUint64(test.expectedRealTokens)) != 0 {
+			t.Fatalf("%s real tokens got %s want %d", test.name, realTokens.Big().String(), test.expectedRealTokens)
+		}
+		if newVirtualTokens.Compare(Uint128FromUint64(test.expectedVirtualTokens)) != 0 {
+			t.Fatalf("%s virtual tokens got %s want %d", test.name, newVirtualTokens.Big().String(), test.expectedVirtualTokens)
+		}
+	}
+
+	sellTests := []struct {
+		name                  string
+		realCPay              uint64
+		virtualCPay           uint64
+		virtualTokens         uint64
+		tokenIn               uint64
+		feeBPS                uint16
+		expectedGrossOut      uint64
+		expectedFee           uint64
+		expectedCPayOut       uint64
+		expectedRealCPay      uint64
+		expectedVirtualCPay   uint64
+		expectedVirtualTokens uint64
+	}{
+		{"individual_min_sell_250_tokens_100bps", 99_100_000_000, 100_099_000_000_000, 1_009_002, 250, 100, 24_795_343_483, 247_953_434, 24_547_390_049, 74_304_656_517, 100_074_204_656_517, 1_009_252},
+		{"individual_max_sell_247_tokens_100bps", 99_100_000_000, 800_099_000_000_000, 1_999_753, 247, 100, 98_812_226_500, 988_122_265, 97_824_104_235, 287_773_500, 800_000_187_773_500, 2_000_000},
+		{"individual_custom_sell_7777_tokens_40bps", 1_229_662_000_000, 331_229_562_000_000, 7_272_902, 7_777, 40, 353_809_349_880, 1_415_237_399, 352_394_112_481, 875_852_650_120, 330_875_752_650_120, 7_280_679},
+	}
+	for _, test := range sellTests {
+		grossOut, realCPay, virtualCPay, virtualTokens, err := cpmmSell(
+			test.realCPay,
+			test.virtualCPay,
+			Uint128FromUint64(test.virtualTokens),
+			Uint128FromUint64(test.tokenIn),
+		)
+		if err != nil {
+			t.Fatalf("%s failed: %v", test.name, err)
+		}
+		fee, err := calculateTradeFee(grossOut, test.feeBPS)
+		if err != nil {
+			t.Fatalf("%s fee failed: %v", test.name, err)
+		}
+		cpayOut := grossOut - fee
+		if grossOut != test.expectedGrossOut || fee != test.expectedFee || cpayOut != test.expectedCPayOut {
+			t.Fatalf("%s payout mismatch: got gross=%d fee=%d out=%d", test.name, grossOut, fee, cpayOut)
+		}
+		if realCPay != test.expectedRealCPay || virtualCPay != test.expectedVirtualCPay {
+			t.Fatalf("%s reserve mismatch: got real=%d virtual=%d", test.name, realCPay, virtualCPay)
+		}
+		if virtualTokens.Compare(Uint128FromUint64(test.expectedVirtualTokens)) != 0 {
+			t.Fatalf("%s virtual tokens got %s want %d", test.name, virtualTokens.Big().String(), test.expectedVirtualTokens)
+		}
+	}
+}
+
 func TestMinGrossInputForTokenOutRemovesIntegerOverpay(t *testing.T) {
 	budget := uint64(10 * constants.SompiPerCryptix)
 	tokenOut, _, _, _, err := cpmmBuy(
@@ -302,6 +462,7 @@ func TestRustGoDeterminismBuyVectorsAreExact(t *testing.T) {
 	}{
 		{"initial_buy_10_cpay_no_fee", Uint128FromUint64(liquidityTokenSupplyRaw), initialVirtualCPayReserves, Uint128FromUint64(initialVirtualTokenReserve), 10 * constants.SompiPerCryptix, 0, 0, 10 * constants.SompiPerCryptix, 4, 999_996, 250_001_000_000_000, 1_199_996},
 		{"initial_buy_1000_cpay_100bps", Uint128FromUint64(liquidityTokenSupplyRaw), initialVirtualCPayReserves, Uint128FromUint64(initialVirtualTokenReserve), 1_000 * constants.SompiPerCryptix, 100, 1_000_000_000, 99_000_000_000, 475, 999_525, 250_099_000_000_000, 1_199_525},
+		{"aggressive_initial_buy_1000_cpay_100bps", Uint128FromUint64(liquidityTokenSupplyRaw), aggressiveVirtualCPayReserve, Uint128FromUint64(aggressiveVirtualTokenReserve), 1_000 * constants.SompiPerCryptix, 100, 1_000_000_000, 99_000_000_000, 519, 999_481, 200_099_000_000_000, 1_049_481},
 		{"custom_buy_fee_250bps", Uint128FromUint64(777_777), 1_234_567_890_123, Uint128FromUint64(987_654), 987_654_321, 250, 24_691_358, 962_962_963, 769, 777_008, 1_235_530_853_086, 986_885},
 		{"near_inventory_buy_exact_one", Uint128FromUint64(2), 1_000, Uint128FromUint64(2), 1_000, 0, 0, 1_000, 1, 1, 2_000, 1},
 	}
