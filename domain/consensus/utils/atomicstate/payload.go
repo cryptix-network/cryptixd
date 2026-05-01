@@ -17,29 +17,33 @@ var (
 )
 
 const (
-	catVersion                 = byte(1)
-	ownerAuthSchemePubKey      = byte(0)
-	ownerAuthSchemePubKeyECDSA = byte(1)
-	ownerAuthSchemeScriptHash  = byte(2)
-	catMaxNameLen              = 32
-	catMaxSymbolLen            = 10
-	catMaxMetadataLen          = 256
-	catMaxPlatformTagLen       = 50
-	catMaxDecimals             = 18
-	maxLiquidityFeeRecipients  = 2
-	minLiquidityFeeBPS         = 10
-	maxLiquidityFeeBPS         = 1000
-	liquidityTokenDecimals     = byte(0)
-	minLiquidityTokenSupplyRaw = uint64(100_000)
-	liquidityTokenSupplyRaw    = uint64(1_000_000)
-	defaultLiquiditySupplyRaw  = liquidityTokenSupplyRaw
-	maxLiquidityTokenSupplyRaw = uint64(10_000_000)
-	minLiquiditySeedReserve    = constants.SompiPerCryptix
-	initialRealCPayReserves    = constants.SompiPerCryptix
-	minCPayReserve             = uint64(1)
-	minRealTokenReserve        = uint64(1)
-	initialVirtualCPayReserves = uint64(250_000_000_000_000)
-	initialVirtualTokenReserve = defaultLiquiditySupplyRaw * 6 / 5
+	catVersion                   = byte(1)
+	currentTokenVersion          = byte(1)
+	currentLiquidityCurveVersion = byte(1)
+	maxTokenVersion              = byte(99)
+	maxLiquidityCurveVersion     = byte(99)
+	ownerAuthSchemePubKey        = byte(0)
+	ownerAuthSchemePubKeyECDSA   = byte(1)
+	ownerAuthSchemeScriptHash    = byte(2)
+	catMaxNameLen                = 32
+	catMaxSymbolLen              = 10
+	catMaxMetadataLen            = 256
+	catMaxPlatformTagLen         = 50
+	catMaxDecimals               = 18
+	maxLiquidityFeeRecipients    = 2
+	minLiquidityFeeBPS           = 10
+	maxLiquidityFeeBPS           = 1000
+	liquidityTokenDecimals       = byte(0)
+	minLiquidityTokenSupplyRaw   = uint64(100_000)
+	liquidityTokenSupplyRaw      = uint64(1_000_000)
+	defaultLiquiditySupplyRaw    = liquidityTokenSupplyRaw
+	maxLiquidityTokenSupplyRaw   = uint64(10_000_000)
+	minLiquiditySeedReserve      = constants.SompiPerCryptix
+	initialRealCPayReserves      = constants.SompiPerCryptix
+	minCPayReserve               = uint64(1)
+	minRealTokenReserve          = uint64(1)
+	initialVirtualCPayReserves   = uint64(250_000_000_000_000)
+	initialVirtualTokenReserve   = defaultLiquiditySupplyRaw * 6 / 5
 )
 
 type PayloadSupplyMode byte
@@ -59,6 +63,7 @@ type PayloadOp interface {
 }
 
 type CreateAssetOp struct {
+	TokenVersion         byte
 	Decimals             byte
 	SupplyMode           PayloadSupplyMode
 	MaxSupply            Uint128
@@ -95,6 +100,7 @@ type BurnOp struct {
 func (BurnOp) isPayloadOp() {}
 
 type CreateAssetWithMintOp struct {
+	TokenVersion         byte
 	Decimals             byte
 	SupplyMode           PayloadSupplyMode
 	MaxSupply            Uint128
@@ -110,6 +116,8 @@ type CreateAssetWithMintOp struct {
 func (CreateAssetWithMintOp) isPayloadOp() {}
 
 type CreateLiquidityAssetOp struct {
+	TokenVersion         byte
+	CurveVersion         byte
 	Decimals             byte
 	MaxSupply            Uint128
 	Name                 []byte
@@ -249,7 +257,7 @@ func ParsePayload(payload []byte) (*ParsedPayload, error) {
 }
 
 func parseCreateAsset(payload []byte, cursor *int) (PayloadOp, error) {
-	decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, err := parseCreateAssetCommon(payload, cursor)
+	tokenVersion, decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, err := parseCreateAssetCommon(payload, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -258,6 +266,7 @@ func parseCreateAsset(payload []byte, cursor *int) (PayloadOp, error) {
 		return nil, err
 	}
 	return CreateAssetOp{
+		TokenVersion:         tokenVersion,
 		Decimals:             decimals,
 		SupplyMode:           supplyMode,
 		MaxSupply:            maxSupply,
@@ -323,7 +332,7 @@ func parseBurn(payload []byte, cursor *int) (PayloadOp, error) {
 }
 
 func parseCreateAssetWithMint(payload []byte, cursor *int) (PayloadOp, error) {
-	decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, err := parseCreateAssetCommon(payload, cursor)
+	tokenVersion, decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, err := parseCreateAssetCommon(payload, cursor)
 	if err != nil {
 		return nil, err
 	}
@@ -347,6 +356,7 @@ func parseCreateAssetWithMint(payload []byte, cursor *int) (PayloadOp, error) {
 		return nil, err
 	}
 	return CreateAssetWithMintOp{
+		TokenVersion:         tokenVersion,
 		Decimals:             decimals,
 		SupplyMode:           supplyMode,
 		MaxSupply:            maxSupply,
@@ -361,6 +371,21 @@ func parseCreateAssetWithMint(payload []byte, cursor *int) (PayloadOp, error) {
 }
 
 func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
+	tokenVersion, ok := takeByte(payload, cursor)
+	if !ok {
+		return nil, fmt.Errorf("truncated CAT token version")
+	}
+	if err := validatePayloadVersion(tokenVersion, currentTokenVersion, maxTokenVersion, "token"); err != nil {
+		return nil, err
+	}
+	curveVersion, ok := takeByte(payload, cursor)
+	if !ok {
+		return nil, fmt.Errorf("truncated CAT liquidity curve version")
+	}
+	if err := validatePayloadVersion(curveVersion, currentLiquidityCurveVersion, maxLiquidityCurveVersion, "liquidity curve"); err != nil {
+		return nil, err
+	}
+
 	decimals, ok := takeByte(payload, cursor)
 	if !ok {
 		return nil, fmt.Errorf("truncated CAT decimals")
@@ -442,6 +467,8 @@ func parseCreateLiquidityAsset(payload []byte, cursor *int) (PayloadOp, error) {
 		return nil, err
 	}
 	return CreateLiquidityAssetOp{
+		TokenVersion:         tokenVersion,
+		CurveVersion:         curveVersion,
 		Decimals:             decimals,
 		MaxSupply:            maxSupply,
 		Name:                 name,
@@ -562,19 +589,27 @@ func parseClaimLiquidityFees(payload []byte, cursor *int) (PayloadOp, error) {
 }
 
 func parseCreateAssetCommon(payload []byte, cursor *int) (
-	byte, PayloadSupplyMode, Uint128, [externalapi.DomainHashSize]byte, []byte, []byte, []byte, error,
+	byte, byte, PayloadSupplyMode, Uint128, [externalapi.DomainHashSize]byte, []byte, []byte, []byte, error,
 ) {
+	tokenVersion, ok := takeByte(payload, cursor)
+	if !ok {
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT token version")
+	}
+	if err := validatePayloadVersion(tokenVersion, currentTokenVersion, maxTokenVersion, "token"); err != nil {
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, err
+	}
+
 	decimals, ok := takeByte(payload, cursor)
 	if !ok {
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT decimals")
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT decimals")
 	}
 	if decimals > catMaxDecimals {
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil,
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil,
 			fmt.Errorf("decimals `%d` above max `%d`", decimals, catMaxDecimals)
 	}
 	rawSupplyMode, ok := takeByte(payload, cursor)
 	if !ok {
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT supply mode")
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT supply mode")
 	}
 	var supplyMode PayloadSupplyMode
 	switch rawSupplyMode {
@@ -583,27 +618,27 @@ func parseCreateAssetCommon(payload []byte, cursor *int) (
 	case 1:
 		supplyMode = PayloadSupplyModeCapped
 	default:
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("invalid supply mode `%d`", rawSupplyMode)
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("invalid supply mode `%d`", rawSupplyMode)
 	}
 	maxSupply, ok := takeUint128LE(payload, cursor)
 	if !ok {
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT max_supply")
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT max_supply")
 	}
 	mintAuthorityOwnerID, ok := take32(payload, cursor)
 	if !ok {
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT mint authority")
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("truncated CAT mint authority")
 	}
 	name, symbol, metadata, err := parseStringFields(payload, cursor)
 	if err != nil {
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, err
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, err
 	}
 	switch {
 	case supplyMode == PayloadSupplyModeCapped && maxSupply.IsZero():
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("capped assets require non-zero max_supply")
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("capped assets require non-zero max_supply")
 	case supplyMode == PayloadSupplyModeUncapped && !maxSupply.IsZero():
-		return 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("uncapped assets must encode max_supply=0")
+		return 0, 0, 0, Uint128{}, [externalapi.DomainHashSize]byte{}, nil, nil, nil, fmt.Errorf("uncapped assets must encode max_supply=0")
 	}
-	return decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, nil
+	return tokenVersion, decimals, supplyMode, maxSupply, mintAuthorityOwnerID, name, symbol, metadata, nil
 }
 
 func parseOptionalPlatformTagTail(payload []byte, cursor *int) ([]byte, error) {
@@ -654,6 +689,13 @@ func validateLiquidityUnlockTarget(unlockTargetSompi uint64) error {
 		return fmt.Errorf("liquidity unlock target `%d` exceeds MaxSompi `%d`", unlockTargetSompi, constants.MaxSompi)
 	}
 	return nil
+}
+
+func validatePayloadVersion(version byte, current byte, max byte, label string) error {
+	if version >= 1 && version <= max && version == current {
+		return nil
+	}
+	return fmt.Errorf("unsupported CAT %s version `%d`", label, version)
 }
 
 func parseStringFields(payload []byte, cursor *int) ([]byte, []byte, []byte, error) {

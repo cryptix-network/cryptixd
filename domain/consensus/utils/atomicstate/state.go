@@ -12,9 +12,16 @@ import (
 )
 
 var (
-	atomicConsensusStateMagic      = []byte("CATCS002")
-	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v2")
+	atomicConsensusStateMagic      = []byte("CATCS004")
+	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v4")
 	atomicStateCommitmentDomain    = []byte("cryptix-utxo-atomic-state-commitment-v1")
+)
+
+const (
+	currentStateTokenVersion          = byte(1)
+	currentStateLiquidityCurveVersion = byte(1)
+	maxStateTokenVersion              = byte(99)
+	maxStateLiquidityCurveVersion     = byte(99)
 )
 
 type BalanceKey struct {
@@ -45,6 +52,7 @@ type LiquidityFeeRecipientState struct {
 
 type LiquidityPoolState struct {
 	PoolNonce              uint64
+	CurveVersion           byte
 	RealCPayReservesSompi  uint64
 	RealTokenReserves      Uint128
 	VirtualCPayReserves    uint64
@@ -60,6 +68,7 @@ type LiquidityPoolState struct {
 
 type AssetState struct {
 	AssetClass           AssetClass
+	TokenVersion         byte
 	MintAuthorityOwnerID [externalapi.DomainHashSize]byte
 	SupplyMode           SupplyMode
 	MaxSupply            Uint128
@@ -363,6 +372,7 @@ func writeUint128(out *[]byte, value Uint128) {
 
 func writeAsset(out *[]byte, asset AssetState) {
 	*out = append(*out, byte(asset.AssetClass))
+	*out = append(*out, asset.TokenVersion)
 	*out = append(*out, asset.MintAuthorityOwnerID[:]...)
 	*out = append(*out, byte(asset.SupplyMode))
 	writeUint128(out, asset.MaxSupply)
@@ -379,6 +389,7 @@ func writeAsset(out *[]byte, asset AssetState) {
 
 func writeLiquidityPool(out *[]byte, pool LiquidityPoolState) {
 	writeUint64(out, pool.PoolNonce)
+	*out = append(*out, pool.CurveVersion)
 	writeUint64(out, pool.RealCPayReservesSompi)
 	writeUint128(out, pool.RealTokenReserves)
 	writeUint64(out, pool.VirtualCPayReserves)
@@ -476,6 +487,20 @@ func (r *atomicStateReader) readLen() (uint64, error) {
 	return r.readUint64()
 }
 
+func validateStateTokenVersion(version byte) error {
+	if version >= 1 && version <= maxStateTokenVersion && version == currentStateTokenVersion {
+		return nil
+	}
+	return fmt.Errorf("unsupported atomic token version `%d`", version)
+}
+
+func validateStateLiquidityCurveVersion(version byte) error {
+	if version >= 1 && version <= maxStateLiquidityCurveVersion && version == currentStateLiquidityCurveVersion {
+		return nil
+	}
+	return fmt.Errorf("unsupported atomic liquidity curve version `%d`", version)
+}
+
 func (r *atomicStateReader) readAsset() (AssetState, error) {
 	rawClass, err := r.readByte()
 	if err != nil {
@@ -489,6 +514,13 @@ func (r *atomicStateReader) readAsset() (AssetState, error) {
 		class = AssetClassLiquidity
 	default:
 		return AssetState{}, fmt.Errorf("invalid atomic asset class `%d`", rawClass)
+	}
+	tokenVersion, err := r.readByte()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if err := validateStateTokenVersion(tokenVersion); err != nil {
+		return AssetState{}, err
 	}
 	mintAuthorityOwnerID, err := r.read32()
 	if err != nil {
@@ -550,6 +582,7 @@ func (r *atomicStateReader) readAsset() (AssetState, error) {
 	}
 	return AssetState{
 		AssetClass:           class,
+		TokenVersion:         tokenVersion,
 		MintAuthorityOwnerID: mintAuthorityOwnerID,
 		SupplyMode:           supplyMode,
 		MaxSupply:            maxSupply,
@@ -562,6 +595,13 @@ func (r *atomicStateReader) readAsset() (AssetState, error) {
 func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 	poolNonce, err := r.readUint64()
 	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	curveVersion, err := r.readByte()
+	if err != nil {
+		return LiquidityPoolState{}, err
+	}
+	if err := validateStateLiquidityCurveVersion(curveVersion); err != nil {
 		return LiquidityPoolState{}, err
 	}
 	realCPayReservesSompi, err := r.readUint64()
@@ -659,6 +699,7 @@ func (r *atomicStateReader) readLiquidityPool() (LiquidityPoolState, error) {
 	}
 	return LiquidityPoolState{
 		PoolNonce:              poolNonce,
+		CurveVersion:           curveVersion,
 		RealCPayReservesSompi:  realCPayReservesSompi,
 		RealTokenReserves:      realTokenReserves,
 		VirtualCPayReserves:    virtualCPayReserves,

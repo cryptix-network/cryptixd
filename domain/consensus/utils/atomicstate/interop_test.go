@@ -100,6 +100,7 @@ func atomicInteropVectorState(t *testing.T) *State {
 	state.NextNonces[bytes32(0x60)] = 99
 	state.Assets[liquidityAssetID] = AssetState{
 		AssetClass:           AssetClassLiquidity,
+		TokenVersion:         currentStateTokenVersion,
 		MintAuthorityOwnerID: bytes32(0x00),
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            liquidityMaxSupply,
@@ -107,6 +108,7 @@ func atomicInteropVectorState(t *testing.T) *State {
 		PlatformTag:          nil,
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:              17,
+			CurveVersion:           currentStateLiquidityCurveVersion,
 			RealCPayReservesSompi:  123_456_789,
 			RealTokenReserves:      liquidityRemaining,
 			VirtualCPayReserves:    1_000_000_000_000,
@@ -135,6 +137,7 @@ func atomicInteropVectorState(t *testing.T) *State {
 	}
 	state.Assets[standardAssetID] = AssetState{
 		AssetClass:           AssetClassStandard,
+		TokenVersion:         currentStateTokenVersion,
 		MintAuthorityOwnerID: bytes32(0xA1),
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            uint128Words(0x0200, 9_999),

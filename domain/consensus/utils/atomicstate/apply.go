@@ -205,8 +205,12 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 		if _, ok := state.Assets[assetID]; ok {
 			return fmt.Errorf("asset `%x` already exists", assetID)
 		}
+		if err := validateStateTokenVersion(op.TokenVersion); err != nil {
+			return err
+		}
 		return insertAssetState(state, assetID, AssetState{
 			AssetClass:           AssetClassStandard,
+			TokenVersion:         op.TokenVersion,
 			MintAuthorityOwnerID: op.MintAuthorityOwnerID,
 			SupplyMode:           payloadSupplyModeToState(op.SupplyMode),
 			MaxSupply:            op.MaxSupply,
@@ -219,6 +223,9 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 		assetID := txIDBytes
 		if _, ok := state.Assets[assetID]; ok {
 			return fmt.Errorf("asset `%x` already exists", assetID)
+		}
+		if err := validateStateTokenVersion(op.TokenVersion); err != nil {
+			return err
 		}
 		supplyMode := payloadSupplyModeToState(op.SupplyMode)
 		totalSupply := Uint128{}
@@ -236,6 +243,7 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 		}
 		return insertAssetState(state, assetID, AssetState{
 			AssetClass:           AssetClassStandard,
+			TokenVersion:         op.TokenVersion,
 			MintAuthorityOwnerID: op.MintAuthorityOwnerID,
 			SupplyMode:           supplyMode,
 			MaxSupply:            op.MaxSupply,
@@ -351,6 +359,12 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	if _, ok := state.Assets[assetID]; ok {
 		return fmt.Errorf("asset `%x` already exists", assetID)
 	}
+	if err := validateStateTokenVersion(op.TokenVersion); err != nil {
+		return err
+	}
+	if err := validateStateLiquidityCurveVersion(op.CurveVersion); err != nil {
+		return err
+	}
 	if err := validateLiquidityCreateParams(op.Decimals, op.MaxSupply, op.SeedReserveSompi); err != nil {
 		return err
 	}
@@ -435,6 +449,7 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	unlocked := op.UnlockTargetSompi == 0 || realCPayReservesSompi >= op.UnlockTargetSompi
 	asset := AssetState{
 		AssetClass:           AssetClassLiquidity,
+		TokenVersion:         op.TokenVersion,
 		MintAuthorityOwnerID: [externalapi.DomainHashSize]byte{},
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            op.MaxSupply,
@@ -442,6 +457,7 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		PlatformTag:          op.PlatformTag,
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:              1,
+			CurveVersion:           op.CurveVersion,
 			RealCPayReservesSompi:  realCPayReservesSompi,
 			RealTokenReserves:      realTokenReserves,
 			VirtualCPayReserves:    virtualCPayReserves,
@@ -897,6 +913,9 @@ func applyFeeToPool(recipients []LiquidityFeeRecipientState, unclaimedFeeTotalSo
 }
 
 func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset AssetState) error {
+	if err := validateStateTokenVersion(asset.TokenVersion); err != nil {
+		return err
+	}
 	if asset.AssetClass != AssetClassLiquidity {
 		return nil
 	}
@@ -907,6 +926,9 @@ func validateLiquidityInvariants(assetID [externalapi.DomainHashSize]byte, asset
 		return fmt.Errorf("liquidity assets must always use capped supply mode")
 	}
 	pool := asset.Liquidity
+	if err := validateStateLiquidityCurveVersion(pool.CurveVersion); err != nil {
+		return err
+	}
 	if err := validateLiquidityUnlockTargetForState(pool.UnlockTargetSompi); err != nil {
 		return err
 	}
