@@ -1240,7 +1240,7 @@ func cpmmSell(realCPayReservesSompi uint64, virtualCPayReserves uint64, virtualT
 		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell y_after cannot be zero")
 	}
 	k := new(big.Int).Mul(new(big.Int).SetUint64(virtualCPayReserves), yBefore.Big())
-	xAfterBig := new(big.Int).Div(k, yAfter.Big())
+	xAfterBig := ceilDivBig(k, yAfter.Big())
 	if !xAfterBig.IsUint64() {
 		return 0, 0, 0, Uint128{}, fmt.Errorf("CPMM sell x_after does not fit u64")
 	}

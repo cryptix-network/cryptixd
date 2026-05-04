@@ -62,7 +62,7 @@ func TestCPMMBuyRejectsFinalTokenDrain(t *testing.T) {
 	}
 }
 
-func TestCPMMSellRejectsGrossFloorBreachEvenWhenNetPayoutWouldFit(t *testing.T) {
+func TestCPMMSellRejectsGrossReserveBreachEvenWhenNetPayoutWouldFit(t *testing.T) {
 	grossOut := uint64(1_000)
 	fee, err := calculateTradeFee(grossOut, 1_000)
 	if err != nil {
@@ -79,6 +79,92 @@ func TestCPMMSellRejectsGrossFloorBreachEvenWhenNetPayoutWouldFit(t *testing.T) 
 	if !strings.Contains(err.Error(), "drain final real sompi") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+}
+
+func TestSplitSellRoundTripDoesNotExtractRoundingProfit(t *testing.T) {
+	buyInput := uint64(7)
+	tokenOut, _, virtualCPay, virtualTokens, err := cpmmBuy(Uint128FromUint64(4), 2, Uint128FromUint64(4), buyInput)
+	if err != nil {
+		t.Fatalf("buy failed: %v", err)
+	}
+	tokenOut64, ok := tokenOut.Uint64()
+	if !ok {
+		t.Fatalf("tokenOut too large: %s", tokenOut.Big().String())
+	}
+	if tokenOut64 != 3 {
+		t.Fatalf("tokenOut got %d want 3", tokenOut64)
+	}
+
+	realCPay := virtualCPay
+	totalGrossOut := uint64(0)
+	for sold := uint64(0); sold < tokenOut64; sold++ {
+		grossOut, nextRealCPay, nextVirtualCPay, nextVirtualTokens, err := cpmmSell(
+			realCPay,
+			virtualCPay,
+			virtualTokens,
+			Uint128FromUint64(1),
+		)
+		if err != nil {
+			t.Fatalf("sell %d failed: %v", sold, err)
+		}
+		totalGrossOut, ok = checkedAddUint64(totalGrossOut, grossOut)
+		if !ok {
+			t.Fatal("total gross out overflow")
+		}
+		realCPay = nextRealCPay
+		virtualCPay = nextVirtualCPay
+		virtualTokens = nextVirtualTokens
+	}
+	if totalGrossOut > buyInput {
+		t.Fatalf("split sell extracted rounding profit: buy=%d sell=%d", buyInput, totalGrossOut)
+	}
+}
+
+func FuzzCPMMBuyThenSplitSellDoesNotExtractRoundingProfit(f *testing.F) {
+	f.Add(uint64(4), uint64(2), uint64(4), uint64(7))
+	f.Add(uint64(1_000_000), uint64(initialVirtualCPayReserves), uint64(initialVirtualTokenReserve), uint64(10*constants.SompiPerCryptix))
+	f.Add(uint64(777_777), uint64(1_234_567_890_123), uint64(987_654), uint64(987_654_321))
+
+	f.Fuzz(func(t *testing.T, realTokenSeed uint64, virtualCPaySeed uint64, virtualTokenSeed uint64, cpayInSeed uint64) {
+		realTokenReserves := Uint128FromUint64(2 + realTokenSeed%10_000)
+		virtualCPayReserves := uint64(1 + virtualCPaySeed%1_000_000_000_000)
+		virtualTokenReserves := Uint128FromUint64(2 + virtualTokenSeed%20_000)
+		cpayIn := uint64(1 + cpayInSeed%1_000_000_000)
+
+		tokenOut, _, virtualCPay, virtualTokens, err := cpmmBuy(realTokenReserves, virtualCPayReserves, virtualTokenReserves, cpayIn)
+		if err != nil {
+			return
+		}
+		tokenOut64, ok := tokenOut.Uint64()
+		if !ok || tokenOut64 == 0 || tokenOut64 > 256 {
+			return
+		}
+
+		realCPay := virtualCPay
+		totalGrossOut := uint64(0)
+		for sold := uint64(0); sold < tokenOut64; sold++ {
+			grossOut, nextRealCPay, nextVirtualCPay, nextVirtualTokens, err := cpmmSell(
+				realCPay,
+				virtualCPay,
+				virtualTokens,
+				Uint128FromUint64(1),
+			)
+			if err != nil {
+				return
+			}
+			totalGrossOut, ok = checkedAddUint64(totalGrossOut, grossOut)
+			if !ok {
+				t.Fatal("total gross out overflow")
+			}
+			realCPay = nextRealCPay
+			virtualCPay = nextVirtualCPay
+			virtualTokens = nextVirtualTokens
+		}
+
+		if totalGrossOut > cpayIn {
+			t.Fatalf("split sell extracted rounding profit: buy=%d sell=%d tokenOut=%d", cpayIn, totalGrossOut, tokenOut64)
+		}
+	})
 }
 
 func TestInitialVirtualTokenReservesScaleWithSupply(t *testing.T) {
@@ -236,9 +322,9 @@ func TestIndividualModeTradeVectorsAreExactAcrossRange(t *testing.T) {
 		expectedVirtualCPay   uint64
 		expectedVirtualTokens uint64
 	}{
-		{"individual_min_sell_250_tokens_100bps", 99_100_000_000, 100_099_000_000_000, 1_009_002, 250, 100, 24_795_343_483, 247_953_434, 24_547_390_049, 74_304_656_517, 100_074_204_656_517, 1_009_252},
+		{"individual_min_sell_250_tokens_100bps", 99_100_000_000, 100_099_000_000_000, 1_009_002, 250, 100, 24_795_343_482, 247_953_434, 24_547_390_048, 74_304_656_518, 100_074_204_656_518, 1_009_252},
 		{"individual_max_sell_247_tokens_100bps", 99_100_000_000, 800_099_000_000_000, 1_999_753, 247, 100, 98_812_226_500, 988_122_265, 97_824_104_235, 287_773_500, 800_000_187_773_500, 2_000_000},
-		{"individual_custom_sell_7777_tokens_40bps", 1_229_662_000_000, 331_229_562_000_000, 7_272_902, 7_777, 40, 353_809_349_880, 1_415_237_399, 352_394_112_481, 875_852_650_120, 330_875_752_650_120, 7_280_679},
+		{"individual_custom_sell_7777_tokens_40bps", 1_229_662_000_000, 331_229_562_000_000, 7_272_902, 7_777, 40, 353_809_349_879, 1_415_237_399, 352_394_112_480, 875_852_650_121, 330_875_752_650_121, 7_280_679},
 	}
 	for _, test := range sellTests {
 		grossOut, realCPay, virtualCPay, virtualTokens, err := cpmmSell(
@@ -507,9 +593,9 @@ func TestRustGoDeterminismSellVectorsAreExact(t *testing.T) {
 		expectedVirtualCPay uint64
 		expectedVirtualTok  uint64
 	}{
-		{"sell_initialish_100_100bps", 99_100_000_000, 250_099_000_000_000, Uint128FromUint64(1_199_525), Uint128FromUint64(100), 100, 20_848_098_365, 208_480_983, 20_639_617_382, 78_251_901_635, 250_078_151_901_635, 1_199_625},
-		{"sell_custom_250bps", 20_000_000_000, 987_654_321_000, Uint128FromUint64(876_543), Uint128FromUint64(12_345), 250, 13_716_680_384, 342_917_009, 13_373_763_375, 6_283_319_616, 973_937_640_616, 888_888},
-		{"sell_big_1000bps", 50_000_000_000_000, 1_234_567_890_123, Uint128FromUint64(987_654), Uint128FromUint64(500_000), 1_000, 414_937_845_132, 41_493_784_513, 373_444_060_619, 49_585_062_154_868, 819_630_044_991, 1_487_654},
+		{"sell_initialish_100_100bps", 99_100_000_000, 250_099_000_000_000, Uint128FromUint64(1_199_525), Uint128FromUint64(100), 100, 20_848_098_364, 208_480_983, 20_639_617_381, 78_251_901_636, 250_078_151_901_636, 1_199_625},
+		{"sell_custom_250bps", 20_000_000_000, 987_654_321_000, Uint128FromUint64(876_543), Uint128FromUint64(12_345), 250, 13_716_680_383, 342_917_009, 13_373_763_374, 6_283_319_617, 973_937_640_617, 888_888},
+		{"sell_big_1000bps", 50_000_000_000_000, 1_234_567_890_123, Uint128FromUint64(987_654), Uint128FromUint64(500_000), 1_000, 414_937_845_131, 41_493_784_513, 373_444_060_618, 49_585_062_154_869, 819_630_044_992, 1_487_654},
 	}
 	for _, test := range tests {
 		grossOut, realCPay, virtualCPay, virtualTokens, err := cpmmSell(
