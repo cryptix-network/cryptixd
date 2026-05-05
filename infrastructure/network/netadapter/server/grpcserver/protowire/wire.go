@@ -345,6 +345,20 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 			return nil, err
 		}
 		return payload, nil
+	case *appmessage.MsgTrustedAtomicStateChunk:
+		payload := new(CryptixdMessage_TrustedAtomicStateChunk)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgRequestNextPruningPointAtomicStateChunk:
+		payload := new(CryptixdMessage_RequestNextPruningPointAtomicStateChunk)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
 	case *appmessage.MsgBlockWithTrustedDataV4:
 		payload := new(CryptixdMessage_BlockWithTrustedDataV4)
 		err := payload.fromAppMessage(message)

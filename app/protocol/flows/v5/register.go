@@ -92,6 +92,7 @@ func registerBlockRelayFlows(m protocolManager, router *routerpkg.Router, isStop
 			appmessage.CmdDonePruningPointUTXOSetChunks, appmessage.CmdIBDBlock, appmessage.CmdPruningPoints,
 			appmessage.CmdPruningPointProof,
 			appmessage.CmdTrustedData,
+			appmessage.CmdTrustedAtomicStateChunk,
 			appmessage.CmdIBDChainBlockLocator,
 		},
 			isStopping, errChan, func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
@@ -136,7 +137,11 @@ func registerBlockRelayFlows(m protocolManager, router *routerpkg.Router, isStop
 		),
 
 		m.RegisterFlow("HandlePruningPointAndItsAnticoneRequests", router,
-			[]appmessage.MessageCommand{appmessage.CmdRequestPruningPointAndItsAnticone, appmessage.CmdRequestNextPruningPointAndItsAnticoneBlocks}, isStopping, errChan,
+			[]appmessage.MessageCommand{
+				appmessage.CmdRequestPruningPointAndItsAnticone,
+				appmessage.CmdRequestNextPruningPointAndItsAnticoneBlocks,
+				appmessage.CmdRequestNextPruningPointAtomicStateChunk,
+			}, isStopping, errChan,
 			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
 				return blockrelay.HandlePruningPointAndItsAnticoneRequests(m.Context(), incomingRoute, outgoingRoute, peer)
 			},

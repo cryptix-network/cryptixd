@@ -1,6 +1,9 @@
 package consensusstatemanager
 
 import (
+	"math"
+
+	"github.com/cryptix-network/cryptixd/domain/consensus/database"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
@@ -60,6 +63,20 @@ func (csm *consensusStateManager) importPruningPointUTXOSet(stagingArea *model.S
 		if err != nil {
 			return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet,
 				"post-payload-HF pruning point %s has an invalid Atomic consensus state", newPruningPoint)
+		}
+	} else {
+		importedPruningPointUTXOIterator, err := csm.pruningStore.ImportedPruningPointUTXOIterator(csm.databaseContext)
+		if err != nil {
+			return err
+		}
+		importedPruningPointAtomicState, err = atomicAnchorStateFromUTXOIterator(importedPruningPointUTXOIterator)
+		closeErr := importedPruningPointUTXOIterator.Close()
+		if err != nil {
+			return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet,
+				"failed reconstructing pre-payload-HF pruning point %s Atomic consensus state", newPruningPoint)
+		}
+		if closeErr != nil {
+			return closeErr
 		}
 	}
 	expectedUTXOCommitment := importedPruningPointAtomicState.HeaderCommitment(importedPruningPointMultiset.Hash(), payloadHFActive)
@@ -234,7 +251,7 @@ func (csm *consensusStateManager) RecoverUTXOIfRequired() error {
 		return err
 	}
 	if !hadStartedImportingPruningPointUTXOSet {
-		return nil
+		return csm.recoverPreHFVirtualAtomicState()
 	}
 
 	log.Warnf("Unimported pruning point UTXO set detected. Attempting to recover...")
@@ -248,5 +265,64 @@ func (csm *consensusStateManager) RecoverUTXOIfRequired() error {
 		return err
 	}
 	log.Warnf("Unimported UTXO set successfully recovered")
-	return nil
+	return csm.recoverPreHFVirtualAtomicState()
+}
+
+func (csm *consensusStateManager) recoverPreHFVirtualAtomicState() error {
+	stagingArea := model.NewStagingArea()
+	virtualDAAScore, err := csm.daaBlocksStore.DAAScore(csm.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return nil
+		}
+		return err
+	}
+	if virtualDAAScore >= csm.payloadHfActivationDAAScore {
+		return nil
+	}
+
+	virtualUTXOSetIterator, err := csm.consensusStateStore.VirtualUTXOSetIterator(csm.databaseContext, stagingArea)
+	if err != nil {
+		return err
+	}
+	reconstructedAtomicState, err := atomicAnchorStateFromUTXOIterator(virtualUTXOSetIterator)
+	closeErr := virtualUTXOSetIterator.Close()
+	if err != nil {
+		return err
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+
+	currentAtomicState, err := csm.atomicStateStore.Get(csm.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil && !database.IsNotFoundError(err) {
+		return err
+	}
+	if err == nil && currentAtomicState.CanonicalHash() == reconstructedAtomicState.CanonicalHash() {
+		return nil
+	}
+
+	log.Warnf("Reconstructing pre-payload-HF virtual Atomic consensus state from the current UTXO set")
+	csm.atomicStateStore.Stage(stagingArea, model.VirtualBlockHash, reconstructedAtomicState)
+	return staging.CommitAllChanges(csm.databaseContext, stagingArea)
+}
+
+func atomicAnchorStateFromUTXOIterator(iterator externalapi.ReadOnlyUTXOSetIterator) (*atomicstate.State, error) {
+	state := atomicstate.NewState()
+	for ok := iterator.First(); ok; ok = iterator.Next() {
+		_, utxoEntry, err := iterator.Get()
+		if err != nil {
+			return nil, err
+		}
+		ownerID, ok := atomicstate.OwnerIDFromScript(utxoEntry.ScriptPublicKey())
+		if !ok {
+			continue
+		}
+		count := state.AnchorCounts[ownerID]
+		if count == math.MaxUint64 {
+			return nil, errors.Errorf("Atomic anchor count overflow for owner `%x`", ownerID)
+		}
+		state.AnchorCounts[ownerID] = count + 1
+	}
+	return state, nil
 }

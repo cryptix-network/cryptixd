@@ -173,6 +173,8 @@ const (
 	CmdRequestFastIntents
 	CmdFastIntent
 	CmdFastMicroblock
+	CmdTrustedAtomicStateChunk
+	CmdRequestNextPruningPointAtomicStateChunk
 )
 
 // ProtocolMessageCommandToString maps all MessageCommands to their string representation
@@ -226,6 +228,8 @@ var ProtocolMessageCommandToString = map[MessageCommand]string{
 	CmdRequestFastIntents:                          "RequestFastIntents",
 	CmdFastIntent:                                  "FastIntent",
 	CmdFastMicroblock:                              "FastMicroblock",
+	CmdTrustedAtomicStateChunk:                     "TrustedAtomicStateChunk",
+	CmdRequestNextPruningPointAtomicStateChunk:     "RequestNextPruningPointAtomicStateChunk",
 }
 
 // RPCMessageCommandToString maps all MessageCommands to their string representation

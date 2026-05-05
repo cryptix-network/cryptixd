@@ -38,15 +38,23 @@ func (x *CryptixdMessage_TrustedData) toAppMessage() (appmessage.Message, error)
 	}
 
 	return &appmessage.MsgTrustedData{
-		DAAWindow:    daaWindow,
-		GHOSTDAGData: ghostdagData,
+		DAAWindow:                      daaWindow,
+		GHOSTDAGData:                   ghostdagData,
+		AtomicConsensusState:           append([]byte(nil), x.TrustedData.AtomicConsensusState...),
+		AtomicConsensusStateHash:       append([]byte(nil), x.TrustedData.AtomicConsensusStateHash...),
+		AtomicConsensusStateByteLength: x.TrustedData.AtomicConsensusStateByteLength,
+		AtomicConsensusStateChunkCount: x.TrustedData.AtomicConsensusStateChunkCount,
 	}, nil
 }
 
 func (x *CryptixdMessage_TrustedData) fromAppMessage(msgTrustedData *appmessage.MsgTrustedData) error {
 	x.TrustedData = &TrustedDataMessage{
-		DaaWindow:    make([]*DaaBlockV4, len(msgTrustedData.DAAWindow)),
-		GhostdagData: make([]*BlockGhostdagDataHashPair, len(msgTrustedData.GHOSTDAGData)),
+		DaaWindow:                      make([]*DaaBlockV4, len(msgTrustedData.DAAWindow)),
+		GhostdagData:                   make([]*BlockGhostdagDataHashPair, len(msgTrustedData.GHOSTDAGData)),
+		AtomicConsensusState:           append([]byte(nil), msgTrustedData.AtomicConsensusState...),
+		AtomicConsensusStateHash:       append([]byte(nil), msgTrustedData.AtomicConsensusStateHash...),
+		AtomicConsensusStateByteLength: msgTrustedData.AtomicConsensusStateByteLength,
+		AtomicConsensusStateChunkCount: msgTrustedData.AtomicConsensusStateChunkCount,
 	}
 
 	for i, daaBlock := range msgTrustedData.DAAWindow {

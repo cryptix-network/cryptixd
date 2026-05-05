@@ -6,6 +6,11 @@ type MsgTrustedData struct {
 
 	DAAWindow    []*TrustedDataDAAHeader
 	GHOSTDAGData []*BlockGHOSTDAGDataHashPair
+
+	AtomicConsensusState           []byte
+	AtomicConsensusStateHash       []byte
+	AtomicConsensusStateByteLength uint64
+	AtomicConsensusStateChunkCount uint64
 }
 
 // Command returns the protocol command string for the message

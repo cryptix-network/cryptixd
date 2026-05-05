@@ -3218,11 +3218,15 @@ func (x *BlockWithTrustedDataV4Message) GetGhostdagDataIndices() []uint64 {
 }
 
 type TrustedDataMessage struct {
-	state         protoimpl.MessageState       `protogen:"open.v1"`
-	DaaWindow     []*DaaBlockV4                `protobuf:"bytes,1,rep,name=daaWindow,proto3" json:"daaWindow,omitempty"`
-	GhostdagData  []*BlockGhostdagDataHashPair `protobuf:"bytes,2,rep,name=ghostdagData,proto3" json:"ghostdagData,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state                          protoimpl.MessageState       `protogen:"open.v1"`
+	DaaWindow                      []*DaaBlockV4                `protobuf:"bytes,1,rep,name=daaWindow,proto3" json:"daaWindow,omitempty"`
+	GhostdagData                   []*BlockGhostdagDataHashPair `protobuf:"bytes,2,rep,name=ghostdagData,proto3" json:"ghostdagData,omitempty"`
+	AtomicConsensusState           []byte                       `protobuf:"bytes,3,opt,name=atomicConsensusState,proto3" json:"atomicConsensusState,omitempty"`
+	AtomicConsensusStateHash       []byte                       `protobuf:"bytes,4,opt,name=atomicConsensusStateHash,proto3" json:"atomicConsensusStateHash,omitempty"`
+	AtomicConsensusStateByteLength uint64                       `protobuf:"varint,5,opt,name=atomicConsensusStateByteLength,proto3" json:"atomicConsensusStateByteLength,omitempty"`
+	AtomicConsensusStateChunkCount uint64                       `protobuf:"varint,6,opt,name=atomicConsensusStateChunkCount,proto3" json:"atomicConsensusStateChunkCount,omitempty"`
+	unknownFields                  protoimpl.UnknownFields
+	sizeCache                      protoimpl.SizeCache
 }
 
 func (x *TrustedDataMessage) Reset() {
@@ -3269,6 +3273,146 @@ func (x *TrustedDataMessage) GetGhostdagData() []*BlockGhostdagDataHashPair {
 	return nil
 }
 
+func (x *TrustedDataMessage) GetAtomicConsensusState() []byte {
+	if x != nil {
+		return x.AtomicConsensusState
+	}
+	return nil
+}
+
+func (x *TrustedDataMessage) GetAtomicConsensusStateHash() []byte {
+	if x != nil {
+		return x.AtomicConsensusStateHash
+	}
+	return nil
+}
+
+func (x *TrustedDataMessage) GetAtomicConsensusStateByteLength() uint64 {
+	if x != nil {
+		return x.AtomicConsensusStateByteLength
+	}
+	return 0
+}
+
+func (x *TrustedDataMessage) GetAtomicConsensusStateChunkCount() uint64 {
+	if x != nil {
+		return x.AtomicConsensusStateChunkCount
+	}
+	return 0
+}
+
+type TrustedAtomicStateChunkMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StateHash     []byte                 `protobuf:"bytes,1,opt,name=stateHash,proto3" json:"stateHash,omitempty"`
+	ChunkIndex    uint64                 `protobuf:"varint,2,opt,name=chunkIndex,proto3" json:"chunkIndex,omitempty"`
+	TotalChunks   uint64                 `protobuf:"varint,3,opt,name=totalChunks,proto3" json:"totalChunks,omitempty"`
+	TotalBytes    uint64                 `protobuf:"varint,4,opt,name=totalBytes,proto3" json:"totalBytes,omitempty"`
+	Chunk         []byte                 `protobuf:"bytes,5,opt,name=chunk,proto3" json:"chunk,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustedAtomicStateChunkMessage) Reset() {
+	*x = TrustedAtomicStateChunkMessage{}
+	mi := &file_p2p_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustedAtomicStateChunkMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustedAtomicStateChunkMessage) ProtoMessage() {}
+
+func (x *TrustedAtomicStateChunkMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustedAtomicStateChunkMessage.ProtoReflect.Descriptor instead.
+func (*TrustedAtomicStateChunkMessage) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *TrustedAtomicStateChunkMessage) GetStateHash() []byte {
+	if x != nil {
+		return x.StateHash
+	}
+	return nil
+}
+
+func (x *TrustedAtomicStateChunkMessage) GetChunkIndex() uint64 {
+	if x != nil {
+		return x.ChunkIndex
+	}
+	return 0
+}
+
+func (x *TrustedAtomicStateChunkMessage) GetTotalChunks() uint64 {
+	if x != nil {
+		return x.TotalChunks
+	}
+	return 0
+}
+
+func (x *TrustedAtomicStateChunkMessage) GetTotalBytes() uint64 {
+	if x != nil {
+		return x.TotalBytes
+	}
+	return 0
+}
+
+func (x *TrustedAtomicStateChunkMessage) GetChunk() []byte {
+	if x != nil {
+		return x.Chunk
+	}
+	return nil
+}
+
+type RequestNextPruningPointAtomicStateChunkMessage struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestNextPruningPointAtomicStateChunkMessage) Reset() {
+	*x = RequestNextPruningPointAtomicStateChunkMessage{}
+	mi := &file_p2p_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestNextPruningPointAtomicStateChunkMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestNextPruningPointAtomicStateChunkMessage) ProtoMessage() {}
+
+func (x *RequestNextPruningPointAtomicStateChunkMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_p2p_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestNextPruningPointAtomicStateChunkMessage.ProtoReflect.Descriptor instead.
+func (*RequestNextPruningPointAtomicStateChunkMessage) Descriptor() ([]byte, []int) {
+	return file_p2p_proto_rawDescGZIP(), []int{63}
+}
+
 type RequestFastIntentsMessage struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	IntentIds     []*Hash                `protobuf:"bytes,1,rep,name=intentIds,proto3" json:"intentIds,omitempty"`
@@ -3278,7 +3422,7 @@ type RequestFastIntentsMessage struct {
 
 func (x *RequestFastIntentsMessage) Reset() {
 	*x = RequestFastIntentsMessage{}
-	mi := &file_p2p_proto_msgTypes[62]
+	mi := &file_p2p_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3290,7 +3434,7 @@ func (x *RequestFastIntentsMessage) String() string {
 func (*RequestFastIntentsMessage) ProtoMessage() {}
 
 func (x *RequestFastIntentsMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[62]
+	mi := &file_p2p_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3303,7 +3447,7 @@ func (x *RequestFastIntentsMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestFastIntentsMessage.ProtoReflect.Descriptor instead.
 func (*RequestFastIntentsMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{62}
+	return file_p2p_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *RequestFastIntentsMessage) GetIntentIds() []*Hash {
@@ -3326,7 +3470,7 @@ type FastIntentMessage struct {
 
 func (x *FastIntentMessage) Reset() {
 	*x = FastIntentMessage{}
-	mi := &file_p2p_proto_msgTypes[63]
+	mi := &file_p2p_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3338,7 +3482,7 @@ func (x *FastIntentMessage) String() string {
 func (*FastIntentMessage) ProtoMessage() {}
 
 func (x *FastIntentMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[63]
+	mi := &file_p2p_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3351,7 +3495,7 @@ func (x *FastIntentMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FastIntentMessage.ProtoReflect.Descriptor instead.
 func (*FastIntentMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{63}
+	return file_p2p_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *FastIntentMessage) GetIntentId() *Hash {
@@ -3399,7 +3543,7 @@ type FastMicroblockMessage struct {
 
 func (x *FastMicroblockMessage) Reset() {
 	*x = FastMicroblockMessage{}
-	mi := &file_p2p_proto_msgTypes[64]
+	mi := &file_p2p_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3411,7 +3555,7 @@ func (x *FastMicroblockMessage) String() string {
 func (*FastMicroblockMessage) ProtoMessage() {}
 
 func (x *FastMicroblockMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[64]
+	mi := &file_p2p_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3424,7 +3568,7 @@ func (x *FastMicroblockMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FastMicroblockMessage.ProtoReflect.Descriptor instead.
 func (*FastMicroblockMessage) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{64}
+	return file_p2p_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *FastMicroblockMessage) GetMicroblockTimeMs() uint64 {
@@ -3455,7 +3599,7 @@ type BlockProducerClaimV1Message struct {
 
 func (x *BlockProducerClaimV1Message) Reset() {
 	*x = BlockProducerClaimV1Message{}
-	mi := &file_p2p_proto_msgTypes[65]
+	mi := &file_p2p_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3467,7 +3611,7 @@ func (x *BlockProducerClaimV1Message) String() string {
 func (*BlockProducerClaimV1Message) ProtoMessage() {}
 
 func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
-	mi := &file_p2p_proto_msgTypes[65]
+	mi := &file_p2p_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3480,7 +3624,7 @@ func (x *BlockProducerClaimV1Message) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BlockProducerClaimV1Message.ProtoReflect.Descriptor instead.
 func (*BlockProducerClaimV1Message) Descriptor() ([]byte, []int) {
-	return file_p2p_proto_rawDescGZIP(), []int{65}
+	return file_p2p_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *BlockProducerClaimV1Message) GetSchemaVersion() uint32 {
@@ -3727,10 +3871,25 @@ const file_p2p_proto_rawDesc = "" +
 	"\x1dBlockWithTrustedDataV4Message\x12-\n" +
 	"\x05block\x18\x01 \x01(\v2\x17.protowire.BlockMessageR\x05block\x12*\n" +
 	"\x10daaWindowIndices\x18\x02 \x03(\x04R\x10daaWindowIndices\x120\n" +
-	"\x13ghostdagDataIndices\x18\x03 \x03(\x04R\x13ghostdagDataIndices\"\x93\x01\n" +
+	"\x13ghostdagDataIndices\x18\x03 \x03(\x04R\x13ghostdagDataIndices\"\x93\x03\n" +
 	"\x12TrustedDataMessage\x123\n" +
 	"\tdaaWindow\x18\x01 \x03(\v2\x15.protowire.DaaBlockV4R\tdaaWindow\x12H\n" +
-	"\fghostdagData\x18\x02 \x03(\v2$.protowire.BlockGhostdagDataHashPairR\fghostdagData\"J\n" +
+	"\fghostdagData\x18\x02 \x03(\v2$.protowire.BlockGhostdagDataHashPairR\fghostdagData\x122\n" +
+	"\x14atomicConsensusState\x18\x03 \x01(\fR\x14atomicConsensusState\x12:\n" +
+	"\x18atomicConsensusStateHash\x18\x04 \x01(\fR\x18atomicConsensusStateHash\x12F\n" +
+	"\x1eatomicConsensusStateByteLength\x18\x05 \x01(\x04R\x1eatomicConsensusStateByteLength\x12F\n" +
+	"\x1eatomicConsensusStateChunkCount\x18\x06 \x01(\x04R\x1eatomicConsensusStateChunkCount\"\xb6\x01\n" +
+	"\x1eTrustedAtomicStateChunkMessage\x12\x1c\n" +
+	"\tstateHash\x18\x01 \x01(\fR\tstateHash\x12\x1e\n" +
+	"\n" +
+	"chunkIndex\x18\x02 \x01(\x04R\n" +
+	"chunkIndex\x12 \n" +
+	"\vtotalChunks\x18\x03 \x01(\x04R\vtotalChunks\x12\x1e\n" +
+	"\n" +
+	"totalBytes\x18\x04 \x01(\x04R\n" +
+	"totalBytes\x12\x14\n" +
+	"\x05chunk\x18\x05 \x01(\fR\x05chunk\"0\n" +
+	".RequestNextPruningPointAtomicStateChunkMessage\"J\n" +
 	"\x19RequestFastIntentsMessage\x12-\n" +
 	"\tintentIds\x18\x01 \x03(\v2\x0f.protowire.HashR\tintentIds\"\xf1\x01\n" +
 	"\x11FastIntentMessage\x12+\n" +
@@ -3763,7 +3922,7 @@ func file_p2p_proto_rawDescGZIP() []byte {
 	return file_p2p_proto_rawDescData
 }
 
-var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
+var file_p2p_proto_msgTypes = make([]protoimpl.MessageInfo, 68)
 var file_p2p_proto_goTypes = []any{
 	(*RequestAddressesMessage)(nil),                            // 0: protowire.RequestAddressesMessage
 	(*AddressesMessage)(nil),                                   // 1: protowire.AddressesMessage
@@ -3827,10 +3986,12 @@ var file_p2p_proto_goTypes = []any{
 	(*ReadyMessage)(nil),                                       // 59: protowire.ReadyMessage
 	(*BlockWithTrustedDataV4Message)(nil),                      // 60: protowire.BlockWithTrustedDataV4Message
 	(*TrustedDataMessage)(nil),                                 // 61: protowire.TrustedDataMessage
-	(*RequestFastIntentsMessage)(nil),                          // 62: protowire.RequestFastIntentsMessage
-	(*FastIntentMessage)(nil),                                  // 63: protowire.FastIntentMessage
-	(*FastMicroblockMessage)(nil),                              // 64: protowire.FastMicroblockMessage
-	(*BlockProducerClaimV1Message)(nil),                        // 65: protowire.BlockProducerClaimV1Message
+	(*TrustedAtomicStateChunkMessage)(nil),                     // 62: protowire.TrustedAtomicStateChunkMessage
+	(*RequestNextPruningPointAtomicStateChunkMessage)(nil),     // 63: protowire.RequestNextPruningPointAtomicStateChunkMessage
+	(*RequestFastIntentsMessage)(nil),                          // 64: protowire.RequestFastIntentsMessage
+	(*FastIntentMessage)(nil),                                  // 65: protowire.FastIntentMessage
+	(*FastMicroblockMessage)(nil),                              // 66: protowire.FastMicroblockMessage
+	(*BlockProducerClaimV1Message)(nil),                        // 67: protowire.BlockProducerClaimV1Message
 }
 var file_p2p_proto_depIdxs = []int32{
 	3,  // 0: protowire.RequestAddressesMessage.subnetworkId:type_name -> protowire.SubnetworkId
@@ -3912,14 +4073,14 @@ func file_p2p_proto_init() {
 		return
 	}
 	file_p2p_proto_msgTypes[27].OneofWrappers = []any{}
-	file_p2p_proto_msgTypes[65].OneofWrappers = []any{}
+	file_p2p_proto_msgTypes[67].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_p2p_proto_rawDesc), len(file_p2p_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   66,
+			NumMessages:   68,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

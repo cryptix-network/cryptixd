@@ -134,6 +134,94 @@ func TestFastMicroblockRoundTrip(t *testing.T) {
 	}
 }
 
+func TestTrustedDataAtomicMetadataRoundTrip(t *testing.T) {
+	input := &appmessage.MsgTrustedData{
+		DAAWindow:                      []*appmessage.TrustedDataDAAHeader{},
+		GHOSTDAGData:                   []*appmessage.BlockGHOSTDAGDataHashPair{},
+		AtomicConsensusState:           []byte{0x01, 0x02},
+		AtomicConsensusStateHash:       bytes.Repeat([]byte{0xAA}, externalapi.DomainHashSize),
+		AtomicConsensusStateByteLength: 123,
+		AtomicConsensusStateChunkCount: 4,
+	}
+
+	protoMessage, err := FromAppMessage(input)
+	if err != nil {
+		t.Fatalf("FromAppMessage failed: %v", err)
+	}
+
+	appMsg, err := protoMessage.ToAppMessage()
+	if err != nil {
+		t.Fatalf("ToAppMessage failed: %v", err)
+	}
+
+	got, ok := appMsg.(*appmessage.MsgTrustedData)
+	if !ok {
+		t.Fatalf("unexpected message type %T", appMsg)
+	}
+	if !bytes.Equal(got.AtomicConsensusState, input.AtomicConsensusState) {
+		t.Fatalf("atomic consensus state mismatch")
+	}
+	if !bytes.Equal(got.AtomicConsensusStateHash, input.AtomicConsensusStateHash) {
+		t.Fatalf("atomic consensus state hash mismatch")
+	}
+	if got.AtomicConsensusStateByteLength != input.AtomicConsensusStateByteLength ||
+		got.AtomicConsensusStateChunkCount != input.AtomicConsensusStateChunkCount {
+		t.Fatalf("atomic consensus state metadata mismatch")
+	}
+}
+
+func TestTrustedAtomicStateChunkRoundTrip(t *testing.T) {
+	input := appmessage.NewMsgTrustedAtomicStateChunk(
+		bytes.Repeat([]byte{0xBB}, externalapi.DomainHashSize),
+		2,
+		9,
+		4097,
+		[]byte{0xCA, 0xFE},
+	)
+
+	protoMessage, err := FromAppMessage(input)
+	if err != nil {
+		t.Fatalf("FromAppMessage failed: %v", err)
+	}
+
+	appMsg, err := protoMessage.ToAppMessage()
+	if err != nil {
+		t.Fatalf("ToAppMessage failed: %v", err)
+	}
+
+	got, ok := appMsg.(*appmessage.MsgTrustedAtomicStateChunk)
+	if !ok {
+		t.Fatalf("unexpected message type %T", appMsg)
+	}
+	if !bytes.Equal(got.StateHash, input.StateHash) {
+		t.Fatalf("state hash mismatch")
+	}
+	if got.ChunkIndex != input.ChunkIndex || got.TotalChunks != input.TotalChunks || got.TotalBytes != input.TotalBytes {
+		t.Fatalf("chunk metadata mismatch")
+	}
+	if !bytes.Equal(got.Chunk, input.Chunk) {
+		t.Fatalf("chunk bytes mismatch")
+	}
+}
+
+func TestRequestNextPruningPointAtomicStateChunkRoundTrip(t *testing.T) {
+	input := appmessage.NewMsgRequestNextPruningPointAtomicStateChunk()
+
+	protoMessage, err := FromAppMessage(input)
+	if err != nil {
+		t.Fatalf("FromAppMessage failed: %v", err)
+	}
+
+	appMsg, err := protoMessage.ToAppMessage()
+	if err != nil {
+		t.Fatalf("ToAppMessage failed: %v", err)
+	}
+
+	if _, ok := appMsg.(*appmessage.MsgRequestNextPruningPointAtomicStateChunk); !ok {
+		t.Fatalf("unexpected message type %T", appMsg)
+	}
+}
+
 func TestEnvelopeIDsRoundTrip(t *testing.T) {
 	input := appmessage.NewMsgRequestAntiFraudSnapshotV1()
 	input.SetRequestID(123)

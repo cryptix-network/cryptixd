@@ -94,6 +94,9 @@ func (flow *receiveVersionFlow) start() (*appmessage.NetAddress, error) {
 	if err != nil {
 		return nil, protocolerrors.Wrapf(false, err, "invalid unified node identity")
 	}
+	if !allowSelfConnections && hardforkActive && isSelfUnifiedNodeID(peerUnifiedNodeID, flow.NetAdapter().UnifiedNodeID()) {
+		return nil, protocolerrors.New(false, "connected to self unified node identity")
+	}
 	peerQuantumHandshakePubKey, err := validatePeerQuantumHandshakePubKey(msgVersion, requireQuantumHandshakeKey)
 	if err != nil {
 		if hardforkActive && peerSupportsQuantumFallback {
@@ -197,6 +200,10 @@ func validatePeerUnifiedNodeIdentity(networkName string, msgVersion *appmessage.
 	}
 	nodeID := netadapter.ComputeUnifiedNodeID(pubKeyXOnly)
 	return &nodeID, &pubKeyXOnly, nil
+}
+
+func isSelfUnifiedNodeID(peerUnifiedNodeID *[32]byte, localUnifiedNodeID [32]byte) bool {
+	return peerUnifiedNodeID != nil && *peerUnifiedNodeID == localUnifiedNodeID
 }
 
 func validatePeerQuantumHandshakePubKey(msgVersion *appmessage.MsgVersion, required bool) ([]byte, error) {

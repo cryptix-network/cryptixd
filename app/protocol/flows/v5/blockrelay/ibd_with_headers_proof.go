@@ -1,12 +1,14 @@
 package blockrelay
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/pkg/errors"
 	"time"
@@ -114,48 +116,49 @@ func (flow *handleIBDFlow) checkIfHighHashHasMoreBlueWorkThanSelectedTipAndPruni
 	return relayBlock.Header.BlueWork().Cmp(virtualSelectedTipInfo.BlueWork) > 0, nil
 }
 
-func (flow *handleIBDFlow) syncAndValidatePruningPointProof() (*externalapi.DomainHash, error) {
+func (flow *handleIBDFlow) syncAndValidatePruningPointProof() (*externalapi.DomainHash, uint64, error) {
 	log.Infof("Downloading the pruning point proof from %s", flow.peer)
 	err := flow.outgoingRoute.Enqueue(appmessage.NewMsgRequestPruningPointProof())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	message, err := flow.incomingRoute.DequeueWithTimeout(10 * time.Minute)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	pruningPointProofMessage, ok := message.(*appmessage.MsgPruningPointProof)
 	if !ok {
-		return nil, protocolerrors.Errorf(true, "received unexpected message type. "+
+		return nil, 0, protocolerrors.Errorf(true, "received unexpected message type. "+
 			"expected: %s, got: %s", appmessage.CmdPruningPointProof, message.Command())
 	}
 	pruningPointProof := appmessage.MsgPruningPointProofToDomainPruningPointProof(pruningPointProofMessage)
 	err = flow.Domain().Consensus().ValidatePruningPointProof(pruningPointProof)
 	if err != nil {
 		if errors.As(err, &ruleerrors.RuleError{}) {
-			return nil, protocolerrors.Wrapf(true, err, "pruning point proof validation failed")
+			return nil, 0, protocolerrors.Wrapf(true, err, "pruning point proof validation failed")
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
 	err = flow.Domain().StagingConsensus().ApplyPruningPointProof(pruningPointProof)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
-	return consensushashing.HeaderHash(pruningPointProof.Headers[0][len(pruningPointProof.Headers[0])-1]), nil
+	proofPruningPointHeader := pruningPointProof.Headers[0][len(pruningPointProof.Headers[0])-1]
+	return consensushashing.HeaderHash(proofPruningPointHeader), proofPruningPointHeader.DAAScore(), nil
 }
 
 func (flow *handleIBDFlow) downloadHeadersAndPruningUTXOSet(
 	syncerHeaderSelectedTipHash, relayBlockHash *externalapi.DomainHash,
 	highBlockDAAScore uint64) error {
 
-	proofPruningPoint, err := flow.syncAndValidatePruningPointProof()
+	proofPruningPoint, proofPruningPointDAAScore, err := flow.syncAndValidatePruningPointProof()
 	if err != nil {
 		return err
 	}
 
-	err = flow.syncPruningPointsAndPruningPointAnticone(proofPruningPoint)
+	err = flow.syncPruningPointsAndPruningPointAnticone(proofPruningPoint, proofPruningPointDAAScore)
 	if err != nil {
 		return err
 	}
@@ -201,7 +204,7 @@ func (flow *handleIBDFlow) downloadHeadersAndPruningUTXOSet(
 	return nil
 }
 
-func (flow *handleIBDFlow) syncPruningPointsAndPruningPointAnticone(proofPruningPoint *externalapi.DomainHash) error {
+func (flow *handleIBDFlow) syncPruningPointsAndPruningPointAnticone(proofPruningPoint *externalapi.DomainHash, proofPruningPointDAAScore uint64) error {
 	log.Infof("Downloading the past pruning points and the pruning point anticone from %s", flow.peer)
 	err := flow.outgoingRoute.Enqueue(appmessage.NewMsgRequestPruningPointAndItsAnticone())
 	if err != nil {
@@ -222,6 +225,11 @@ func (flow *handleIBDFlow) syncPruningPointsAndPruningPointAnticone(proofPruning
 	if !ok {
 		return protocolerrors.Errorf(true, "received unexpected message type. "+
 			"expected: %s, got: %s", appmessage.CmdTrustedData, message.Command())
+	}
+
+	err = flow.receivePruningPointTrustedAtomicState(flow.Domain().StagingConsensus(), msgTrustedData, proofPruningPoint, proofPruningPointDAAScore)
+	if err != nil {
+		return err
 	}
 
 	pruningPointWithMetaData, done, err := flow.receiveBlockWithTrustedData()
@@ -270,6 +278,173 @@ func (flow *handleIBDFlow) syncPruningPointsAndPruningPointAnticone(proofPruning
 	}
 
 	log.Infof("Finished downloading pruning point and its anticone from %s. Total blocks downloaded: %d", flow.peer, i+1)
+	return nil
+}
+
+func (flow *handleIBDFlow) receivePruningPointTrustedAtomicState(consensus externalapi.Consensus,
+	msgTrustedData *appmessage.MsgTrustedData, proofPruningPoint *externalapi.DomainHash, proofPruningPointDAAScore uint64) error {
+
+	if proofPruningPointDAAScore < flow.Config().NetParams().PayloadHfActivationDAAScore {
+		if len(msgTrustedData.AtomicConsensusStateHash) != 0 || len(msgTrustedData.AtomicConsensusState) != 0 ||
+			msgTrustedData.AtomicConsensusStateByteLength != 0 || msgTrustedData.AtomicConsensusStateChunkCount != 0 {
+			log.Debugf("Ignoring pre-payload-HF pruning point Atomic trusted data from peer %s; consensus reconstructs it from the imported UTXO set", flow.peer)
+		}
+		return nil
+	}
+
+	if len(msgTrustedData.AtomicConsensusStateHash) == 0 && len(msgTrustedData.AtomicConsensusState) == 0 &&
+		msgTrustedData.AtomicConsensusStateByteLength == 0 && msgTrustedData.AtomicConsensusStateChunkCount == 0 {
+		return protocolerrors.Errorf(true, "post-payload-HF trusted data is missing pruning point Atomic state metadata")
+	}
+
+	stateHash, err := trustedAtomicStateHashFromBytes(msgTrustedData.AtomicConsensusStateHash)
+	if err != nil {
+		return err
+	}
+
+	var stateBytes []byte
+	if len(msgTrustedData.AtomicConsensusState) != 0 {
+		stateBytes = append([]byte(nil), msgTrustedData.AtomicConsensusState...)
+		if len(stateBytes) > maxImportedAtomicStateBytes {
+			return protocolerrors.Errorf(true, "inline pruning point Atomic state is too large")
+		}
+	} else {
+		stateBytes, err = flow.receiveTrustedAtomicStateChunks(
+			stateHash,
+			msgTrustedData.AtomicConsensusStateByteLength,
+			msgTrustedData.AtomicConsensusStateChunkCount)
+		if err != nil {
+			return err
+		}
+	}
+
+	if err := importTrustedAtomicState(consensus, stateBytes, stateHash); err != nil {
+		return err
+	}
+
+	log.Debugf("Imported pruning point Atomic trusted state for %s from %s", proofPruningPoint, flow.peer)
+	return nil
+}
+
+func trustedAtomicStateHashFromBytes(hashBytes []byte) ([externalapi.DomainHashSize]byte, error) {
+	if len(hashBytes) != externalapi.DomainHashSize {
+		return [externalapi.DomainHashSize]byte{}, protocolerrors.Errorf(true,
+			"invalid pruning point Atomic state hash length: expected %d, got %d",
+			externalapi.DomainHashSize, len(hashBytes))
+	}
+
+	var stateHash [externalapi.DomainHashSize]byte
+	copy(stateHash[:], hashBytes)
+	return stateHash, nil
+}
+
+func importTrustedAtomicState(consensus externalapi.Consensus, stateBytes []byte, expectedStateHash [externalapi.DomainHashSize]byte) error {
+	stateHash := atomicstate.HashCanonicalBytes(stateBytes)
+	if stateHash != expectedStateHash {
+		return protocolerrors.Errorf(true, "pruning point Atomic state hash mismatch")
+	}
+
+	err := consensus.AppendImportedPruningPointAtomicState(stateBytes)
+	if err != nil {
+		return protocolerrors.Wrapf(true, err, "invalid pruning point Atomic state")
+	}
+	return nil
+}
+
+func (flow *handleIBDFlow) receiveTrustedAtomicStateChunks(
+	stateHash [externalapi.DomainHashSize]byte, totalBytes, totalChunks uint64) ([]byte, error) {
+
+	if err := validateTrustedAtomicStateMetadata(totalBytes, totalChunks); err != nil {
+		return nil, err
+	}
+
+	stateBytes := make([]byte, 0)
+	for expectedChunkIndex := uint64(0); expectedChunkIndex < totalChunks; expectedChunkIndex++ {
+		message, err := flow.incomingRoute.DequeueWithTimeout(common.DefaultTimeout)
+		if err != nil {
+			return nil, err
+		}
+
+		chunk, ok := message.(*appmessage.MsgTrustedAtomicStateChunk)
+		if !ok {
+			return nil, protocolerrors.Errorf(true, "received unexpected message type. "+
+				"expected: %s, got: %s", appmessage.CmdTrustedAtomicStateChunk, message.Command())
+		}
+
+		err = validateTrustedAtomicStateChunk(chunk, stateHash, expectedChunkIndex, totalChunks, totalBytes, uint64(len(stateBytes)))
+		if err != nil {
+			return nil, err
+		}
+		stateBytes = append(stateBytes, chunk.Chunk...)
+
+		downloadedChunks := expectedChunkIndex + 1
+		if downloadedChunks%ibdBatchSize == 0 && downloadedChunks < totalChunks {
+			log.Infof("Downloaded %d pruning point Atomic state chunks from %s", downloadedChunks, flow.peer)
+			err := flow.outgoingRoute.Enqueue(appmessage.NewMsgRequestNextPruningPointAtomicStateChunk())
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	if uint64(len(stateBytes)) != totalBytes {
+		return nil, protocolerrors.Errorf(true,
+			"pruning point Atomic state size mismatch: expected %d, got %d", totalBytes, len(stateBytes))
+	}
+
+	log.Infof("Finished receiving pruning point Atomic state from %s: %d bytes in %d chunks", flow.peer, totalBytes, totalChunks)
+	return stateBytes, nil
+}
+
+func validateTrustedAtomicStateMetadata(totalBytes, totalChunks uint64) error {
+	if totalBytes == 0 || totalChunks == 0 {
+		return protocolerrors.Errorf(true, "chunked pruning point Atomic state must declare non-zero bytes and chunks")
+	}
+	if totalBytes > maxImportedAtomicStateBytes {
+		return protocolerrors.Errorf(true, "chunked pruning point Atomic state size %d exceeds transfer limit %d",
+			totalBytes, maxImportedAtomicStateBytes)
+	}
+
+	expectedChunks := trustedAtomicStateChunkCount(totalBytes)
+	if totalChunks != expectedChunks {
+		return protocolerrors.Errorf(true,
+			"chunked pruning point Atomic state metadata mismatch: expected %d chunks for %d bytes, got %d",
+			expectedChunks, totalBytes, totalChunks)
+	}
+	return nil
+}
+
+func validateTrustedAtomicStateChunk(chunk *appmessage.MsgTrustedAtomicStateChunk, stateHash [externalapi.DomainHashSize]byte,
+	expectedChunkIndex, totalChunks, totalBytes, assembledLen uint64) error {
+
+	if !bytes.Equal(chunk.StateHash, stateHash[:]) {
+		return protocolerrors.Errorf(true, "pruning point Atomic state chunk hash label mismatch")
+	}
+	if chunk.ChunkIndex != expectedChunkIndex {
+		return protocolerrors.Errorf(true, "unexpected pruning point Atomic state chunk index: expected %d, got %d",
+			expectedChunkIndex, chunk.ChunkIndex)
+	}
+	if chunk.TotalChunks != totalChunks || chunk.TotalBytes != totalBytes {
+		return protocolerrors.Errorf(true, "pruning point Atomic state chunk metadata changed mid-stream")
+	}
+	if len(chunk.Chunk) == 0 {
+		return protocolerrors.Errorf(true, "pruning point Atomic state chunk must not be empty")
+	}
+	if len(chunk.Chunk) > trustedAtomicStateChunkSize {
+		return protocolerrors.Errorf(true, "pruning point Atomic state chunk %d size %d exceeds max %d",
+			expectedChunkIndex, len(chunk.Chunk), trustedAtomicStateChunkSize)
+	}
+
+	remaining := totalBytes - assembledLen
+	expectedLen := remaining
+	if expectedLen > trustedAtomicStateChunkSize {
+		expectedLen = trustedAtomicStateChunkSize
+	}
+	if uint64(len(chunk.Chunk)) != expectedLen {
+		return protocolerrors.Errorf(true, "pruning point Atomic state chunk %d invalid size: expected %d, got %d",
+			expectedChunkIndex, expectedLen, len(chunk.Chunk))
+	}
+
 	return nil
 }
 

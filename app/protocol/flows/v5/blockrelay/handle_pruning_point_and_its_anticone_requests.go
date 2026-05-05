@@ -6,6 +6,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"sync/atomic"
@@ -56,6 +57,9 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 			pointAndItsAnticone, err := context.Domain().Consensus().PruningPointAndItsAnticone()
 			if err != nil {
 				return err
+			}
+			if len(pointAndItsAnticone) == 0 {
+				return protocolerrors.Errorf(false, "pruning point and its anticone is empty")
 			}
 
 			windowSize := context.Config().NetParams().DifficultyAdjustmentWindowSize
@@ -113,9 +117,27 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 				}
 			}
 
-			err = outgoingRoute.Enqueue(appmessage.DomainTrustedDataToTrustedData(daaWindowBlocks, ghostdagData))
+			msgTrustedData := appmessage.DomainTrustedDataToTrustedData(daaWindowBlocks, ghostdagData)
+			atomicStateBytes, atomicStateHash, err := pruningPointAtomicStateForTrustedData(context, pointAndItsAnticone[0])
 			if err != nil {
 				return err
+			}
+			if len(atomicStateBytes) != 0 {
+				msgTrustedData.AtomicConsensusStateHash = append([]byte(nil), atomicStateHash[:]...)
+				msgTrustedData.AtomicConsensusStateByteLength = uint64(len(atomicStateBytes))
+				msgTrustedData.AtomicConsensusStateChunkCount = trustedAtomicStateChunkCount(uint64(len(atomicStateBytes)))
+			}
+
+			err = outgoingRoute.Enqueue(msgTrustedData)
+			if err != nil {
+				return err
+			}
+
+			if len(atomicStateBytes) != 0 {
+				err = sendTrustedAtomicStateChunks(incomingRoute, outgoingRoute, atomicStateHash, atomicStateBytes)
+				if err != nil {
+					return err
+				}
 			}
 
 			for i, blockHash := range pointAndItsAnticone {
@@ -159,4 +181,71 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 			return err
 		}
 	}
+}
+
+func pruningPointAtomicStateForTrustedData(context PruningPointAndItsAnticoneRequestsContext,
+	pruningPoint *externalapi.DomainHash) ([]byte, [externalapi.DomainHashSize]byte, error) {
+
+	header, err := context.Domain().Consensus().GetBlockHeader(pruningPoint)
+	if err != nil {
+		return nil, [externalapi.DomainHashSize]byte{}, err
+	}
+	if header.DAAScore() < context.Config().NetParams().PayloadHfActivationDAAScore {
+		return nil, [externalapi.DomainHashSize]byte{}, nil
+	}
+
+	atomicStateBytes, err := context.Domain().Consensus().GetPruningPointAtomicState(pruningPoint)
+	if err != nil {
+		return nil, [externalapi.DomainHashSize]byte{}, err
+	}
+	if len(atomicStateBytes) == 0 {
+		return nil, [externalapi.DomainHashSize]byte{},
+			protocolerrors.Errorf(false, "post-payload-HF pruning point Atomic state is empty")
+	}
+	if len(atomicStateBytes) > maxImportedAtomicStateBytes {
+		return nil, [externalapi.DomainHashSize]byte{},
+			protocolerrors.Errorf(false, "post-payload-HF pruning point Atomic state is too large: %d bytes", len(atomicStateBytes))
+	}
+
+	return atomicStateBytes, atomicstate.HashCanonicalBytes(atomicStateBytes), nil
+}
+
+func sendTrustedAtomicStateChunks(incomingRoute *router.Route, outgoingRoute *router.Route,
+	stateHash [externalapi.DomainHashSize]byte, stateBytes []byte) error {
+
+	totalBytes := uint64(len(stateBytes))
+	totalChunks := trustedAtomicStateChunkCount(totalBytes)
+	for chunkIndex, offset := uint64(0), 0; offset < len(stateBytes); chunkIndex++ {
+		chunkEnd := offset + trustedAtomicStateChunkSize
+		if chunkEnd > len(stateBytes) {
+			chunkEnd = len(stateBytes)
+		}
+
+		err := outgoingRoute.Enqueue(appmessage.NewMsgTrustedAtomicStateChunk(
+			stateHash[:],
+			chunkIndex,
+			totalChunks,
+			totalBytes,
+			stateBytes[offset:chunkEnd],
+		))
+		if err != nil {
+			return err
+		}
+
+		offset = chunkEnd
+		downloadedChunks := chunkIndex + 1
+		if downloadedChunks%ibdBatchSize == 0 && downloadedChunks < totalChunks {
+			message, err := incomingRoute.Dequeue()
+			if err != nil {
+				return err
+			}
+			if _, ok := message.(*appmessage.MsgRequestNextPruningPointAtomicStateChunk); !ok {
+				return protocolerrors.Errorf(true, "received unexpected message type. "+
+					"expected: %s, got: %s", appmessage.CmdRequestNextPruningPointAtomicStateChunk, message.Command())
+			}
+		}
+	}
+
+	log.Debugf("Finished sending pruning point Atomic state in %d chunks", totalChunks)
+	return nil
 }

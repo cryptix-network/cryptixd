@@ -36,7 +36,17 @@ type handleIBDFlow struct {
 	peer                         *peerpkg.Peer
 }
 
-const maxImportedAtomicStateBytes = 1 << 30
+const (
+	maxImportedAtomicStateBytes = 1 << 30
+	trustedAtomicStateChunkSize = 4 * 1024 * 1024
+)
+
+func trustedAtomicStateChunkCount(byteLength uint64) uint64 {
+	if byteLength == 0 {
+		return 0
+	}
+	return ((byteLength - 1) / trustedAtomicStateChunkSize) + 1
+}
 
 // HandleIBD handles IBD
 func HandleIBD(context IBDContext, incomingRoute *router.Route, outgoingRoute *router.Route,
@@ -579,6 +589,13 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 	receivedUTXOCount := 0
 	receivedAtomicStateComplete := false
 	atomicStateBytes := make([]byte, 0)
+
+	pruningPointHeader, err := consensus.GetBlockHeader(pruningPointHash)
+	if err != nil {
+		return false, err
+	}
+	requiresAtomicState := pruningPointHeader.DAAScore() >= flow.Config().NetParams().PayloadHfActivationDAAScore
+
 	for {
 		message, err := flow.incomingRoute.DequeueWithTimeout(common.DefaultTimeout)
 		if err != nil {
@@ -587,7 +604,7 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 
 		switch message := message.(type) {
 		case *appmessage.MsgPruningPointUTXOSetChunk:
-			if !receivedAtomicStateComplete {
+			if requiresAtomicState && !receivedAtomicStateComplete {
 				if len(atomicStateBytes)+len(message.AtomicConsensusStateChunk) > maxImportedAtomicStateBytes {
 					return false, protocolerrors.Errorf(true, "received pruning point Atomic state is too large")
 				}
@@ -599,6 +616,8 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 					}
 					receivedAtomicStateComplete = true
 				}
+			} else if !requiresAtomicState && (len(message.AtomicConsensusStateChunk) != 0 || message.AtomicConsensusStateComplete) {
+				log.Debugf("Ignoring pre-payload-HF pruning point Atomic state from peer %s; consensus reconstructs it from the imported UTXO set", flow.peer)
 			}
 
 			receivedUTXOCount += len(message.OutpointAndUTXOEntryPairs)
@@ -623,16 +642,9 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 			}
 
 		case *appmessage.MsgDonePruningPointUTXOSetChunks:
-			if !receivedAtomicStateComplete {
-				pruningPointHeader, err := consensus.GetBlockHeader(pruningPointHash)
-				if err != nil {
-					return false, err
-				}
-				if pruningPointHeader.DAAScore() >= flow.Config().NetParams().PayloadHfActivationDAAScore {
-					log.Infof("Peer %s did not provide the pruning point Atomic state for post-payload-HF pruning point %s",
-						flow.peer, pruningPointHash)
-					return false, nil
-				}
+			if requiresAtomicState && !receivedAtomicStateComplete {
+				log.Debugf("Peer %s did not provide pruning point Atomic state in UTXO chunks for post-payload-HF pruning point %s; relying on trusted-data transfer or final UTXO commitment validation",
+					flow.peer, pruningPointHash)
 			}
 			log.Infof("Finished receiving the UTXO set. Total UTXOs: %d", receivedUTXOCount)
 			return true, nil

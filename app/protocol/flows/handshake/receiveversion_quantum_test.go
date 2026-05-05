@@ -34,3 +34,23 @@ func TestValidatePeerQuantumHandshakePubKey(t *testing.T) {
 		t.Fatalf("expected error for malformed key size")
 	}
 }
+
+func TestIsSelfUnifiedNodeID(t *testing.T) {
+	var local [32]byte
+	local[0] = 1
+
+	if isSelfUnifiedNodeID(nil, local) {
+		t.Fatalf("nil peer unified node ID must not be treated as self")
+	}
+
+	same := local
+	if !isSelfUnifiedNodeID(&same, local) {
+		t.Fatalf("matching unified node ID must be treated as self")
+	}
+
+	different := local
+	different[31] = 2
+	if isSelfUnifiedNodeID(&different, local) {
+		t.Fatalf("different unified node ID must not be treated as self")
+	}
+}
