@@ -289,6 +289,16 @@ func (flow *handleIBDFlow) receivePruningPointTrustedAtomicState(consensus exter
 			msgTrustedData.AtomicConsensusStateByteLength != 0 || msgTrustedData.AtomicConsensusStateChunkCount != 0 {
 			log.Debugf("Ignoring pre-payload-HF pruning point Atomic trusted data from peer %s; consensus reconstructs it from the imported UTXO set", flow.peer)
 		}
+		if msgTrustedData.AtomicConsensusStateByteLength != 0 || msgTrustedData.AtomicConsensusStateChunkCount != 0 {
+			stateHash, err := trustedAtomicStateHashFromBytes(msgTrustedData.AtomicConsensusStateHash)
+			if err != nil {
+				return err
+			}
+			return flow.drainTrustedAtomicStateChunks(
+				stateHash,
+				msgTrustedData.AtomicConsensusStateByteLength,
+				msgTrustedData.AtomicConsensusStateChunkCount)
+		}
 		return nil
 	}
 
@@ -394,6 +404,52 @@ func (flow *handleIBDFlow) receiveTrustedAtomicStateChunks(
 
 	log.Infof("Finished receiving pruning point Atomic state from %s: %d bytes in %d chunks", flow.peer, totalBytes, totalChunks)
 	return stateBytes, nil
+}
+
+func (flow *handleIBDFlow) drainTrustedAtomicStateChunks(
+	stateHash [externalapi.DomainHashSize]byte, totalBytes, totalChunks uint64) error {
+
+	if err := validateTrustedAtomicStateMetadata(totalBytes, totalChunks); err != nil {
+		return err
+	}
+
+	downloadedBytes := uint64(0)
+	for expectedChunkIndex := uint64(0); expectedChunkIndex < totalChunks; expectedChunkIndex++ {
+		message, err := flow.incomingRoute.DequeueWithTimeout(common.DefaultTimeout)
+		if err != nil {
+			return err
+		}
+
+		chunk, ok := message.(*appmessage.MsgTrustedAtomicStateChunk)
+		if !ok {
+			return protocolerrors.Errorf(true, "received unexpected message type. "+
+				"expected: %s, got: %s", appmessage.CmdTrustedAtomicStateChunk, message.Command())
+		}
+
+		err = validateTrustedAtomicStateChunk(chunk, stateHash, expectedChunkIndex, totalChunks, totalBytes, downloadedBytes)
+		if err != nil {
+			return err
+		}
+		downloadedBytes += uint64(len(chunk.Chunk))
+
+		downloadedChunks := expectedChunkIndex + 1
+		if downloadedChunks%ibdBatchSize == 0 && downloadedChunks < totalChunks {
+			log.Infof("Drained %d ignored pre-payload-HF pruning point Atomic state chunks from %s", downloadedChunks, flow.peer)
+			err := flow.outgoingRoute.Enqueue(appmessage.NewMsgRequestNextPruningPointAtomicStateChunk())
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	if downloadedBytes != totalBytes {
+		return protocolerrors.Errorf(true,
+			"pruning point Atomic state size mismatch: expected %d, got %d", totalBytes, downloadedBytes)
+	}
+
+	log.Debugf("Drained ignored pre-payload-HF pruning point Atomic state from %s: %d bytes in %d chunks",
+		flow.peer, totalBytes, totalChunks)
+	return nil
 }
 
 func validateTrustedAtomicStateMetadata(totalBytes, totalChunks uint64) error {
