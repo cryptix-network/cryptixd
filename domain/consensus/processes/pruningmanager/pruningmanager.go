@@ -17,7 +17,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const maxImportedAtomicStateBytes = 1 << 30
+const maxImportedAtomicStateBytes uint64 = 8 << 30
 
 // pruningManager resolves and manages the current pruning point
 type pruningManager struct {
@@ -989,7 +989,7 @@ func (pm *pruningManager) AppendImportedPruningPointUTXOs(outpointAndUTXOEntryPa
 }
 
 func (pm *pruningManager) AppendImportedPruningPointAtomicState(stateBytes []byte) error {
-	if len(stateBytes) > maxImportedAtomicStateBytes {
+	if uint64(len(stateBytes)) > maxImportedAtomicStateBytes {
 		return errors.Errorf("imported pruning point Atomic state is too large: %d bytes", len(stateBytes))
 	}
 	state, err := atomicstate.FromCanonicalBytes(stateBytes)

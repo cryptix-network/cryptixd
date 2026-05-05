@@ -315,7 +315,7 @@ func (flow *handleIBDFlow) receivePruningPointTrustedAtomicState(consensus exter
 	var stateBytes []byte
 	if len(msgTrustedData.AtomicConsensusState) != 0 {
 		stateBytes = append([]byte(nil), msgTrustedData.AtomicConsensusState...)
-		if len(stateBytes) > maxImportedAtomicStateBytes {
+		if uint64(len(stateBytes)) > maxImportedAtomicStateBytes {
 			return protocolerrors.Errorf(true, "inline pruning point Atomic state is too large")
 		}
 	} else {

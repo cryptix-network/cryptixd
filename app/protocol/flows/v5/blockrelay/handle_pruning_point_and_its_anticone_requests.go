@@ -202,7 +202,7 @@ func pruningPointAtomicStateForTrustedData(context PruningPointAndItsAnticoneReq
 		return nil, [externalapi.DomainHashSize]byte{},
 			protocolerrors.Errorf(false, "post-payload-HF pruning point Atomic state is empty")
 	}
-	if len(atomicStateBytes) > maxImportedAtomicStateBytes {
+	if uint64(len(atomicStateBytes)) > maxImportedAtomicStateBytes {
 		return nil, [externalapi.DomainHashSize]byte{},
 			protocolerrors.Errorf(false, "post-payload-HF pruning point Atomic state is too large: %d bytes", len(atomicStateBytes))
 	}

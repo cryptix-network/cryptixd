@@ -37,8 +37,8 @@ type handleIBDFlow struct {
 }
 
 const (
-	maxImportedAtomicStateBytes = 1 << 30
-	trustedAtomicStateChunkSize = 4 * 1024 * 1024
+	maxImportedAtomicStateBytes uint64 = 8 << 30
+	trustedAtomicStateChunkSize        = 4 * 1024 * 1024
 )
 
 func trustedAtomicStateChunkCount(byteLength uint64) uint64 {
@@ -605,7 +605,7 @@ func (flow *handleIBDFlow) receiveAndInsertPruningPointUTXOSet(
 		switch message := message.(type) {
 		case *appmessage.MsgPruningPointUTXOSetChunk:
 			if requiresAtomicState && !receivedAtomicStateComplete {
-				if len(atomicStateBytes)+len(message.AtomicConsensusStateChunk) > maxImportedAtomicStateBytes {
+				if uint64(len(atomicStateBytes))+uint64(len(message.AtomicConsensusStateChunk)) > maxImportedAtomicStateBytes {
 					return false, protocolerrors.Errorf(true, "received pruning point Atomic state is too large")
 				}
 				atomicStateBytes = append(atomicStateBytes, message.AtomicConsensusStateChunk...)
