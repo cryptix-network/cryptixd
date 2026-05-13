@@ -96,8 +96,8 @@ func atomicInteropVectorState(t *testing.T) *State {
 	vaultTransactionID := bytes32(0x77)
 
 	state := NewState()
-	state.NextNonces[bytes32(0x61)] = 3
-	state.NextNonces[bytes32(0x60)] = 99
+	state.NextNonces[OwnerNonceKey(bytes32(0x61))] = 3
+	state.NextNonces[AssetNonceKey(bytes32(0x60), standardAssetID)] = 99
 	state.Assets[liquidityAssetID] = AssetState{
 		AssetClass:           AssetClassLiquidity,
 		TokenVersion:         currentStateTokenVersion,

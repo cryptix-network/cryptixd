@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	atomicConsensusStateMagic      = []byte("CATCS004")
-	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v4")
+	atomicConsensusStateMagic      = []byte("CATCS005")
+	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v5")
 	atomicStateCommitmentDomain    = []byte("cryptix-utxo-atomic-state-commitment-v1")
 )
 
@@ -27,6 +27,44 @@ const (
 type BalanceKey struct {
 	AssetID [externalapi.DomainHashSize]byte
 	OwnerID [externalapi.DomainHashSize]byte
+}
+
+type NonceScopeKind byte
+
+const (
+	NonceScopeOwner NonceScopeKind = iota
+	NonceScopeAsset
+)
+
+type NonceKey struct {
+	OwnerID   [externalapi.DomainHashSize]byte
+	ScopeKind NonceScopeKind
+	ScopeID   [externalapi.DomainHashSize]byte
+}
+
+func OwnerNonceKey(ownerID [externalapi.DomainHashSize]byte) NonceKey {
+	return NonceKey{OwnerID: ownerID, ScopeKind: NonceScopeOwner}
+}
+
+func AssetNonceKey(ownerID [externalapi.DomainHashSize]byte, assetID [externalapi.DomainHashSize]byte) NonceKey {
+	return NonceKey{OwnerID: ownerID, ScopeKind: NonceScopeAsset, ScopeID: assetID}
+}
+
+func (key NonceKey) validate() error {
+	switch key.ScopeKind {
+	case NonceScopeOwner:
+		if key.ScopeID == ([externalapi.DomainHashSize]byte{}) {
+			return nil
+		}
+		return fmt.Errorf("owner nonce scope for owner `%x` has non-zero scope id `%x`", key.OwnerID, key.ScopeID)
+	case NonceScopeAsset:
+		if key.ScopeID != ([externalapi.DomainHashSize]byte{}) {
+			return nil
+		}
+		return fmt.Errorf("asset nonce scope for owner `%x` has zero asset id", key.OwnerID)
+	default:
+		return fmt.Errorf("atomic nonce for owner `%x` has invalid scope kind `%d`", key.OwnerID, key.ScopeKind)
+	}
 }
 
 type SupplyMode byte
@@ -81,7 +119,7 @@ type AssetState struct {
 }
 
 type State struct {
-	NextNonces              map[[externalapi.DomainHashSize]byte]uint64
+	NextNonces              map[NonceKey]uint64
 	Assets                  map[[externalapi.DomainHashSize]byte]AssetState
 	Balances                map[BalanceKey]Uint128
 	AnchorCounts            map[[externalapi.DomainHashSize]byte]uint64
@@ -90,7 +128,7 @@ type State struct {
 
 func NewState() *State {
 	return &State{
-		NextNonces:              make(map[[externalapi.DomainHashSize]byte]uint64),
+		NextNonces:              make(map[NonceKey]uint64),
 		Assets:                  make(map[[externalapi.DomainHashSize]byte]AssetState),
 		Balances:                make(map[BalanceKey]Uint128),
 		AnchorCounts:            make(map[[externalapi.DomainHashSize]byte]uint64),
@@ -155,15 +193,17 @@ func (s *State) CanonicalBytes() []byte {
 	out := make([]byte, 0)
 	out = append(out, atomicConsensusStateMagic...)
 
-	nonceKeys := make([][externalapi.DomainHashSize]byte, 0, len(s.NextNonces))
-	for ownerID := range s.NextNonces {
-		nonceKeys = append(nonceKeys, ownerID)
+	nonceKeys := make([]NonceKey, 0, len(s.NextNonces))
+	for key := range s.NextNonces {
+		nonceKeys = append(nonceKeys, key)
 	}
-	sort.Slice(nonceKeys, func(i, j int) bool { return bytes.Compare(nonceKeys[i][:], nonceKeys[j][:]) < 0 })
+	sort.Slice(nonceKeys, func(i, j int) bool { return compareNonceKeys(nonceKeys[i], nonceKeys[j]) < 0 })
 	writeLen(&out, len(nonceKeys))
-	for _, ownerID := range nonceKeys {
-		out = append(out, ownerID[:]...)
-		writeUint64(&out, s.NextNonces[ownerID])
+	for _, key := range nonceKeys {
+		out = append(out, key.OwnerID[:]...)
+		out = append(out, byte(key.ScopeKind))
+		out = append(out, key.ScopeID[:]...)
+		writeUint64(&out, s.NextNonces[key])
 	}
 
 	assetKeys := make([][externalapi.DomainHashSize]byte, 0, len(s.Assets))
@@ -206,6 +246,19 @@ func (s *State) CanonicalBytes() []byte {
 	}
 
 	return out
+}
+
+func compareNonceKeys(left, right NonceKey) int {
+	if cmp := bytes.Compare(left.OwnerID[:], right.OwnerID[:]); cmp != 0 {
+		return cmp
+	}
+	if left.ScopeKind < right.ScopeKind {
+		return -1
+	}
+	if left.ScopeKind > right.ScopeKind {
+		return 1
+	}
+	return bytes.Compare(left.ScopeID[:], right.ScopeID[:])
 }
 
 func (s *State) CanonicalHash() [externalapi.DomainHashSize]byte {
@@ -267,14 +320,26 @@ func FromCanonicalBytes(stateBytes []byte) (*State, error) {
 		if err != nil {
 			return nil, err
 		}
+		scopeKind, err := reader.readByte()
+		if err != nil {
+			return nil, err
+		}
+		scopeID, err := reader.read32()
+		if err != nil {
+			return nil, err
+		}
+		nonceKey := NonceKey{OwnerID: ownerID, ScopeKind: NonceScopeKind(scopeKind), ScopeID: scopeID}
+		if err := nonceKey.validate(); err != nil {
+			return nil, err
+		}
 		nonce, err := reader.readUint64()
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := state.NextNonces[ownerID]; ok {
-			return nil, fmt.Errorf("duplicate atomic nonce owner id")
+		if _, ok := state.NextNonces[nonceKey]; ok {
+			return nil, fmt.Errorf("duplicate atomic nonce key")
 		}
-		state.NextNonces[ownerID] = nonce
+		state.NextNonces[nonceKey] = nonce
 	}
 
 	assetLen, err := reader.readLen()

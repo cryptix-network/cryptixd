@@ -64,12 +64,14 @@ func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore 
 	if err != nil {
 		return err
 	}
-	expectedNonce := state.NextNonces[ownerID]
+	nonceKey := nonceKeyForOp(ownerID, parsedPayload.Op)
+	expectedNonce := state.NextNonces[nonceKey]
 	if expectedNonce == 0 {
 		expectedNonce = 1
 	}
 	if parsedPayload.Nonce != expectedNonce {
-		return fmt.Errorf("nonce baseline violation for owner `%x`: expected `%d`, got `%d`", ownerID, expectedNonce, parsedPayload.Nonce)
+		return fmt.Errorf("nonce baseline violation for owner `%x` scope `%d:%x`: expected `%d`, got `%d`",
+			ownerID, nonceKey.ScopeKind, nonceKey.ScopeID, expectedNonce, parsedPayload.Nonce)
 	}
 
 	if len(spentVaultInputs) != 0 {
@@ -96,11 +98,32 @@ func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore 
 	}
 
 	if expectedNonce == math.MaxUint64 {
-		return fmt.Errorf("nonce progression overflow for owner `%x`", ownerID)
+		return fmt.Errorf("nonce progression overflow for owner `%x` scope `%d:%x`", ownerID, nonceKey.ScopeKind, nonceKey.ScopeID)
 	}
-	state.NextNonces[ownerID] = expectedNonce + 1
+	state.NextNonces[nonceKey] = expectedNonce + 1
 	applyAnchorDeltas(tx, state)
 	return nil
+}
+
+func nonceKeyForOp(ownerID [externalapi.DomainHashSize]byte, op PayloadOp) NonceKey {
+	switch op := op.(type) {
+	case CreateAssetOp, CreateAssetWithMintOp, CreateLiquidityAssetOp:
+		return OwnerNonceKey(ownerID)
+	case TransferOp:
+		return AssetNonceKey(ownerID, op.AssetID)
+	case MintOp:
+		return AssetNonceKey(ownerID, op.AssetID)
+	case BurnOp:
+		return AssetNonceKey(ownerID, op.AssetID)
+	case BuyLiquidityExactInOp:
+		return AssetNonceKey(ownerID, op.AssetID)
+	case SellLiquidityExactInOp:
+		return AssetNonceKey(ownerID, op.AssetID)
+	case ClaimLiquidityFeesOp:
+		return AssetNonceKey(ownerID, op.AssetID)
+	default:
+		return OwnerNonceKey(ownerID)
+	}
 }
 
 func opAllowsLiquidityVaultOutput(op PayloadOp) bool {
