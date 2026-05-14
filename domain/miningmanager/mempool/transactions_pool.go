@@ -1,6 +1,7 @@
 package mempool
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -16,6 +17,8 @@ type transactionsPool struct {
 	highPriorityTransactions      model.IDToTransactionMap
 	chainedTransactionsByParentID model.IDToTransactionsSliceMap
 	transactionsOrderedByFeeRate  model.TransactionsOrderedByFeeRate
+	atomicSlotOwners              map[atomicMempoolSlot]externalapi.DomainTransactionID
+	atomicSlotsByTransactionID    map[externalapi.DomainTransactionID][]atomicMempoolSlot
 	lastExpireScanDAAScore        uint64
 	lastExpireScanTime            time.Time
 }
@@ -27,6 +30,8 @@ func newTransactionsPool(mp *mempool) *transactionsPool {
 		highPriorityTransactions:      model.IDToTransactionMap{},
 		chainedTransactionsByParentID: model.IDToTransactionsSliceMap{},
 		transactionsOrderedByFeeRate:  model.TransactionsOrderedByFeeRate{},
+		atomicSlotOwners:              map[atomicMempoolSlot]externalapi.DomainTransactionID{},
+		atomicSlotsByTransactionID:    map[externalapi.DomainTransactionID][]atomicMempoolSlot{},
 		lastExpireScanDAAScore:        0,
 		lastExpireScanTime:            time.Now(),
 	}
@@ -52,6 +57,18 @@ func (tp *transactionsPool) addTransaction(transaction *externalapi.DomainTransa
 }
 
 func (tp *transactionsPool) addMempoolTransaction(transaction *model.MempoolTransaction) error {
+	atomicSlots, err := atomicMempoolSlots(transaction.Transaction())
+	if err != nil {
+		return err
+	}
+	for _, slot := range atomicSlots {
+		if existingTransactionID, ok := tp.atomicSlotOwners[slot]; ok {
+			return transactionRuleError(RejectDuplicate, fmt.Sprintf(
+				"transaction %s conflicts with pending CAT transaction %s on atomic slot %s",
+				transaction.TransactionID(), existingTransactionID, slot))
+		}
+	}
+
 	tp.allTransactions[*transaction.TransactionID()] = transaction
 
 	for _, parentTransactionInPool := range transaction.ParentTransactionsInPool() {
@@ -65,7 +82,15 @@ func (tp *transactionsPool) addMempoolTransaction(transaction *model.MempoolTran
 
 	tp.mempool.mempoolUTXOSet.addTransaction(transaction)
 
-	err := tp.transactionsOrderedByFeeRate.Push(transaction)
+	transactionID := *transaction.TransactionID()
+	if len(atomicSlots) > 0 {
+		tp.atomicSlotsByTransactionID[transactionID] = atomicSlots
+		for _, slot := range atomicSlots {
+			tp.atomicSlotOwners[slot] = transactionID
+		}
+	}
+
+	err = tp.transactionsOrderedByFeeRate.Push(transaction)
 	if err != nil {
 		return err
 	}
@@ -78,7 +103,9 @@ func (tp *transactionsPool) addMempoolTransaction(transaction *model.MempoolTran
 }
 
 func (tp *transactionsPool) removeTransaction(transaction *model.MempoolTransaction) error {
-	delete(tp.allTransactions, *transaction.TransactionID())
+	transactionID := *transaction.TransactionID()
+	delete(tp.allTransactions, transactionID)
+	tp.removeAtomicSlots(transactionID)
 
 	err := tp.transactionsOrderedByFeeRate.Remove(transaction)
 	if err != nil {
@@ -90,11 +117,25 @@ func (tp *transactionsPool) removeTransaction(transaction *model.MempoolTransact
 		}
 	}
 
-	delete(tp.highPriorityTransactions, *transaction.TransactionID())
+	delete(tp.highPriorityTransactions, transactionID)
 
-	delete(tp.chainedTransactionsByParentID, *transaction.TransactionID())
+	delete(tp.chainedTransactionsByParentID, transactionID)
 
 	return nil
+}
+
+func (tp *transactionsPool) removeAtomicSlots(transactionID externalapi.DomainTransactionID) {
+	slots, ok := tp.atomicSlotsByTransactionID[transactionID]
+	if !ok {
+		return
+	}
+
+	for _, slot := range slots {
+		if ownerTransactionID, ok := tp.atomicSlotOwners[slot]; ok && ownerTransactionID == transactionID {
+			delete(tp.atomicSlotOwners, slot)
+		}
+	}
+	delete(tp.atomicSlotsByTransactionID, transactionID)
 }
 
 func (tp *transactionsPool) expireOldTransactions() error {

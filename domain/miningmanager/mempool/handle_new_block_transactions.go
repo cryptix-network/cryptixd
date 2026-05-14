@@ -25,6 +25,11 @@ func (mp *mempool) handleNewBlockTransactions(blockTransactions []*externalapi.D
 			return nil, err
 		}
 
+		err = mp.removeAcceptedAtomicConflicts(transaction)
+		if err != nil {
+			return nil, err
+		}
+
 		err = mp.orphansPool.removeOrphan(transactionID, false)
 		if err != nil {
 			return nil, err
@@ -59,4 +64,21 @@ func (mp *mempool) removeDoubleSpends(transaction *externalapi.DomainTransaction
 		}
 	}
 	return nil
+}
+
+func (mp *mempool) removeAcceptedAtomicConflicts(transaction *externalapi.DomainTransaction) error {
+	slot, ok, err := atomicMempoolLiquidityPoolSlot(transaction)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	conflictingTransactionID, ok := mp.transactionsPool.atomicSlotOwners[slot]
+	if !ok {
+		return nil
+	}
+
+	return mp.removeTransaction(&conflictingTransactionID, true)
 }

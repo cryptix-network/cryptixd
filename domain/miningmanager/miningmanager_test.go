@@ -1,6 +1,7 @@
 package miningmanager_test
 
 import (
+	"encoding/binary"
 	"reflect"
 	"strings"
 	"testing"
@@ -128,6 +129,138 @@ func TestPayloadTransactionTemplateBuild(t *testing.T) {
 		}
 		if !foundPayloadTx {
 			t.Fatalf("expected payload transaction %s in block template", payloadTxID)
+		}
+	})
+}
+
+func newTestMiningManager(t *testing.T, consensusConfig *consensus.Config, name string) miningmanager.MiningManager {
+	t.Helper()
+
+	factory := consensus.NewFactory()
+	tc, teardown, err := factory.NewTestConsensus(consensusConfig, name)
+	if err != nil {
+		t.Fatalf("Error setting up TestConsensus: %+v", err)
+	}
+	t.Cleanup(func() {
+		teardown(false)
+	})
+
+	miningFactory := miningmanager.NewFactory()
+	tcAsConsensus := tc.(externalapi.Consensus)
+	tcAsConsensusPointer := &tcAsConsensus
+	consensusReference := consensusreference.NewConsensusReference(&tcAsConsensusPointer)
+	return miningFactory.NewMiningManager(consensusReference, &consensusConfig.Params, mempool.DefaultConfig(&consensusConfig.Params))
+}
+
+func TestAtomicMempoolRejectsDuplicateAssetNonceSlot(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolRejectsDuplicateAssetNonceSlot")
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x11
+		payload := createCATTransferPayload(assetID, 1)
+		firstTx := createCATTransactionWithUTXOEntry(t, 1, payload)
+		secondTx := createCATTransactionWithUTXOEntry(t, 2, payload)
+
+		_, err := miningManager.ValidateAndInsertTransaction(firstTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction firstTx: %v", err)
+		}
+
+		_, err = miningManager.ValidateAndInsertTransaction(secondTx, false, true)
+		if err == nil {
+			t.Fatalf("expected duplicate CAT nonce slot rejection")
+		}
+		if !strings.Contains(err.Error(), "atomic slot nonce:asset") {
+			t.Fatalf("expected duplicate CAT asset nonce slot error, got: %v", err)
+		}
+	})
+}
+
+func TestAtomicMempoolRejectsDuplicateOwnerNonceSlot(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolRejectsDuplicateOwnerNonceSlot")
+
+		payload := createCATCreateAssetPayload(1)
+		firstTx := createCATTransactionWithUTXOEntry(t, 1, payload)
+		secondTx := createCATTransactionWithUTXOEntry(t, 2, payload)
+
+		_, err := miningManager.ValidateAndInsertTransaction(firstTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction firstTx: %v", err)
+		}
+
+		_, err = miningManager.ValidateAndInsertTransaction(secondTx, false, true)
+		if err == nil {
+			t.Fatalf("expected duplicate CAT owner nonce slot rejection")
+		}
+		if !strings.Contains(err.Error(), "atomic slot nonce:owner") {
+			t.Fatalf("expected duplicate CAT owner nonce slot error, got: %v", err)
+		}
+	})
+}
+
+func TestAtomicMempoolRejectsDuplicateLiquidityPoolSlot(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolRejectsDuplicateLiquidityPoolSlot")
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x22
+		firstTx := createCATTransactionWithUTXOEntry(t, 1, createCATBuyPayload(assetID, 1, 9))
+		secondTx := createCATTransactionWithUTXOEntry(t, 2, createCATBuyPayload(assetID, 2, 9))
+
+		_, err := miningManager.ValidateAndInsertTransaction(firstTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction firstTx: %v", err)
+		}
+
+		_, err = miningManager.ValidateAndInsertTransaction(secondTx, false, true)
+		if err == nil {
+			t.Fatalf("expected duplicate CAT liquidity pool slot rejection")
+		}
+		if !strings.Contains(err.Error(), "atomic slot liquidity-pool") {
+			t.Fatalf("expected duplicate CAT liquidity pool slot error, got: %v", err)
+		}
+	})
+}
+
+func TestAtomicMempoolRemovesAcceptedLiquidityPoolConflict(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolRemovesAcceptedLiquidityPoolConflict")
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x33
+		localTx := createCATTransactionWithUTXOEntry(t, 1, createCATBuyPayload(assetID, 1, 9))
+		acceptedTxFromAnotherNode := createCATTransactionWithUTXOEntry(t, 2, createCATBuyPayload(assetID, 2, 9))
+
+		_, err := miningManager.ValidateAndInsertTransaction(localTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction localTx: %v", err)
+		}
+
+		_, err = miningManager.HandleNewBlockTransactions([]*externalapi.DomainTransaction{
+			{},
+			acceptedTxFromAnotherNode,
+		})
+		if err != nil {
+			t.Fatalf("HandleNewBlockTransactions: %v", err)
+		}
+
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 0 {
+			t.Fatalf("expected accepted liquidity pool conflict to evict local tx, got %d transactions", len(transactionsFromMempool))
 		}
 	})
 }
@@ -1002,6 +1135,71 @@ func createTransactionWithUTXOEntry(t *testing.T, i int, daaScore uint64) *exter
 		LockTime:     0}
 
 	return &tx
+}
+
+func createCATTransactionWithUTXOEntry(t *testing.T, i int, payload []byte) *externalapi.DomainTransaction {
+	tx := createTransactionWithUTXOEntry(t, i, 0)
+	tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+	tx.Payload = append([]byte(nil), payload...)
+	return tx
+}
+
+func createCATTransferPayload(assetID [externalapi.DomainHashSize]byte, nonce uint64) []byte {
+	payload := createCATPayloadHeader(1, nonce)
+	payload = append(payload, assetID[:]...)
+	var toOwnerID [externalapi.DomainHashSize]byte
+	toOwnerID[0] = 0x77
+	payload = append(payload, toOwnerID[:]...)
+	return appendCATUint128(payload, 1)
+}
+
+func createCATCreateAssetPayload(nonce uint64) []byte {
+	payload := createCATPayloadHeader(0, nonce)
+	payload = append(payload, 1, 0, 0)
+	payload = appendCATUint128(payload, 0)
+	var mintAuthorityOwnerID [externalapi.DomainHashSize]byte
+	mintAuthorityOwnerID[0] = 0x55
+	payload = append(payload, mintAuthorityOwnerID[:]...)
+	payload = append(payload, 1, 1)
+	payload = appendUint16LE(payload, 0)
+	payload = append(payload, 'A', 'A')
+	return payload
+}
+
+func createCATBuyPayload(assetID [externalapi.DomainHashSize]byte, nonce uint64, expectedPoolNonce uint64) []byte {
+	payload := createCATPayloadHeader(6, nonce)
+	payload = append(payload, assetID[:]...)
+	payload = appendUint64LE(payload, expectedPoolNonce)
+	payload = appendUint64LE(payload, 1)
+	return appendCATUint128(payload, 1)
+}
+
+func createCATPayloadHeader(opcode byte, nonce uint64) []byte {
+	payload := make([]byte, 16)
+	copy(payload, []byte("CAT"))
+	payload[3] = 1
+	payload[4] = opcode
+	binary.LittleEndian.PutUint16(payload[6:8], 0)
+	binary.LittleEndian.PutUint64(payload[8:16], nonce)
+	return payload
+}
+
+func appendUint16LE(payload []byte, value uint16) []byte {
+	var encoded [2]byte
+	binary.LittleEndian.PutUint16(encoded[:], value)
+	return append(payload, encoded[:]...)
+}
+
+func appendUint64LE(payload []byte, value uint64) []byte {
+	var encoded [8]byte
+	binary.LittleEndian.PutUint64(encoded[:], value)
+	return append(payload, encoded[:]...)
+}
+
+func appendCATUint128(payload []byte, value uint64) []byte {
+	var encoded [16]byte
+	binary.LittleEndian.PutUint64(encoded[:8], value)
+	return append(payload, encoded[:]...)
 }
 
 func createArraysOfParentAndChildrenTransactions(tc testapi.TestConsensus) ([]*externalapi.DomainTransaction,

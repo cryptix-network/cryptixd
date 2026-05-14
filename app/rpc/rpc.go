@@ -22,6 +22,7 @@ var handlers = map[appmessage.MessageCommand]handler{
 	appmessage.CmdGetConnectedPeerInfoRequestMessage:                        rpchandlers.HandleGetConnectedPeerInfo,
 	appmessage.CmdAddPeerRequestMessage:                                     rpchandlers.HandleAddPeer,
 	appmessage.CmdSubmitTransactionRequestMessage:                           rpchandlers.HandleSubmitTransaction,
+	appmessage.CmdSubmitTransactionReplacementRequestMessage:                rpchandlers.HandleSubmitTransactionReplacement,
 	appmessage.CmdNotifyVirtualSelectedParentChainChangedRequestMessage:     rpchandlers.HandleNotifyVirtualSelectedParentChainChanged,
 	appmessage.CmdGetBlockRequestMessage:                                    rpchandlers.HandleGetBlock,
 	appmessage.CmdGetSubnetworkRequestMessage:                               rpchandlers.HandleGetSubnetwork,
