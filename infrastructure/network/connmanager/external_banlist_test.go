@@ -187,6 +187,66 @@ func TestDecodeExternalBanlistPayloadAcceptsSignedRuntimeDisable(t *testing.T) {
 	}
 }
 
+func TestDisabledPeerSnapshotMajorityKeepsCurrentState(t *testing.T) {
+	snapshot, err := decodeExternalBanlistPayload(buildSignedSnapshotPayload(t, false), 0)
+	if err != nil {
+		t.Fatalf("decodeExternalBanlistPayload unexpectedly failed: %s", err)
+	}
+	manager := &ConnectionManager{
+		cfg:                     config.DefaultConfig(),
+		antiFraudRuntimeEnabled: true,
+		antiFraudPeerFallback:   true,
+		antiFraudPeerVotes:      map[string]*peerAntiFraudVote{},
+		externallyBannedIPs:     map[string]struct{}{},
+		externallyBannedNodeIDs: map[string]struct{}{},
+	}
+
+	result, err := manager.IngestPeerAntiFraudSnapshot("peer-a", snapshot.toAppMessage())
+	if err != nil {
+		t.Fatalf("IngestPeerAntiFraudSnapshot unexpectedly failed: %s", err)
+	}
+	if result == nil || result.Applied {
+		t.Fatalf("expected disabled peer majority to be ignored, got %+v", result)
+	}
+
+	manager.externalBanlistLock.RLock()
+	defer manager.externalBanlistLock.RUnlock()
+	if !manager.antiFraudRuntimeEnabled {
+		t.Fatalf("expected runtime to stay enabled after disabled peer majority")
+	}
+	if manager.hasExternalSnapshot || manager.antiFraudCurrentSnapshot != nil {
+		t.Fatalf("expected disabled peer majority not to apply as current snapshot")
+	}
+}
+
+func TestPersistedDisabledAntiFraudSnapshotIgnored(t *testing.T) {
+	snapshot, err := decodeExternalBanlistPayload(buildSignedSnapshotPayload(t, false), 0)
+	if err != nil {
+		t.Fatalf("decodeExternalBanlistPayload unexpectedly failed: %s", err)
+	}
+	tmpDir := t.TempDir()
+	currentPath := antiFraudPersistPath(tmpDir, antiFraudCurrentFile)
+	if err := writeAntiFraudSnapshotAtomic(currentPath, snapshot.toAppMessage()); err != nil {
+		t.Fatalf("writeAntiFraudSnapshotAtomic failed: %s", err)
+	}
+
+	cfg := config.DefaultConfig()
+	cfg.AppDir = tmpDir
+	manager := &ConnectionManager{
+		cfg:                     cfg,
+		externallyBannedIPs:     map[string]struct{}{},
+		externallyBannedNodeIDs: map[string]struct{}{},
+		antiFraudPeerVotes:      map[string]*peerAntiFraudVote{},
+	}
+	manager.tryLoadPersistedAntiFraudSnapshot()
+
+	manager.externalBanlistLock.RLock()
+	defer manager.externalBanlistLock.RUnlock()
+	if manager.hasExternalSnapshot || manager.antiFraudCurrentSnapshot != nil {
+		t.Fatalf("expected persisted disabled snapshot to be ignored")
+	}
+}
+
 func TestDecodeExternalBanlistPayloadStatusError(t *testing.T) {
 	_, err := decodeExternalBanlistPayload([]byte(`{"status":"error","ips":["127.0.0.1"]}`), 0)
 	if err == nil {
@@ -214,84 +274,6 @@ func TestReadSnapshotAntiFraudEnabledRequiresStrictBool(t *testing.T) {
 	_, err = readSnapshotAntiFraudEnabled([]byte(`{"antifraud_enabled":"true"}`))
 	if err == nil {
 		t.Fatalf("expected string antifraud_enabled to be rejected")
-	}
-}
-
-func TestEvaluateEnabledSnapshotPairRejectsSameSeqDifferentHash(t *testing.T) {
-	nowMs := uint64(1_700_000_020_000)
-	selected := testExternalSnapshotForConsistency(10, 1_700_000_000_000, 0x11)
-	peer := testExternalSnapshotForConsistency(10, 1_700_000_000_100, 0x22)
-
-	_, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
-	if err == nil {
-		t.Fatalf("expected mismatch for same seq with different root hash")
-	}
-}
-
-func TestEvaluateEnabledSnapshotPairAcceptsSameSeqSameHash(t *testing.T) {
-	nowMs := uint64(1_700_000_020_000)
-	selected := testExternalSnapshotForConsistency(10, 1_700_000_000_000, 0x11)
-	peer := testExternalSnapshotForConsistency(10, 1_700_000_000_100, 0x11)
-
-	toleratedSkew, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
-	if err != nil {
-		t.Fatalf("expected same hash pair to pass: %s", err)
-	}
-	if toleratedSkew {
-		t.Fatalf("expected no skew flag for same seq/hash pair")
-	}
-}
-
-func TestEvaluateEnabledSnapshotPairAllowsOneStepReplicationSkewWithinTolerance(t *testing.T) {
-	toleranceMs := uint64(externalBanlistPropagationLag / time.Millisecond)
-	nowMs := uint64(1_700_000_020_000)
-	newer := testExternalSnapshotForConsistency(11, nowMs-toleranceMs, 0x22)
-	older := testExternalSnapshotForConsistency(10, nowMs-30_000, 0x11)
-
-	toleratedSkew, newerLabel, olderLabel, newerSeq, olderSeq, newerAgeMs, err := evaluateEnabledSnapshotPair(
-		"primary",
-		newer,
-		"secondary",
-		older,
-		nowMs,
-	)
-	if err != nil {
-		t.Fatalf("expected tolerated one-step skew: %s", err)
-	}
-	if !toleratedSkew {
-		t.Fatalf("expected skew to be tolerated")
-	}
-	if newerLabel != "primary" || olderLabel != "secondary" {
-		t.Fatalf("unexpected skew labels: newer=%s older=%s", newerLabel, olderLabel)
-	}
-	if newerSeq != 11 || olderSeq != 10 {
-		t.Fatalf("unexpected skew seq values: newer=%d older=%d", newerSeq, olderSeq)
-	}
-	if newerAgeMs != toleranceMs {
-		t.Fatalf("unexpected newer age: got %d expected %d", newerAgeMs, toleranceMs)
-	}
-}
-
-func TestEvaluateEnabledSnapshotPairRejectsSkewBeyondTolerance(t *testing.T) {
-	toleranceMs := uint64(externalBanlistPropagationLag / time.Millisecond)
-	nowMs := uint64(1_700_000_020_000)
-	selected := testExternalSnapshotForConsistency(11, nowMs-toleranceMs-1, 0x22)
-	peer := testExternalSnapshotForConsistency(10, nowMs-30_000, 0x11)
-
-	_, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
-	if err == nil {
-		t.Fatalf("expected skew beyond tolerance to fail")
-	}
-}
-
-func TestEvaluateEnabledSnapshotPairRejectsLargeSeqGap(t *testing.T) {
-	nowMs := uint64(1_700_000_020_000)
-	selected := testExternalSnapshotForConsistency(14, nowMs-1000, 0x44)
-	peer := testExternalSnapshotForConsistency(10, nowMs-30_000, 0x11)
-
-	_, _, _, _, _, _, err := evaluateEnabledSnapshotPair("primary", selected, "secondary", peer, nowMs)
-	if err == nil {
-		t.Fatalf("expected seq gap > 1 to fail")
 	}
 }
 
@@ -323,16 +305,6 @@ func TestPruneAntiFraudPeerVotesRemovesExpiredAndInvalidEntries(t *testing.T) {
 	}
 }
 
-func testExternalSnapshotForConsistency(seq uint64, generatedAtMs uint64, hashByte byte) *externalBanlistSnapshot {
-	root := [32]byte{}
-	root[0] = hashByte
-	return &externalBanlistSnapshot{
-		SnapshotSeq:   seq,
-		GeneratedAtMs: generatedAtMs,
-		RootHash:      root,
-	}
-}
-
 func TestPruneAntiFraudPeerVotesCapsSizeToNewestEntries(t *testing.T) {
 	now := time.Unix(1_700_000_000, 0)
 	votes := make(map[string]*peerAntiFraudVote, externalBanlistPeerVoteMaxSize+10)
@@ -359,7 +331,7 @@ func TestPruneAntiFraudPeerVotesCapsSizeToNewestEntries(t *testing.T) {
 }
 
 func TestHandleExternalBanlistRefreshFailureEscalatesToPeerFallback(t *testing.T) {
-	manager := &ConnectionManager{cfg: &config.Config{Flags: &config.Flags{AllowAntiFraudPeerFallback: true}}}
+	manager := &ConnectionManager{cfg: &config.Config{Flags: &config.Flags{EnableExternalBanlist: true}}}
 	now := time.Unix(1_700_000_000, 0)
 
 	manager.handleExternalBanlistRefreshFailure(now, errors.New("seed endpoint unavailable"))
@@ -410,44 +382,37 @@ func TestHandleExternalBanlistRefreshFailureEscalatesToPeerFallback(t *testing.T
 	}
 }
 
-func TestAntiFraudPeerFallbackNotAllowedByNoDNSSeed(t *testing.T) {
-	manager := &ConnectionManager{cfg: &config.Config{Flags: &config.Flags{DisableDNSSeed: true}}}
-	if manager.antiFraudPeerFallbackAllowed() {
-		t.Fatalf("expected --nodnsseed to leave anti-fraud peer fallback disabled")
-	}
-}
-
-func TestHandleExternalBanlistRefreshFailureKeepsCurrentWhenPeerFallbackDisabled(t *testing.T) {
+func TestNoSeedModeRequiresPeerFallbackSnapshots(t *testing.T) {
 	manager := &ConnectionManager{
-		cfg:                         &config.Config{Flags: &config.Flags{}},
+		cfg:                         &config.Config{Flags: &config.Flags{EnableExternalBanlist: false}},
 		antiFraudRuntimeEnabled:     true,
-		antiFraudPeerFallback:       true,
-		externalBanlistRetryPending: true,
+		antiFraudPeerFallback:       false,
+		externalBanlistRetryPending: false,
 	}
 	now := time.Unix(1_700_000_000, 0)
 
-	manager.handleExternalBanlistRefreshFailure(now, errors.New("seed endpoint unavailable"))
+	manager.refreshExternalBanlistIfNeeded(now)
 
 	manager.externalBanlistLock.RLock()
 	defer manager.externalBanlistLock.RUnlock()
 	if !manager.antiFraudRuntimeEnabled {
-		t.Fatalf("expected existing anti-fraud runtime state to remain enabled")
+		t.Fatalf("expected anti-fraud runtime to remain enabled in no-seed mode")
 	}
-	if manager.antiFraudPeerFallback {
-		t.Fatalf("expected peer fallback to be cleared when policy disables it")
+	if !manager.antiFraudPeerFallback {
+		t.Fatalf("expected no-seed mode to require peer fallback snapshots")
 	}
 	if manager.externalBanlistRetryPending {
-		t.Fatalf("expected retry-pending to be cleared when peer fallback is disabled")
+		t.Fatalf("expected no-seed mode to avoid seed retry state")
 	}
 	expectedNextFetch := now.Add(externalBanlistFetchInterval)
 	if !manager.nextExternalBanlistFetch.Equal(expectedNextFetch) {
-		t.Fatalf("unexpected next fetch after disabled fallback: got %s expected %s", manager.nextExternalBanlistFetch, expectedNextFetch)
+		t.Fatalf("unexpected next peer mode refresh: got %s expected %s", manager.nextExternalBanlistFetch, expectedNextFetch)
 	}
 }
 
 func TestHandleExternalBanlistRefreshFailureKeepsExistingPeerFallback(t *testing.T) {
 	manager := &ConnectionManager{
-		cfg:                         &config.Config{Flags: &config.Flags{AllowAntiFraudPeerFallback: true}},
+		cfg:                         &config.Config{Flags: &config.Flags{EnableExternalBanlist: true}},
 		antiFraudRuntimeEnabled:     true,
 		antiFraudPeerFallback:       true,
 		externalBanlistRetryPending: true,

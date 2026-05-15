@@ -24,12 +24,7 @@ func (f *FlowContext) HasValidBlockProducerClaim(blockHash *externalapi.DomainHa
 		return true
 	}
 	key := *blockHash.ByteArray()
-	for _, nodeID := range f.strongNodeClaims.ClaimNodeIDsForBlock(key) {
-		if !f.ConnectionManager().IsUnifiedNodeIDBanned(nodeID) {
-			return true
-		}
-	}
-	return false
+	return len(f.strongNodeClaims.ClaimNodeIDsForBlock(key)) > 0
 }
 
 func (f *FlowContext) WaitForValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool {
@@ -53,24 +48,7 @@ func (f *FlowContext) BlockProducerClaimsForBlock(blockHash *externalapi.DomainH
 		return nil
 	}
 	key := *blockHash.ByteArray()
-	claims := f.strongNodeClaims.ClaimMessagesForBlock(key)
-	filtered := make([]*appmessage.MsgBlockProducerClaimV1, 0, len(claims))
-	for _, claim := range claims {
-		if claim == nil || len(claim.NodePubkeyXOnly) != 32 {
-			continue
-		}
-		var pubKey [32]byte
-		copy(pubKey[:], claim.NodePubkeyXOnly)
-		nodeID := netadapter.ComputeUnifiedNodeID(pubKey)
-		if nodeID != f.NetAdapter().UnifiedNodeID() {
-			continue
-		}
-		if f.ConnectionManager().IsUnifiedNodeIDBanned(nodeID) {
-			continue
-		}
-		filtered = append(filtered, claim)
-	}
-	return filtered
+	return f.strongNodeClaims.ClaimMessagesForBlock(key)
 }
 
 func (f *FlowContext) BroadcastBlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) error {
@@ -112,9 +90,6 @@ func (f *FlowContext) HandleBlockProducerClaim(peer *peerpkg.Peer, message *appm
 		f.strongNodeClaims.MaybeFlush()
 		return nil
 	case strongnodeclaims.IngestStrike:
-		if outcome.NodeID != nil && f.ConnectionManager().IsUnifiedNodeIDBanned(*outcome.NodeID) {
-			return protocolerrors.New(true, "claim references externally banned unified node ID")
-		}
 		return protocolerrors.Errorf(true, "invalid block producer claim: %s", outcome.Reason)
 	default:
 		return nil
@@ -129,7 +104,7 @@ func (f *FlowContext) broadcastBlockProducerClaim(message *appmessage.MsgBlockPr
 	targets := make([]*netadapter.NetConnection, 0, len(f.Peers()))
 	peers := f.Peers()
 	for _, peer := range peers {
-		if peer == nil || peer.AntiFraudRestricted() {
+		if peer == nil {
 			continue
 		}
 		if sourcePeer != nil && peer.ID().IsEqual(sourcePeer.ID()) {

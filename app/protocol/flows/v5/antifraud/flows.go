@@ -13,22 +13,7 @@ import (
 const (
 	snapshotRequestInterval = 20 * time.Second
 	snapshotRequestTimeout  = 5 * time.Second
-	modeRecheckInterval     = 1 * time.Second
-	modeMismatchThreshold   = 5
-	hardforkProtocolVersion = uint32(9)
 )
-
-func shouldDisconnectOnConsecutiveMismatch(streak *int, mismatch bool) bool {
-	if streak == nil {
-		return false
-	}
-	if !mismatch {
-		*streak = 0
-		return false
-	}
-	*streak++
-	return *streak >= modeMismatchThreshold
-}
 
 // HandleSnapshotRequestsContext is the context required for serving anti-fraud snapshots to peers.
 type HandleSnapshotRequestsContext interface {
@@ -57,69 +42,16 @@ func HandleSnapshotRequests(context HandleSnapshotRequestsContext, incomingRoute
 type SyncSnapshotsContext interface {
 	ShutdownChan() <-chan struct{}
 	ConnectionManager() *connmanager.ConnectionManager
-	IsPayloadHfActive() bool
 }
 
 // SyncSnapshots requests peer snapshots while peer-fallback is required and ingests valid responses.
 func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, outgoingRoute *router.Route, peer *peerpkg.Peer) error {
-	modeTicker := time.NewTicker(modeRecheckInterval)
 	requestTicker := time.NewTicker(snapshotRequestInterval)
-	protocolMismatchStreak := 0
-	serviceMismatchStreak := 0
-	modeMismatchStreak := 0
-	defer modeTicker.Stop()
 	defer requestTicker.Stop()
 
 	for {
 		select {
 		case <-context.ShutdownChan():
-			return nil
-		case <-modeTicker.C:
-			if !context.IsPayloadHfActive() {
-				protocolMismatchStreak = 0
-				serviceMismatchStreak = 0
-				modeMismatchStreak = 0
-				continue
-			}
-			protocolMismatch := peer.ProtocolVersion() < hardforkProtocolVersion
-			if shouldDisconnectOnConsecutiveMismatch(&protocolMismatchStreak, protocolMismatch) {
-				log.Warnf("Peer %s still uses pre-HF protocol version %d; reconnecting to enforce v%d+", peer, peer.ProtocolVersion(), hardforkProtocolVersion)
-				peer.Connection().Disconnect()
-				return nil
-			}
-			if protocolMismatch {
-				serviceMismatchStreak = 0
-				modeMismatchStreak = 0
-				continue
-			}
-			missingMandatoryService := peer.Services()&appmessage.SFNodeCryptixAtomic == 0 ||
-				peer.Services()&appmessage.SFNodeStrongNodeClaims == 0
-			if shouldDisconnectOnConsecutiveMismatch(&serviceMismatchStreak, missingMandatoryService) {
-				log.Warnf("Peer %s is missing mandatory post-HF service bits; reconnecting to renegotiate post-HF capabilities", peer)
-				peer.Connection().Disconnect()
-				return nil
-			}
-			if missingMandatoryService {
-				modeMismatchStreak = 0
-				continue
-			}
-			if !context.ConnectionManager().IsAntiFraudRuntimeEnabled() {
-				modeMismatchStreak = 0
-				continue
-			}
-			currentMode := context.ConnectionManager().AntiFraudModeForPeerHashes(peer.AntiFraudHashes())
-			modeMismatch := (peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeFull) ||
-				(!peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeRestricted)
-			if !shouldDisconnectOnConsecutiveMismatch(&modeMismatchStreak, modeMismatch) {
-				continue
-			}
-			if peer.AntiFraudRestricted() && currentMode == connmanager.AntiFraudModeFull {
-				log.Infof("Peer %s anti-fraud overlap became valid; reconnecting to upgrade from RESTRICTED_AF to FULL", peer)
-				peer.Connection().Disconnect()
-				return nil
-			}
-			log.Warnf("Peer %s lost anti-fraud hash overlap; reconnecting to enforce RESTRICTED_AF", peer)
-			peer.Connection().Disconnect()
 			return nil
 		case <-requestTicker.C:
 			if !context.ConnectionManager().IsAntiFraudRuntimeEnabled() || !context.ConnectionManager().IsAntiFraudPeerFallbackRequired() {
@@ -158,25 +90,6 @@ func SyncSnapshots(context SyncSnapshotsContext, incomingRoute *router.Route, ou
 			}
 			if ingestResult == nil {
 				continue
-			}
-
-			// Keep peer hash window current based on verified snapshot messages so
-			// mode rechecks don't rely on stale handshake-only hashes.
-			currentHashes := peer.AntiFraudHashes()
-			updatedHashes := context.ConnectionManager().AdvancePeerAntiFraudHashWindow(currentHashes, ingestResult.RootHash)
-			if len(updatedHashes) == len(currentHashes) {
-				same := true
-				for i := range updatedHashes {
-					if updatedHashes[i] != currentHashes[i] {
-						same = false
-						break
-					}
-				}
-				if !same {
-					peer.SetAntiFraudHashes(updatedHashes)
-				}
-			} else {
-				peer.SetAntiFraudHashes(updatedHashes)
 			}
 		}
 	}

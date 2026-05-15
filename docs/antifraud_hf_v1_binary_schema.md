@@ -13,10 +13,11 @@ This document is normative for Rust/Go implementations.
 4. `snapshot_seq` (`u64`, big-endian)
 5. `generated_at_ms` (`u64`, big-endian; telemetry only)
 6. `signing_key_id` (`u8`)
-7. `banned_ips_count` (`u32`, big-endian)
-8. `banned_ip_entry[]` (concatenated)
-9. `banned_node_ids_count` (`u32`, big-endian)
-10. `banned_node_id_entry[]` (concatenated)
+7. `antifraud_enabled` (`u8`, `1` for enabled, `0` for disabled)
+8. `banned_ips_count` (`u32`, big-endian)
+9. `banned_ip_entry[]` (concatenated)
+10. `banned_node_ids_count` (`u32`, big-endian)
+11. `banned_node_id_entry[]` (concatenated)
 
 ## Entry Encoding
 - `banned_ip_entry`:
@@ -44,6 +45,7 @@ This document is normative for Rust/Go implementations.
 - `2 = devnet`
 - `3 = simnet`
 
-## Zero-Hash
-- Zero-Hash is exactly 32 bytes of `0x00`
-- Zero-Hash is padding-only in hash windows and never counts as overlap
+## Operational Notes
+- `antifraud_enabled=false` snapshots are signature-validated but are not applied as runtime state.
+- The AntiFraud list is used only for peer connection IP/unified node ID filtering.
+- Hash windows in version messages are optional metadata and MUST NOT restrict block, transaction, claim, or IBD flows.

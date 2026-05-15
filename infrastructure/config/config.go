@@ -91,10 +91,11 @@ type Flags struct {
 	EnableBanning                   bool          `long:"enablebanning" description:"Enable banning of misbehaving peers"`
 	BanDuration                     time.Duration `long:"banduration" description:"How long to ban misbehaving peers. Valid time units are {s, m, h}. Minimum 1 second"`
 	BanThreshold                    uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
-	EnableExternalBanlist           bool          `long:"external-banlist" description:"Enable external antifraud banlist synchronization (IP and node ID)"`
-	DisableExternalBanlist          bool          `long:"no-external-banlist" description:"Disable external antifraud banlist synchronization (overrides --external-banlist)"`
-	AntiFraudGuard                  bool          `long:"antifraud-guard" description:"Also query the optional AntiFraud guard mirror as a secondary consistency endpoint"`
-	AllowAntiFraudPeerFallback      bool          `long:"antifraud-allow-peer-fallback" description:"Allow peer snapshot fallback for AntiFraud when seed endpoints are unavailable"`
+	EnableExternalBanlist           bool          `long:"external-banlist" description:"Enable external antifraud connection banlist seed synchronization (IP and node ID)"`
+	EnableBanserver                 bool          `long:"banserver" description:"Enable the primary AntiFraud seed endpoint for the signed connection banlist"`
+	DisableExternalBanlist          bool          `long:"no-external-banlist" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
+	DisableBanserver                bool          `long:"no-banserver" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
+	AntiFraudNoSeed                 bool          `long:"antifraud-no-seed" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
 	Whitelists                      []string      `long:"whitelist" description:"Add an IP network or IP that will not be banned. (eg. 192.168.1.0/24 or ::1)"`
 	RPCListeners                    []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: 19201, testnet: 19202)"`
 	RPCCert                         string        `long:"rpccert" description:"File containing the certificate file"`
@@ -283,8 +284,11 @@ func LoadConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// --no-external-banlist always has priority over --external-banlist.
-	if cfg.DisableExternalBanlist {
+	if cfg.EnableBanserver {
+		cfg.EnableExternalBanlist = true
+	}
+	// No-seed aliases always have priority over seed enable flags.
+	if cfg.DisableExternalBanlist || cfg.DisableBanserver || cfg.AntiFraudNoSeed {
 		cfg.EnableExternalBanlist = false
 	}
 

@@ -41,14 +41,6 @@ func Register(m protocolManager, router *routerpkg.Router, errChan chan error, i
 	return flows
 }
 
-// RegisterRestricted registers only RESTRICTED_AF-allowed flows.
-func RegisterRestricted(m protocolManager, router *routerpkg.Router, errChan chan error, isStopping *uint32) (flows []*common.Flow) {
-	flows = registerPingFlows(m, router, isStopping, errChan)
-	flows = append(flows, registerHFACompatibilityFlows(m, router, isStopping, errChan)...)
-	flows = append(flows, registerAntiFraudFlows(m, router, isStopping, errChan)...)
-	return flows
-}
-
 func registerAddressFlows(m protocolManager, router *routerpkg.Router, isStopping *uint32, errChan chan error) []*common.Flow {
 	outgoingRoute := router.OutgoingRoute()
 

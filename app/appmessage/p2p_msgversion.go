@@ -59,8 +59,7 @@ type MsgVersion struct {
 	// The subnetwork of the generator of the version message. Should be nil in full nodes
 	SubnetworkID *externalapi.DomainSubnetworkID
 
-	// antiFraudHashes is a newest-first window of up to 3 anti-fraud root hashes (32 bytes each).
-	// Zero-hash entries are allowed only as trailing padding.
+	// antiFraudHashes is optional newest-first AntiFraud root-hash metadata.
 	AntiFraudHashes [][32]byte
 
 	// nodePubkeyXOnly is the node identity x-only pubkey (32 bytes) used for unified node identity PoW verification.

@@ -129,14 +129,12 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		var flows []*common.Flow
 		log.Infof("Registering p2p flows for peer %s for protocol version %d", peer, peer.ProtocolVersion())
 		enforceHardforkCore := false
-		antiFraudRuntimeEnabled := m.context.ConnectionManager().IsAntiFraudRuntimeEnabled()
 		virtualDAAScore, err := m.context.Domain().Consensus().GetVirtualDAAScore()
 		if err != nil {
 			log.Warnf("Failed reading virtual DAA score for hardfork mode check: %s", err)
 		} else if virtualDAAScore >= m.context.Config().NetParams().PayloadHfActivationDAAScore {
 			enforceHardforkCore = true
 		}
-		enforceAntiFraud := enforceHardforkCore && antiFraudRuntimeEnabled
 		peerSupportsQuantumFallback := peerSupportsQuantumHandshakeFallback(peer)
 		requireQuantumReady := enforceHardforkCore && !peerSupportsQuantumFallback
 		logQuantumHandshakeModeTransition(enforceHardforkCore)
@@ -149,20 +147,10 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 		if enforceHardforkCore && !requireQuantumReady {
 			log.Debugf("Peer %s supports post-HF quantum-safe handshake fallback negotiation", peer)
 		}
-		antiFraudMode := connmanager.AntiFraudModeFull
-		if enforceAntiFraud {
-			antiFraudMode = m.context.ConnectionManager().AntiFraudModeForPeerHashes(peer.AntiFraudHashes())
-			peer.SetAntiFraudRestricted(antiFraudMode == connmanager.AntiFraudModeRestricted)
-		}
 		switch peer.ProtocolVersion() {
 		case 5, 6, 7, 8, 9:
 			// Protocol versions 5/6/7/8/9 currently use the v5 flow set in this node implementation.
-			if enforceAntiFraud && antiFraudMode == connmanager.AntiFraudModeRestricted {
-				log.Infof("Peer %s has no valid anti-fraud hash overlap and will run in RESTRICTED_AF mode", peer)
-				flows = v5.RegisterRestricted(m, router, errChan, &isStopping)
-			} else {
-				flows = v5.Register(m, router, errChan, &isStopping)
-			}
+			flows = v5.Register(m, router, errChan, &isStopping)
 		default:
 			panic(errors.Errorf("no way to handle protocol version %d", peer.ProtocolVersion()))
 		}

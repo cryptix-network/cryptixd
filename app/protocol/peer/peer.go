@@ -24,8 +24,6 @@ type Peer struct {
 	protocolVersion          uint32 // negotiated protocol version
 	disableRelayTx           bool
 	subnetworkID             *externalapi.DomainSubnetworkID
-	antiFraudHashes          [][32]byte
-	antiFraudRestricted      bool
 	unifiedNodeID            *[32]byte
 
 	timeOffset        time.Duration
@@ -116,7 +114,6 @@ func (p *Peer) UpdateFieldsFromMsgVersion(msg *appmessage.MsgVersion, maxProtoco
 
 	p.disableRelayTx = msg.DisableRelayTx
 	p.subnetworkID = msg.SubnetworkID
-	p.antiFraudHashes = append(p.antiFraudHashes[:0], msg.AntiFraudHashes...)
 	if len(msg.NodePubkeyXOnly) == 32 {
 		var pub [32]byte
 		copy(pub[:], msg.NodePubkeyXOnly)
@@ -127,26 +124,6 @@ func (p *Peer) UpdateFieldsFromMsgVersion(msg *appmessage.MsgVersion, maxProtoco
 	}
 
 	p.timeOffset = mstime.Since(msg.Timestamp)
-}
-
-// AntiFraudHashes returns the peer anti-fraud hash window advertised in Version.
-func (p *Peer) AntiFraudHashes() [][32]byte {
-	return append([][32]byte(nil), p.antiFraudHashes...)
-}
-
-// SetAntiFraudHashes updates the peer anti-fraud hash window used for runtime mode checks.
-func (p *Peer) SetAntiFraudHashes(hashes [][32]byte) {
-	p.antiFraudHashes = append(p.antiFraudHashes[:0], hashes...)
-}
-
-// SetAntiFraudRestricted stores whether this peer is currently restricted by anti-fraud compatibility.
-func (p *Peer) SetAntiFraudRestricted(restricted bool) {
-	p.antiFraudRestricted = restricted
-}
-
-// AntiFraudRestricted returns whether this peer is currently in restricted anti-fraud mode.
-func (p *Peer) AntiFraudRestricted() bool {
-	return p.antiFraudRestricted
 }
 
 // UnifiedNodeID returns the verified node ID advertised in handshake when present.

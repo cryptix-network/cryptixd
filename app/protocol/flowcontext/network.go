@@ -47,9 +47,6 @@ func (f *FlowContext) readyBroadcastPeerConnections() []*netadapter.NetConnectio
 	defer f.peersMutex.RUnlock()
 	peerConnections := make([]*netadapter.NetConnection, 0, len(f.peers))
 	for _, peer := range f.peers {
-		if peer.AntiFraudRestricted() {
-			continue
-		}
 		peerConnections = append(peerConnections, peer.Connection())
 	}
 	return peerConnections

@@ -55,10 +55,13 @@ func TestCreateDefaultConfigFile(t *testing.T) {
 	}
 }
 
-func TestDefaultAntiFraudGuardDisabled(t *testing.T) {
+func TestDefaultAntiFraudSeedEnabled(t *testing.T) {
 	cfg := DefaultConfig()
-	if cfg.AntiFraudGuard {
-		t.Fatalf("expected optional AntiFraud guard mirror to be disabled by default")
+	if !cfg.EnableExternalBanlist {
+		t.Fatalf("expected primary AntiFraud seed sync to be enabled by default")
+	}
+	if cfg.DisableBanserver || cfg.AntiFraudNoSeed {
+		t.Fatalf("expected no-seed aliases to be disabled by default")
 	}
 }
 

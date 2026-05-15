@@ -26,9 +26,8 @@ import (
 )
 
 const (
-	externalBanlistFetchInterval     = 10 * time.Minute
+	externalBanlistFetchInterval     = time.Hour
 	externalBanlistRetryInterval     = 15 * time.Second
-	externalBanlistPropagationLag    = 15 * time.Second
 	externalBanlistRequestTimeout    = 10 * time.Second
 	externalBanlistMaxResponseSize   = 2 * 1024 * 1024
 	externalBanlistMaxIPs            = 4096
@@ -48,7 +47,6 @@ const (
 	antiFraudCurrentFile             = "current.snapshot"
 	antiFraudPreviousFile            = "previous.snapshot"
 	defaultExternalBanlistPrimaryURL = "https://antifraud.cryptix-network.org/api/v1/antifraud/snapshot"
-	defaultExternalBanlistSeedURL    = "https://guard.seed2.cryptix-network.org/api/v1/antifraud/snapshot"
 )
 
 type externalBanlistSnapshot struct {
@@ -107,34 +105,11 @@ type externalBanlistFetchOutcome uint8
 
 const (
 	externalBanlistFetchEnabled externalBanlistFetchOutcome = iota
-	externalBanlistFetchDisabledByGate
 	externalBanlistFetchUnavailable
 )
 
-func endpointLabel(endpoint *endpointAntiFraudSnapshotResult) string {
-	if endpoint == nil {
-		return "unknown-endpoint"
-	}
-	name := strings.TrimSpace(endpoint.endpointName)
-	url := strings.TrimSpace(endpoint.sourceURL)
-	switch {
-	case name == "" && url == "":
-		return "unknown-endpoint"
-	case name == "":
-		return url
-	case url == "":
-		return name
-	default:
-		return name + " " + url
-	}
-}
-
 func (c *ConnectionManager) externalBanlistEnabled() bool {
 	return c != nil && c.cfg != nil && c.cfg.EnableExternalBanlist
-}
-
-func (c *ConnectionManager) antiFraudPeerFallbackAllowed() bool {
-	return c != nil && c.cfg != nil && c.cfg.AllowAntiFraudPeerFallback
 }
 
 func (c *ConnectionManager) IsAntiFraudRuntimeEnabled() bool {
@@ -171,38 +146,9 @@ func (c *ConnectionManager) logExternalAntiFraudRuntimeState(reason string) {
 	)
 }
 
-func (c *ConnectionManager) disableAntiFraudRuntime(now time.Time, reason string) {
-	c.externalBanlistLock.Lock()
-	wasEnabled := c.antiFraudRuntimeEnabled
-	hadState := c.antiFraudRuntimeEnabled ||
-		len(c.externallyBannedIPs) > 0 ||
-		len(c.externallyBannedNodeIDs) > 0 ||
-		c.antiFraudHashWindow != [antiFraudHashWindowLen][32]byte{}
-	c.antiFraudRuntimeEnabled = false
-	c.externallyBannedIPs = map[string]struct{}{}
-	c.externallyBannedNodeIDs = map[string]struct{}{}
-	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
-	c.antiFraudHashWindow = [antiFraudHashWindowLen][32]byte{}
-	c.antiFraudPeerFallback = false
-	c.externalBanlistRetryPending = false
-	c.antiFraudPeerVotes = map[string]*peerAntiFraudVote{}
-	c.externalBanlistLock.Unlock()
-
-	logExternalAntiFraudRuntimeTransition(wasEnabled, false, reason)
-	if hadState {
-		log.Infof("External antifraud runtime disabled: %s. Cleared active anti-fraud enforcement state.", reason)
-	}
-	c.logExternalAntiFraudRuntimeState(reason)
-}
-
 func (c *ConnectionManager) ensurePeerOnlyAntiFraudRuntime(now time.Time, reason string) {
 	c.externalBanlistLock.Lock()
 	wasEnabled := c.antiFraudRuntimeEnabled
-	if c.antiFraudCurrentSnapshot != nil && !c.antiFraudCurrentSnapshot.AntiFraudEnabled {
-		// Honor the latest signed OFF gate and do not auto-reenable in peer-only mode.
-		c.externalBanlistLock.Unlock()
-		return
-	}
 	alreadyPeerOnly := c.antiFraudRuntimeEnabled && c.antiFraudPeerFallback && !c.externalBanlistRetryPending
 	if alreadyPeerOnly {
 		c.externalBanlistLock.Unlock()
@@ -218,17 +164,6 @@ func (c *ConnectionManager) ensurePeerOnlyAntiFraudRuntime(now time.Time, reason
 	c.logExternalAntiFraudRuntimeState(reason)
 }
 
-func (c *ConnectionManager) holdCurrentAntiFraudState(now time.Time, reason string) {
-	c.externalBanlistLock.Lock()
-	c.antiFraudPeerFallback = false
-	c.externalBanlistRetryPending = false
-	c.nextExternalBanlistFetch = now.Add(externalBanlistFetchInterval)
-	c.externalBanlistLock.Unlock()
-
-	log.Warnf("%s. Peer fallback disabled by policy; keeping current anti-fraud state.", reason)
-	c.logExternalAntiFraudRuntimeState(reason)
-}
-
 func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	c.externalBanlistLock.RLock()
 	nextFetch := c.nextExternalBanlistFetch
@@ -238,26 +173,13 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 	}
 
 	if !c.externalBanlistEnabled() {
-		if c.antiFraudPeerFallbackAllowed() {
-			c.ensurePeerOnlyAntiFraudRuntime(now, "external banlist disabled by configuration; peer snapshot fallback enabled by operator policy")
-		} else {
-			c.holdCurrentAntiFraudState(now, "external banlist disabled by configuration")
-		}
+		c.ensurePeerOnlyAntiFraudRuntime(now, "external banlist seed disabled by configuration; peer snapshot majority mode active")
 		return
 	}
 
 	snapshot, fetchOutcome, err := c.fetchExternalBanlist()
 	if err != nil {
 		c.handleExternalBanlistRefreshFailure(now, errors.Wrap(err, "snapshot endpoint fetch/validation failed"))
-		return
-	}
-	if fetchOutcome == externalBanlistFetchDisabledByGate {
-		if snapshot != nil {
-			if _, applyErr := c.tryApplyAntiFraudSnapshot(snapshot, "banserver-gate-disabled"); applyErr != nil {
-				log.Warnf("Failed to cache disabled antifraud gate snapshot: %s", applyErr)
-			}
-		}
-		c.disableAntiFraudRuntime(now, "snapshot endpoint antifraud_enabled flag is false")
 		return
 	}
 	if fetchOutcome == externalBanlistFetchUnavailable {
@@ -293,12 +215,6 @@ func (c *ConnectionManager) refreshExternalBanlistIfNeeded(now time.Time) {
 func (c *ConnectionManager) handleExternalBanlistRefreshFailure(now time.Time, cause error) {
 	c.externalBanlistLock.Lock()
 	wasEnabled := c.antiFraudRuntimeEnabled
-
-	if !c.antiFraudPeerFallbackAllowed() {
-		c.externalBanlistLock.Unlock()
-		c.holdCurrentAntiFraudState(now, fmt.Sprintf("External antifraud refresh failed: %s", cause))
-		return
-	}
 
 	if !c.antiFraudRuntimeEnabled {
 		c.antiFraudRuntimeEnabled = true
@@ -357,188 +273,20 @@ func (c *ConnectionManager) fetchExternalBanlist() (*externalBanlistSnapshot, ex
 	}
 
 	primaryResult, primaryErr := c.fetchExternalBanlistFromEndpoint("primary", defaultExternalBanlistPrimaryURL, expectedNetwork)
-
-	endpointResults := make([]*endpointAntiFraudSnapshotResult, 0, 2)
-	endpointErrors := make([]string, 0, 2)
 	if primaryErr != nil {
-		endpointErrors = append(endpointErrors, errors.Wrap(primaryErr, "primary endpoint unavailable").Error())
-	} else if primaryResult != nil {
-		endpointResults = append(endpointResults, primaryResult)
+		log.Warnf("External antifraud primary seed unavailable: %s", primaryErr)
+		return nil, externalBanlistFetchUnavailable, nil
 	}
-	if c.cfg.AntiFraudGuard {
-		secondaryResult, secondaryErr := c.fetchExternalBanlistFromEndpoint("secondary", defaultExternalBanlistSeedURL, expectedNetwork)
-		if secondaryErr != nil {
-			endpointErrors = append(endpointErrors, errors.Wrap(secondaryErr, "secondary endpoint unavailable").Error())
-		} else if secondaryResult != nil {
-			endpointResults = append(endpointResults, secondaryResult)
-		}
+	if primaryResult == nil || primaryResult.snapshot == nil {
+		log.Warnf("External antifraud primary seed returned no usable snapshot")
+		return nil, externalBanlistFetchUnavailable, nil
 	}
-
-	disabledResults := make([]*endpointAntiFraudSnapshotResult, 0, len(endpointResults))
-	for _, endpoint := range endpointResults {
-		if endpoint != nil && !endpoint.enabled {
-			disabledResults = append(disabledResults, endpoint)
-		}
-	}
-	if len(disabledResults) > 0 {
-		stateParts := make([]string, 0, len(endpointResults)+len(endpointErrors))
-		for _, item := range endpointResults {
-			if item == nil {
-				continue
-			}
-			stateParts = append(stateParts, endpointLabel(item)+fmt.Sprintf("=%t", item.enabled))
-		}
-		stateParts = append(stateParts, endpointErrors...)
-		log.Infof("External antifraud runtime gate from snapshots: %s -> disabled", strings.Join(stateParts, "; "))
-
-		selected := disabledResults[0]
-		for i := 1; i < len(disabledResults); i++ {
-			candidate := disabledResults[i]
-			if candidate.snapshot == nil || selected.snapshot == nil {
-				continue
-			}
-			if candidate.snapshot.SnapshotSeq > selected.snapshot.SnapshotSeq {
-				selected = candidate
-				continue
-			}
-			if candidate.snapshot.SnapshotSeq == selected.snapshot.SnapshotSeq && selected.endpointName != "primary" && candidate.endpointName == "primary" {
-				selected = candidate
-			}
-		}
-		return selected.snapshot, externalBanlistFetchDisabledByGate, nil
-	}
-
-	enabledResults := make([]*endpointAntiFraudSnapshotResult, 0, len(endpointResults))
-	for _, endpoint := range endpointResults {
-		if endpoint == nil || !endpoint.enabled {
-			continue
-		}
-		if endpoint.snapshot == nil {
-			endpointErrors = append(endpointErrors, endpointLabel(endpoint)+" returned antifraud_enabled=true without snapshot payload")
-			continue
-		}
-		enabledResults = append(enabledResults, endpoint)
-	}
-
-	if len(enabledResults) == 0 {
-		if len(endpointErrors) == 0 {
-			log.Warnf("External antifraud runtime gate from snapshots: no endpoint provided usable antifraud payload -> unavailable")
-		} else {
-			log.Warnf("External antifraud runtime gate from snapshots: %s -> unavailable", strings.Join(endpointErrors, "; "))
-		}
+	if !primaryResult.enabled {
+		log.Warnf("External antifraud primary seed returned signed antifraud_enabled=false; keeping current state and falling back to peers")
 		return nil, externalBanlistFetchUnavailable, nil
 	}
 
-	if len(endpointErrors) > 0 {
-		log.Warnf(
-			"External antifraud snapshot fetch degraded: %s. Continuing because at least one endpoint is enabled and valid.",
-			strings.Join(endpointErrors, "; "),
-		)
-	}
-
-	selected := enabledResults[0]
-	for i := 1; i < len(enabledResults); i++ {
-		candidate := enabledResults[i]
-		if candidate.snapshot.SnapshotSeq > selected.snapshot.SnapshotSeq {
-			selected = candidate
-			continue
-		}
-		if candidate.snapshot.SnapshotSeq == selected.snapshot.SnapshotSeq && selected.endpointName != "primary" && candidate.endpointName == "primary" {
-			selected = candidate
-		}
-	}
-
-	nowMs := uint64(time.Now().UnixMilli())
-	for _, endpoint := range enabledResults {
-		if endpoint == nil || endpoint.snapshot == nil || endpoint == selected {
-			continue
-		}
-		selectedSnapshot := selected.snapshot
-		peerSnapshot := endpoint.snapshot
-		selectedLabel := endpointLabel(selected)
-		peerLabel := endpointLabel(endpoint)
-		toleratedSkew, newerLabel, olderLabel, newerSeq, olderSeq, newerAgeMs, pairErr := evaluateEnabledSnapshotPair(
-			selectedLabel,
-			selectedSnapshot,
-			peerLabel,
-			peerSnapshot,
-			nowMs,
-		)
-		if pairErr != nil {
-			log.Errorf(
-				"External antifraud snapshot mismatch: rejecting update (%s seq=%d hash=%s vs %s seq=%d hash=%s): %s",
-				selectedLabel,
-				selectedSnapshot.SnapshotSeq,
-				hex.EncodeToString(selectedSnapshot.RootHash[:]),
-				peerLabel,
-				peerSnapshot.SnapshotSeq,
-				hex.EncodeToString(peerSnapshot.RootHash[:]),
-				pairErr.Error(),
-			)
-			return nil, externalBanlistFetchUnavailable, nil
-		}
-		if toleratedSkew {
-			log.Warnf(
-				"External antifraud snapshot temporary replication skew tolerated: newer %s seq=%d, older %s seq=%d, newer_age_ms=%d (<= %d)",
-				newerLabel,
-				newerSeq,
-				olderLabel,
-				olderSeq,
-				newerAgeMs,
-				uint64(externalBanlistPropagationLag/time.Millisecond),
-			)
-		}
-	}
-
-	return selected.snapshot, externalBanlistFetchEnabled, nil
-}
-
-func evaluateEnabledSnapshotPair(
-	selectedLabel string,
-	selectedSnapshot *externalBanlistSnapshot,
-	peerLabel string,
-	peerSnapshot *externalBanlistSnapshot,
-	nowMs uint64,
-) (toleratedSkew bool, newerLabel string, olderLabel string, newerSeq uint64, olderSeq uint64, newerAgeMs uint64, err error) {
-	if selectedSnapshot == nil || peerSnapshot == nil {
-		return false, "", "", 0, 0, 0, errors.New("missing enabled snapshot payload")
-	}
-
-	if peerSnapshot.SnapshotSeq == selectedSnapshot.SnapshotSeq {
-		if peerSnapshot.RootHash != selectedSnapshot.RootHash {
-			return false, "", "", 0, 0, 0, errors.New("enabled endpoints disagree on identical snapshot_seq")
-		}
-		return false, "", "", 0, 0, 0, nil
-	}
-
-	newerSnapshot := selectedSnapshot
-	olderSnapshot := peerSnapshot
-	newerLabel = selectedLabel
-	olderLabel = peerLabel
-	if peerSnapshot.SnapshotSeq > selectedSnapshot.SnapshotSeq {
-		newerSnapshot = peerSnapshot
-		olderSnapshot = selectedSnapshot
-		newerLabel = peerLabel
-		olderLabel = selectedLabel
-	}
-	newerSeq = newerSnapshot.SnapshotSeq
-	olderSeq = olderSnapshot.SnapshotSeq
-	seqGap := newerSeq - olderSeq
-	if nowMs > newerSnapshot.GeneratedAtMs {
-		newerAgeMs = nowMs - newerSnapshot.GeneratedAtMs
-	}
-
-	toleranceMs := uint64(externalBanlistPropagationLag / time.Millisecond)
-	if seqGap == 1 && newerAgeMs <= toleranceMs {
-		return true, newerLabel, olderLabel, newerSeq, olderSeq, newerAgeMs, nil
-	}
-
-	return false, newerLabel, olderLabel, newerSeq, olderSeq, newerAgeMs, errors.Errorf(
-		"enabled endpoints diverged beyond tolerance (seq_gap=%d newer_age_ms=%d tolerance_ms=%d)",
-		seqGap,
-		newerAgeMs,
-		toleranceMs,
-	)
+	return primaryResult.snapshot, externalBanlistFetchEnabled, nil
 }
 
 func (c *ConnectionManager) fetchExternalBanlistFromEndpoint(
@@ -1212,13 +960,6 @@ func normalizeExternalBanlistNodeIDEntries(rawNodeIDs []string) ([][32]byte, map
 	return entries, normalizedNodeIDs
 }
 
-type AntiFraudMode uint8
-
-const (
-	AntiFraudModeFull AntiFraudMode = iota
-	AntiFraudModeRestricted
-)
-
 type IngestPeerAntiFraudSnapshotResult struct {
 	Applied  bool
 	RootHash [32]byte
@@ -1241,7 +982,7 @@ func (c *ConnectionManager) IsAntiFraudPeerFallbackRequired() bool {
 	if !c.antiFraudRuntimeEnabled {
 		return false
 	}
-	return c.antiFraudPeerFallbackAllowed() && c.antiFraudPeerFallback
+	return !c.externalBanlistEnabled() || c.antiFraudPeerFallback
 }
 
 func (c *ConnectionManager) AntiFraudSnapshotForPeer() *appmessage.MsgAntiFraudSnapshotV1 {
@@ -1251,78 +992,6 @@ func (c *ConnectionManager) AntiFraudSnapshotForPeer() *appmessage.MsgAntiFraudS
 		return nil
 	}
 	return cloneAntiFraudSnapshotMessage(c.antiFraudCurrentSnapshot)
-}
-
-func (c *ConnectionManager) AntiFraudModeForPeerHashes(peerHashes [][32]byte) AntiFraudMode {
-	if !c.IsAntiFraudRuntimeEnabled() {
-		return AntiFraudModeFull
-	}
-	local := c.AntiFraudHashWindow()
-	if isAllZeroAntiFraudHashWindow(local) {
-		// No local non-zero anchor yet => remain gated until overlap exists.
-		return AntiFraudModeRestricted
-	}
-	if !validateAntiFraudHashWindow(peerHashes) {
-		return AntiFraudModeRestricted
-	}
-	if isAllZeroAntiFraudHashWindow(peerHashes) {
-		// Peer did not provide any non-zero anchor yet => remain gated.
-		return AntiFraudModeRestricted
-	}
-	if !hasNonZeroAntiFraudHashOverlap(local, peerHashes) {
-		return AntiFraudModeRestricted
-	}
-	return AntiFraudModeFull
-}
-
-func validateAntiFraudHashWindow(hashes [][32]byte) bool {
-	if len(hashes) != antiFraudHashWindowLen {
-		return false
-	}
-	seenNonZero := map[[32]byte]struct{}{}
-	seenZero := false
-	for _, hash := range hashes {
-		if hash == ([32]byte{}) {
-			seenZero = true
-			continue
-		}
-		if seenZero {
-			return false
-		}
-		if _, exists := seenNonZero[hash]; exists {
-			return false
-		}
-		seenNonZero[hash] = struct{}{}
-	}
-	return true
-}
-
-func hasNonZeroAntiFraudHashOverlap(local, remote [][32]byte) bool {
-	remoteSet := map[[32]byte]struct{}{}
-	for _, hash := range remote {
-		if hash == ([32]byte{}) {
-			continue
-		}
-		remoteSet[hash] = struct{}{}
-	}
-	for _, hash := range local {
-		if hash == ([32]byte{}) {
-			continue
-		}
-		if _, ok := remoteSet[hash]; ok {
-			return true
-		}
-	}
-	return false
-}
-
-func isAllZeroAntiFraudHashWindow(hashes [][32]byte) bool {
-	for _, hash := range hashes {
-		if hash != ([32]byte{}) {
-			return false
-		}
-	}
-	return true
 }
 
 func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *appmessage.MsgAntiFraudSnapshotV1) (*IngestPeerAntiFraudSnapshotResult, error) {
@@ -1404,11 +1073,8 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 	}
 	winner := snapshotByHash[winnerHash]
 	if !winner.AntiFraudEnabled {
-		if _, applyErr := c.tryApplyAntiFraudSnapshotLocked(winner, "peer-gate-disabled"); applyErr != nil {
-			log.Warnf("Failed to cache disabled peer-gate snapshot: %s", applyErr)
-		}
 		c.externalBanlistLock.Unlock()
-		c.disableAntiFraudRuntime(now, "peer snapshot majority gate is false")
+		log.Warnf("Ignoring peer anti-fraud snapshot majority with antifraud_enabled=false; keeping current runtime state")
 		return result, nil
 	}
 	applied, err := c.tryApplyAntiFraudSnapshotLocked(winner, "peer")
@@ -1453,17 +1119,6 @@ func pruneAntiFraudPeerVotes(votes map[string]*peerAntiFraudVote, now time.Time)
 	for i := 0; i < overflow; i++ {
 		delete(votes, ordered[i].peerID)
 	}
-}
-
-func (c *ConnectionManager) AdvancePeerAntiFraudHashWindow(current [][32]byte, newHash [32]byte) [][32]byte {
-	var normalized [antiFraudHashWindowLen][32]byte
-	if validateAntiFraudHashWindow(current) {
-		copy(normalized[:], current)
-	}
-	advanced := advanceAntiFraudHashWindow(normalized, newHash)
-	out := make([][32]byte, antiFraudHashWindowLen)
-	copy(out, advanced[:])
-	return out
 }
 
 func decodeExternalBanlistSnapshotFromMessage(message *appmessage.MsgAntiFraudSnapshotV1, expectedNetwork uint8) (*externalBanlistSnapshot, error) {
@@ -1641,6 +1296,9 @@ func (c *ConnectionManager) tryApplyAntiFraudSnapshotLocked(snapshot *externalBa
 	if snapshot == nil {
 		return false, errors.New("snapshot is nil")
 	}
+	if !snapshot.AntiFraudEnabled {
+		return false, errors.New("snapshot has antifraud_enabled=false")
+	}
 	if c.hasExternalSnapshot {
 		if snapshot.SnapshotSeq < c.externalSnapshotSeq {
 			return false, errors.Errorf("received older snapshot_seq (%d < %d)", snapshot.SnapshotSeq, c.externalSnapshotSeq)
@@ -1743,6 +1401,10 @@ func (c *ConnectionManager) tryLoadPersistedAntiFraudSnapshot() {
 		loaded = c.loadPersistedSnapshotFile(previousPath)
 	}
 	if loaded == nil {
+		return
+	}
+	if !loaded.AntiFraudEnabled {
+		log.Warnf("Ignoring persisted anti-fraud snapshot with antifraud_enabled=false")
 		return
 	}
 	if _, err := c.tryApplyAntiFraudSnapshot(loaded, "disk"); err != nil {
