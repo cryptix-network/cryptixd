@@ -217,6 +217,9 @@ func TestDisabledPeerSnapshotMajorityKeepsCurrentState(t *testing.T) {
 	if manager.hasExternalSnapshot || manager.antiFraudCurrentSnapshot != nil {
 		t.Fatalf("expected disabled peer majority not to apply as current snapshot")
 	}
+	if len(manager.antiFraudPeerVotes) != 0 {
+		t.Fatalf("expected disabled peer snapshot not to be retained as a vote")
+	}
 }
 
 func TestPersistedDisabledAntiFraudSnapshotIgnored(t *testing.T) {

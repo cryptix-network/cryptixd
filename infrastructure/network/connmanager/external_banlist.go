@@ -1013,6 +1013,10 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 		return nil, err
 	}
 	result := &IngestPeerAntiFraudSnapshotResult{Applied: false, RootHash: snapshot.RootHash}
+	if !snapshot.AntiFraudEnabled {
+		log.Warnf("Ignoring signed peer anti-fraud snapshot with antifraud_enabled=false")
+		return result, nil
+	}
 
 	now := time.Now()
 	c.externalBanlistLock.Lock()
@@ -1074,7 +1078,7 @@ func (c *ConnectionManager) IngestPeerAntiFraudSnapshot(peerID string, message *
 	winner := snapshotByHash[winnerHash]
 	if !winner.AntiFraudEnabled {
 		c.externalBanlistLock.Unlock()
-		log.Warnf("Ignoring peer anti-fraud snapshot majority with antifraud_enabled=false; keeping current runtime state")
+		log.Warnf("Ignoring peer anti-fraud snapshot majority with antifraud_enabled=false")
 		return result, nil
 	}
 	applied, err := c.tryApplyAntiFraudSnapshotLocked(winner, "peer")
