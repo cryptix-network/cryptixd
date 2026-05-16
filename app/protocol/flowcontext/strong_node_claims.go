@@ -16,7 +16,7 @@ const (
 )
 
 func (f *FlowContext) isStrongNodeClaimsP2PEnabled() bool {
-	return f.strongNodeClaims != nil && f.strongNodeClaims.ShouldAdvertiseServiceBit(f.IsPayloadHfActive())
+	return f.strongNodeClaims != nil && f.strongNodeClaims.RuntimeAvailable(f.IsPayloadHfActive())
 }
 
 func (f *FlowContext) HasValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool {

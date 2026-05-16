@@ -69,7 +69,6 @@ func (flow *sendVersionFlow) start() error {
 	if err != nil {
 		return err
 	}
-	hardforkActive := minAcceptableProtocolVersion >= hardforkProtocolVersion
 	if flow.Config().ProtocolVersion < minAcceptableProtocolVersion {
 		return errors.Errorf("configured protocol version %d is obsolete (minimum required: %d)",
 			flow.Config().ProtocolVersion, minAcceptableProtocolVersion)
@@ -90,10 +89,11 @@ func (flow *sendVersionFlow) start() error {
 	msg.Services = defaultServices
 	// Advertise support for post-HF PQ handshake fallback negotiation.
 	msg.Services |= appmessage.SFNodeQuantumHandshakeFallback
-	if hardforkActive {
-		msg.Services |= appmessage.SFNodeCryptixAtomic
-		msg.Services |= appmessage.SFNodeStrongNodeClaims
-	}
+	// Atomic and strong-node-claims are binary capabilities. They must be
+	// advertised before the local DAG reaches HF so fresh nodes can still sync
+	// from already post-HF peers.
+	msg.Services |= appmessage.SFNodeCryptixAtomic
+	msg.Services |= appmessage.SFNodeStrongNodeClaims
 	if flow.Config().IsArchivalNode {
 		msg.Services |= appmessage.SFNodeArchival
 	}

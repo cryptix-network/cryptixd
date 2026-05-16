@@ -181,15 +181,12 @@ func TestHardforkGatingIgnoresClaimsAndChainUpdatesPreHF(t *testing.T) {
 	}
 }
 
-func TestServiceBitAdvertisementIsHardforkGated(t *testing.T) {
+func TestServiceBitAdvertisementIsCapabilityGated(t *testing.T) {
 	tempDir := t.TempDir()
 	engine := New(true, "cryptix-mainnet", tempDir)
 
-	if engine.ShouldAdvertiseServiceBit(false) {
-		t.Fatalf("expected service bit advertisement to be disabled before hardfork")
-	}
-	if !engine.ShouldAdvertiseServiceBit(true) {
-		t.Fatalf("expected service bit advertisement to be enabled after hardfork")
+	if !engine.ShouldAdvertiseServiceBit() {
+		t.Fatalf("expected enabled engine to advertise service bit before local hardfork activation")
 	}
 
 	preHFSnapshot := engine.Snapshot(false)
@@ -203,7 +200,7 @@ func TestServiceBitAdvertisementIsHardforkGated(t *testing.T) {
 	}
 
 	disabledEngine := New(false, "cryptix-mainnet", tempDir)
-	if disabledEngine.ShouldAdvertiseServiceBit(false) || disabledEngine.ShouldAdvertiseServiceBit(true) {
+	if disabledEngine.ShouldAdvertiseServiceBit() {
 		t.Fatalf("expected disabled engine to never advertise service bit")
 	}
 }

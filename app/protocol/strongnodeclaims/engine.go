@@ -142,7 +142,14 @@ func (e *Engine) Enabled() bool {
 	return e.enabled
 }
 
-func (e *Engine) ShouldAdvertiseServiceBit(hardforkActive bool) bool {
+func (e *Engine) ShouldAdvertiseServiceBit() bool {
+	// The service bit is a protocol capability, not a statement about the
+	// local virtual DAA score. Fresh nodes still need to advertise support so
+	// already post-HF peers can admit them for IBD.
+	return e.enabled
+}
+
+func (e *Engine) RuntimeAvailable(hardforkActive bool) bool {
 	return e.enabled && hardforkActive
 }
 
@@ -337,7 +344,7 @@ func (e *Engine) Snapshot(hardforkActive bool) RuntimeSnapshot {
 	return RuntimeSnapshot{
 		Enabled:          e.enabled,
 		HardforkActive:   hardforkActive,
-		RuntimeAvailable: e.enabled && hardforkActive,
+		RuntimeAvailable: e.RuntimeAvailable(hardforkActive),
 		WindowSize:       CLAIM_WINDOW_SIZE_BLOCKS,
 		ConflictTotal:    e.state.ConflictTotal,
 		Entries:          entries,
