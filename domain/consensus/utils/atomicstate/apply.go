@@ -73,6 +73,9 @@ func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore 
 		return fmt.Errorf("nonce baseline violation for owner `%x` scope `%d:%x`: expected `%d`, got `%d`",
 			ownerID, nonceKey.ScopeKind, nonceKey.ScopeID, expectedNonce, parsedPayload.Nonce)
 	}
+	if expectedNonce == math.MaxUint64 {
+		return fmt.Errorf("nonce progression overflow for owner `%x` scope `%d:%x`", ownerID, nonceKey.ScopeKind, nonceKey.ScopeID)
+	}
 
 	if len(spentVaultInputs) != 0 {
 		switch parsedPayload.Op.(type) {
@@ -97,9 +100,6 @@ func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore 
 		return err
 	}
 
-	if expectedNonce == math.MaxUint64 {
-		return fmt.Errorf("nonce progression overflow for owner `%x` scope `%d:%x`", ownerID, nonceKey.ScopeKind, nonceKey.ScopeID)
-	}
 	state.NextNonces[nonceKey] = expectedNonce + 1
 	applyAnchorDeltas(tx, state)
 	return nil

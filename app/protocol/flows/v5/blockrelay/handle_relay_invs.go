@@ -32,6 +32,7 @@ type RelayInvsContext interface {
 	SharedRequestedBlocks() *flowcontext.SharedRequestedBlocks
 	Broadcast(message appmessage.Message) error
 	BroadcastBlockProducerClaimsForBlock(blockHash *externalapi.DomainHash) error
+	HasValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool
 	WaitForValidBlockProducerClaim(blockHash *externalapi.DomainHash) bool
 	AddOrphan(orphanBlock *externalapi.DomainBlock)
 	GetOrphanRoots(orphanHash *externalapi.DomainHash) ([]*externalapi.DomainHash, bool, error)
@@ -114,20 +115,23 @@ func (flow *handleRelayInvsFlow) start() error {
 			continue
 		}
 
+		isNearlySynced, err := flow.IsNearlySynced()
+		if err != nil {
+			return err
+		}
+
 		// Block relay is disabled if the node is already during IBD AND considered out of sync
 		if flow.IsIBDRunning() {
-			isNearlySynced, err := flow.IsNearlySynced()
-			if err != nil {
-				return err
-			}
 			if !isNearlySynced {
 				log.Debugf("Got block %s while in IBD and the node is out of sync. Continuing...", inv.Hash)
 				continue
 			}
 		}
 
-		if !flow.WaitForValidBlockProducerClaim(inv.Hash) {
+		if isNearlySynced && !flow.WaitForValidBlockProducerClaim(inv.Hash) {
 			return protocolerrors.Errorf(true, "relay block %s missing valid strong-node block producer claim", inv.Hash)
+		} else if !isNearlySynced && !flow.HasValidBlockProducerClaim(inv.Hash) {
+			log.Debugf("Relay block %s has no strong-node block producer claim yet, but node is not nearly synced; requesting it as a potential IBD trigger", inv.Hash)
 		}
 
 		log.Debugf("Requesting block %s", inv.Hash)

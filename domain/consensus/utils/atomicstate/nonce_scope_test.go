@@ -2,6 +2,7 @@ package atomicstate
 
 import (
 	"encoding/binary"
+	"math"
 	"strings"
 	"testing"
 
@@ -100,6 +101,33 @@ func TestScopedNonceRejectsAssetNonceGapWithoutMutatingState(t *testing.T) {
 	}
 	if got := state.Balances[BalanceKey{AssetID: assetID, OwnerID: ownerID}]; got.Compare(Uint128FromUint64(10)) != 0 {
 		t.Fatalf("owner balance mutated by rejected gap transaction: got %s", got.Big().String())
+	}
+}
+
+func TestScopedNonceOverflowRejectsBeforeMutatingState(t *testing.T) {
+	ownerScript := testOwnerScript(0xA7)
+	ownerID := mustOwnerIDFromScript(t, ownerScript)
+	assetID := bytes32(0x17)
+	state := testTransferState(ownerID, assetID, 10)
+	state.NextNonces[AssetNonceKey(ownerID, assetID)] = math.MaxUint64
+
+	err := ValidateAndApplyTransaction(
+		testTransferTx(ownerScript, 0x08, testTransferPayload(math.MaxUint64, assetID, bytes32(0xC7), Uint128FromUint64(2))),
+		1,
+		0,
+		state,
+	)
+	if err == nil || !strings.Contains(err.Error(), "nonce progression overflow") {
+		t.Fatalf("overflow transfer got error %v, want nonce progression overflow", err)
+	}
+	if got := state.NextNonces[AssetNonceKey(ownerID, assetID)]; got != math.MaxUint64 {
+		t.Fatalf("asset nonce changed after rejected overflow: got %d", got)
+	}
+	if got := state.Balances[BalanceKey{AssetID: assetID, OwnerID: ownerID}]; got.Compare(Uint128FromUint64(10)) != 0 {
+		t.Fatalf("owner balance mutated by rejected overflow: got %s", got.Big().String())
+	}
+	if got := state.Balances[BalanceKey{AssetID: assetID, OwnerID: bytes32(0xC7)}]; !got.IsZero() {
+		t.Fatalf("receiver balance inserted by rejected overflow: got %s", got.Big().String())
 	}
 }
 
