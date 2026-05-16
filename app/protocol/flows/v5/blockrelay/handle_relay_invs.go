@@ -128,10 +128,16 @@ func (flow *handleRelayInvsFlow) start() error {
 			}
 		}
 
-		if isNearlySynced && !flow.WaitForValidBlockProducerClaim(inv.Hash) {
-			return protocolerrors.Errorf(true, "relay block %s missing valid strong-node block producer claim", inv.Hash)
-		} else if !isNearlySynced && !flow.HasValidBlockProducerClaim(inv.Hash) {
-			log.Debugf("Relay block %s has no strong-node block producer claim yet, but node is not nearly synced; requesting it as a potential IBD trigger", inv.Hash)
+		hasValidClaim := false
+		if isNearlySynced {
+			hasValidClaim = flow.WaitForValidBlockProducerClaim(inv.Hash)
+		} else {
+			hasValidClaim = flow.HasValidBlockProducerClaim(inv.Hash)
+		}
+		if !hasValidClaim {
+			// Strong-node claims are an overlay/gossip signal. Missing or delayed claim gossip must not
+			// partition otherwise valid post-HF blocks; consensus validation remains the source of truth.
+			log.Debugf("Relay block %s has no strong-node block producer claim yet; requesting block and deferring to consensus validation", inv.Hash)
 		}
 
 		log.Debugf("Requesting block %s", inv.Hash)
