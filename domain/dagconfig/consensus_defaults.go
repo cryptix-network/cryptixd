@@ -30,6 +30,12 @@ const (
 	defaultPayloadMaxLengthStandard = 2048
 	// defaultPayloadWeightMultiplier scales payload byte mass in the payload subnetwork.
 	defaultPayloadWeightMultiplier = 4
+	// Atomic state-growth limits
+	defaultAtomicMaxNewAssetsPerBlock          = 256
+	defaultAtomicMaxNewBalanceKeysPerBlock     = 4096
+	defaultAtomicMaxNewNonceKeysPerBlock       = 4096
+	defaultAtomicMaxNewPoolsPerBlock           = 64
+	defaultAtomicMaxNewAnchorOwnerKeysPerBlock = 8192
 	// defaultMaxBlockMass is a bound on the mass of a block, larger values increase the bound d
 	// on the round trip time of a block, which affects the other parameters as described below
 	defaultMaxBlockMass = 500_000

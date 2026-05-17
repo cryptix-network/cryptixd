@@ -6,7 +6,6 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"sync/atomic"
@@ -118,12 +117,14 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 			}
 
 			msgTrustedData := appmessage.DomainTrustedDataToTrustedData(daaWindowBlocks, ghostdagData)
-			atomicStateBytes, atomicStateHash, err := pruningPointAtomicStateForTrustedData(context, pointAndItsAnticone[0])
+			atomicStateBytes, atomicStateHash, hasAtomicState, err := pruningPointAtomicStateForTrustedData(context, pointAndItsAnticone[0])
 			if err != nil {
 				return err
 			}
-			if len(atomicStateBytes) != 0 {
+			if hasAtomicState {
 				msgTrustedData.AtomicConsensusStateHash = append([]byte(nil), atomicStateHash[:]...)
+			}
+			if len(atomicStateBytes) != 0 {
 				msgTrustedData.AtomicConsensusStateByteLength = uint64(len(atomicStateBytes))
 				msgTrustedData.AtomicConsensusStateChunkCount = trustedAtomicStateChunkCount(uint64(len(atomicStateBytes)))
 			}
@@ -184,30 +185,22 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 }
 
 func pruningPointAtomicStateForTrustedData(context PruningPointAndItsAnticoneRequestsContext,
-	pruningPoint *externalapi.DomainHash) ([]byte, [externalapi.DomainHashSize]byte, error) {
+	pruningPoint *externalapi.DomainHash) ([]byte, [externalapi.DomainHashSize]byte, bool, error) {
 
 	header, err := context.Domain().Consensus().GetBlockHeader(pruningPoint)
 	if err != nil {
-		return nil, [externalapi.DomainHashSize]byte{}, err
+		return nil, [externalapi.DomainHashSize]byte{}, false, err
 	}
 	if header.DAAScore() < context.Config().NetParams().PayloadHfActivationDAAScore {
-		return nil, [externalapi.DomainHashSize]byte{}, nil
+		return nil, [externalapi.DomainHashSize]byte{}, false, nil
 	}
 
-	atomicStateBytes, err := context.Domain().Consensus().GetPruningPointAtomicState(pruningPoint)
+	atomicStateHash, err := context.Domain().Consensus().GetPruningPointAtomicStateHash(pruningPoint)
 	if err != nil {
-		return nil, [externalapi.DomainHashSize]byte{}, err
-	}
-	if len(atomicStateBytes) == 0 {
-		return nil, [externalapi.DomainHashSize]byte{},
-			protocolerrors.Errorf(false, "post-payload-HF pruning point Atomic state is empty")
-	}
-	if uint64(len(atomicStateBytes)) > maxImportedAtomicStateBytes {
-		return nil, [externalapi.DomainHashSize]byte{},
-			protocolerrors.Errorf(false, "post-payload-HF pruning point Atomic state is too large: %d bytes", len(atomicStateBytes))
+		return nil, [externalapi.DomainHashSize]byte{}, false, err
 	}
 
-	return atomicStateBytes, atomicstate.HashCanonicalBytes(atomicStateBytes), nil
+	return nil, atomicStateHash, true, nil
 }
 
 func sendTrustedAtomicStateChunks(incomingRoute *router.Route, outgoingRoute *router.Route,

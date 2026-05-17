@@ -3,6 +3,7 @@ package consensusstatemanager
 import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 )
 
 // consensusStateManager manages the node's consensus state
@@ -12,6 +13,7 @@ type consensusStateManager struct {
 	genesisHash                 *externalapi.DomainHash
 	databaseContext             model.DBManager
 	payloadHfActivationDAAScore uint64
+	atomicStateGrowthLimits     atomicstate.StateGrowthLimits
 
 	ghostdagManager       model.GHOSTDAGManager
 	dagTopologyManager    model.DAGTopologyManager
@@ -47,6 +49,7 @@ func New(
 	mergeSetSizeLimit uint64,
 	genesisHash *externalapi.DomainHash,
 	payloadHfActivationDAAScore uint64,
+	atomicStateGrowthLimits atomicstate.StateGrowthLimits,
 
 	ghostdagManager model.GHOSTDAGManager,
 	dagTopologyManager model.DAGTopologyManager,
@@ -77,6 +80,7 @@ func New(
 		mergeSetSizeLimit:           mergeSetSizeLimit,
 		genesisHash:                 genesisHash,
 		payloadHfActivationDAAScore: payloadHfActivationDAAScore,
+		atomicStateGrowthLimits:     atomicStateGrowthLimits,
 
 		databaseContext: databaseContext,
 

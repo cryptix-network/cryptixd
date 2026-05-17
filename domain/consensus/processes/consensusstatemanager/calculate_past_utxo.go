@@ -204,6 +204,7 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 		}
 		isSelectedParent := i == 0
 		log.Tracef("Is merge set block %s the selected parent: %t", mergeSetBlockHash, isSelectedParent)
+		atomicGrowth := &atomicstate.BlockStateGrowth{}
 
 		for j, transaction := range mergeSetBlock.Transactions {
 			var isAccepted bool
@@ -213,7 +214,7 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 				transactionID, mergeSetBlockHash)
 
 			isAccepted, accumulatedMass, err = csm.maybeAcceptTransaction(stagingArea, transaction, blockHash,
-				isSelectedParent, accumulatedUTXODiff, accumulatedAtomicState, accumulatedMass, selectedParentMedianTime, daaScore)
+				isSelectedParent, accumulatedUTXODiff, accumulatedAtomicState, accumulatedMass, selectedParentMedianTime, daaScore, atomicGrowth)
 			if err != nil {
 				return nil, nil, nil, err
 			}
@@ -245,7 +246,7 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 	transaction *externalapi.DomainTransaction, blockHash *externalapi.DomainHash, isSelectedParent bool,
 	accumulatedUTXODiff externalapi.MutableUTXODiff, accumulatedAtomicState *atomicstate.State,
 	accumulatedMassBefore uint64, selectedParentPastMedianTime int64,
-	blockDAAScore uint64) (isAccepted bool, accumulatedMassAfter uint64, err error) {
+	blockDAAScore uint64, atomicGrowth *atomicstate.BlockStateGrowth) (isAccepted bool, accumulatedMassAfter uint64, err error) {
 
 	transactionID := consensushashing.TransactionID(transaction)
 	log.Tracef("maybeAcceptTransaction start for transaction %s in block %s", transactionID, blockHash)
@@ -285,7 +286,14 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 		}
 		log.Tracef("Validation passed for transaction %s in block %s", transactionID, blockHash)
 
-		err = atomicstate.ValidateAndApplyTransaction(transaction, blockDAAScore, csm.payloadHfActivationDAAScore, accumulatedAtomicState)
+		err = atomicstate.ValidateAndApplyTransactionWithGrowth(
+			transaction,
+			blockDAAScore,
+			csm.payloadHfActivationDAAScore,
+			accumulatedAtomicState,
+			atomicGrowth,
+			csm.atomicStateGrowthLimits,
+		)
 		if err != nil {
 			log.Tracef("Atomic validation failed for transaction %s in block %s: %s", transactionID, blockHash, err)
 			return false, accumulatedMassBefore, nil

@@ -312,6 +312,16 @@ func (flow *handleIBDFlow) receivePruningPointTrustedAtomicState(consensus exter
 		return err
 	}
 
+	if len(msgTrustedData.AtomicConsensusState) == 0 &&
+		msgTrustedData.AtomicConsensusStateByteLength == 0 &&
+		msgTrustedData.AtomicConsensusStateChunkCount == 0 {
+		if err := consensus.AppendImportedPruningPointAtomicStateHash(stateHash); err != nil {
+			return protocolerrors.Wrapf(true, err, "invalid pruning point Atomic root")
+		}
+		log.Debugf("Imported pruning point Atomic trusted root for %s from %s", proofPruningPoint, flow.peer)
+		return nil
+	}
+
 	var stateBytes []byte
 	if len(msgTrustedData.AtomicConsensusState) != 0 {
 		stateBytes = append([]byte(nil), msgTrustedData.AtomicConsensusState...)

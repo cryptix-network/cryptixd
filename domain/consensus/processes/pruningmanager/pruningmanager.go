@@ -1014,6 +1014,21 @@ func (pm *pruningManager) AppendImportedPruningPointAtomicState(stateBytes []byt
 	return dbTx.Commit()
 }
 
+func (pm *pruningManager) AppendImportedPruningPointAtomicStateHash(stateHash [externalapi.DomainHashSize]byte) error {
+	dbTx, err := pm.databaseContext.Begin()
+	if err != nil {
+		return err
+	}
+	defer dbTx.RollbackUnlessClosed()
+
+	err = pm.pruningStore.UpdateImportedPruningPointAtomicStateHash(dbTx, stateHash)
+	if err != nil {
+		return err
+	}
+
+	return dbTx.Commit()
+}
+
 func (pm *pruningManager) UpdatePruningPointIfRequired() error {
 	hadStartedUpdatingPruningPointUTXOSet, err := pm.pruningStore.HadStartedUpdatingPruningPointUTXOSet(pm.databaseContext)
 	if err != nil {

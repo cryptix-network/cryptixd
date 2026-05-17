@@ -612,7 +612,31 @@ func (s *consensus) GetPruningPointAtomicState(expectedPruningPointHash *externa
 	if err != nil {
 		return nil, err
 	}
-	return atomicState.CanonicalBytes(), nil
+	return atomicstate.NewRootOnlyState(atomicState.CanonicalHash()).CanonicalBytes(), nil
+}
+
+func (s *consensus) GetPruningPointAtomicStateHash(expectedPruningPointHash *externalapi.DomainHash) ([externalapi.DomainHashSize]byte, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+
+	pruningPointHash, err := s.pruningStore.PruningPoint(s.databaseContext, stagingArea)
+	if err != nil {
+		return [externalapi.DomainHashSize]byte{}, err
+	}
+
+	if !expectedPruningPointHash.Equal(pruningPointHash) {
+		return [externalapi.DomainHashSize]byte{}, errors.Wrapf(ruleerrors.ErrWrongPruningPointHash, "expected pruning point %s but got %s",
+			expectedPruningPointHash,
+			pruningPointHash)
+	}
+
+	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, pruningPointHash)
+	if err != nil {
+		return [externalapi.DomainHashSize]byte{}, err
+	}
+	return atomicState.CanonicalHash(), nil
 }
 
 func (s *consensus) GetVirtualUTXOs(expectedVirtualParents []*externalapi.DomainHash,
@@ -698,6 +722,13 @@ func (s *consensus) AppendImportedPruningPointAtomicState(stateBytes []byte) err
 	defer s.lock.Unlock()
 
 	return s.pruningManager.AppendImportedPruningPointAtomicState(stateBytes)
+}
+
+func (s *consensus) AppendImportedPruningPointAtomicStateHash(stateHash [externalapi.DomainHashSize]byte) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return s.pruningManager.AppendImportedPruningPointAtomicStateHash(stateHash)
 }
 
 func (s *consensus) ValidateAndInsertImportedPruningPoint(newPruningPoint *externalapi.DomainHash) error {

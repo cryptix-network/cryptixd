@@ -4,6 +4,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
@@ -185,15 +186,34 @@ func (ps *pruningStore) ClearImportedPruningPointAtomicState(dbContext model.DBW
 }
 
 func (ps *pruningStore) ImportedPruningPointAtomicState(dbContext model.DBReader) ([]byte, error) {
-	stateBytes, err := dbContext.Get(ps.importedPruningPointAtomicStateKey)
+	stateHash, err := ps.ImportedPruningPointAtomicStateHash(dbContext)
 	if err != nil {
 		return nil, err
 	}
-	return append([]byte(nil), stateBytes...), nil
+	return atomicstate.NewRootOnlyState(stateHash).CanonicalBytes(), nil
+}
+
+func (ps *pruningStore) ImportedPruningPointAtomicStateHash(dbContext model.DBReader) ([externalapi.DomainHashSize]byte, error) {
+	stateHashBytes, err := dbContext.Get(ps.importedPruningPointAtomicStateKey)
+	if err != nil {
+		return [externalapi.DomainHashSize]byte{}, err
+	}
+	if len(stateHashBytes) != externalapi.DomainHashSize {
+		return [externalapi.DomainHashSize]byte{}, errors.Errorf(
+			"imported pruning point Atomic state hash has invalid length %d", len(stateHashBytes))
+	}
+	var stateHash [externalapi.DomainHashSize]byte
+	copy(stateHash[:], stateHashBytes)
+	return stateHash, nil
 }
 
 func (ps *pruningStore) UpdateImportedPruningPointAtomicState(dbTx model.DBTransaction, stateBytes []byte) error {
-	return dbTx.Put(ps.importedPruningPointAtomicStateKey, append([]byte(nil), stateBytes...))
+	stateHash := atomicstate.HashCanonicalBytes(stateBytes)
+	return ps.UpdateImportedPruningPointAtomicStateHash(dbTx, stateHash)
+}
+
+func (ps *pruningStore) UpdateImportedPruningPointAtomicStateHash(dbTx model.DBTransaction, stateHash [externalapi.DomainHashSize]byte) error {
+	return dbTx.Put(ps.importedPruningPointAtomicStateKey, append([]byte(nil), stateHash[:]...))
 }
 
 func (ps *pruningStore) serializeMultiset(multiset model.Multiset) ([]byte, error) {

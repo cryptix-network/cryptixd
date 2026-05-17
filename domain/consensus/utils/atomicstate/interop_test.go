@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -13,7 +14,6 @@ import (
 
 type atomicInteropVector struct {
 	Name                      string `json:"name"`
-	StateCanonicalHex         string `json:"state_canonical_hex"`
 	StateHashHex              string `json:"state_hash_hex"`
 	RawUTXOCommitmentHex      string `json:"raw_utxo_commitment_hex"`
 	HeaderCommitmentPreHFHex  string `json:"header_commitment_pre_hf_hex"`
@@ -22,31 +22,14 @@ type atomicInteropVector struct {
 
 func TestAtomicConsensusStateRustInteropVector(t *testing.T) {
 	vector := loadAtomicInteropVector(t)
-	if vector.Name != "cryptix-atomic-consensus-state-interop-v1" {
+	if vector.Name != "cryptix-atomic-consensus-state-root-v2" {
 		t.Fatalf("unexpected vector name %q", vector.Name)
 	}
 
 	state := atomicInteropVectorState(t)
-	canonicalBytes := state.CanonicalBytes()
-	if got := hex.EncodeToString(canonicalBytes); got != vector.StateCanonicalHex {
-		t.Fatalf("canonical bytes mismatch\n got: %s\nwant: %s", got, vector.StateCanonicalHex)
-	}
 	stateCanonicalHash := state.CanonicalHash()
 	if got := hex.EncodeToString(stateCanonicalHash[:]); got != vector.StateHashHex {
 		t.Fatalf("state hash mismatch\n got: %s\nwant: %s", got, vector.StateHashHex)
-	}
-
-	vectorCanonicalBytes := mustDecodeHex(t, vector.StateCanonicalHex)
-	decoded, err := FromCanonicalBytes(vectorCanonicalBytes)
-	if err != nil {
-		t.Fatalf("FromCanonicalBytes failed: %s", err)
-	}
-	if got := hex.EncodeToString(decoded.CanonicalBytes()); got != vector.StateCanonicalHex {
-		t.Fatalf("decoded canonical bytes mismatch\n got: %s\nwant: %s", got, vector.StateCanonicalHex)
-	}
-	vectorCanonicalHash := HashCanonicalBytes(vectorCanonicalBytes)
-	if got := hex.EncodeToString(vectorCanonicalHash[:]); got != vector.StateHashHex {
-		t.Fatalf("HashCanonicalBytes mismatch\n got: %s\nwant: %s", got, vector.StateHashHex)
 	}
 
 	rawUTXOCommitment, err := externalapi.NewDomainHashFromByteSlice(mustDecodeHex(t, vector.RawUTXOCommitmentHex))
@@ -59,6 +42,38 @@ func TestAtomicConsensusStateRustInteropVector(t *testing.T) {
 	}
 	if got := HeaderCommitment(rawUTXOCommitment, stateHash, true).String(); got != vector.HeaderCommitmentPostHFHex {
 		t.Fatalf("post-HF header commitment mismatch\n got: %s\nwant: %s", got, vector.HeaderCommitmentPostHFHex)
+	}
+}
+
+func TestRootOnlyAtomicStateRoundTrip(t *testing.T) {
+	var stateHash [externalapi.DomainHashSize]byte
+	for i := range stateHash {
+		stateHash[i] = byte(i + 1)
+	}
+
+	state := NewRootOnlyState(stateHash)
+	if !state.IsRootOnly() {
+		t.Fatalf("expected root-only state")
+	}
+
+	stateBytes := state.CanonicalBytes()
+	decoded, err := FromCanonicalBytes(stateBytes)
+	if err != nil {
+		t.Fatalf("FromCanonicalBytes failed: %s", err)
+	}
+	if !decoded.IsRootOnly() {
+		t.Fatalf("expected decoded state to remain root-only")
+	}
+	if got := decoded.CanonicalHash(); got != stateHash {
+		t.Fatalf("decoded root hash mismatch\n got: %x\nwant: %x", got, stateHash)
+	}
+	if got := HashCanonicalBytes(stateBytes); got != stateHash {
+		t.Fatalf("root-only canonical hash mismatch\n got: %x\nwant: %x", got, stateHash)
+	}
+
+	err = ValidateAndApplyTransaction(&externalapi.DomainTransaction{}, 1, 0, decoded)
+	if err == nil || !strings.Contains(err.Error(), "root-only Atomic consensus state") {
+		t.Fatalf("expected root-only post-HF validation guard, got %v", err)
 	}
 }
 
@@ -163,7 +178,7 @@ func loadAtomicInteropVector(t *testing.T) atomicInteropVector {
 	if !ok {
 		t.Fatal("runtime.Caller failed")
 	}
-	fixturePath := filepath.Join(filepath.Dir(filename), "..", "..", "..", "..", "docs", "atomic_consensus_state_interop_v1.json")
+	fixturePath := filepath.Join(filepath.Dir(filename), "..", "..", "..", "..", "docs", "atomic_consensus_state_root_v2.json")
 	bytes, err := os.ReadFile(fixturePath)
 	if err != nil {
 		t.Fatalf("read interop vector fixture: %s", err)

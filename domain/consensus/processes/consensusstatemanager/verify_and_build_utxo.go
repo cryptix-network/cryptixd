@@ -70,6 +70,7 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 	log.Tracef("The past median time of %s is %d", blockHash, selectedParentMedianTime)
 	blockDAAScore := block.Header.DAAScore()
 	accumulatedAtomicState := atomicState.Clone()
+	atomicGrowth := &atomicstate.BlockStateGrowth{}
 
 	for i, transaction := range block.Transactions {
 		transactionID := consensushashing.TransactionID(transaction)
@@ -95,7 +96,14 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 		log.Tracef("Validation against the block's past UTXO "+
 			"passed for transaction %s in block %s", transactionID, blockHash)
 
-		err = atomicstate.ValidateAndApplyTransaction(transaction, blockDAAScore, csm.payloadHfActivationDAAScore, accumulatedAtomicState)
+		err = atomicstate.ValidateAndApplyTransactionWithGrowth(
+			transaction,
+			blockDAAScore,
+			csm.payloadHfActivationDAAScore,
+			accumulatedAtomicState,
+			atomicGrowth,
+			csm.atomicStateGrowthLimits,
+		)
 		if err != nil {
 			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "atomic validation failed for transaction %s in block %s: %s",
 				transactionID, blockHash, err)

@@ -84,6 +84,15 @@ func (flow *handleRequestPruningPointUTXOSetFlow) sendPruningPointUTXOSet(
 	const step = 1000
 	var fromOutpoint *externalapi.DomainOutpoint
 	chunksSent := 0
+	atomicStateBytes, err := flow.Domain().Consensus().GetPruningPointAtomicState(
+		msgRequestPruningPointUTXOSet.PruningPointHash)
+	if err != nil {
+		if errors.Is(err, ruleerrors.ErrWrongPruningPointHash) {
+			return flow.outgoingRoute.Enqueue(appmessage.NewMsgUnexpectedPruningPoint())
+		}
+		return err
+	}
+	atomicStateSent := false
 	for {
 		pruningPointUTXOs, err := flow.Domain().Consensus().GetPruningPointUTXOs(
 			msgRequestPruningPointUTXOSet.PruningPointHash, fromOutpoint, step)
@@ -100,7 +109,15 @@ func (flow *handleRequestPruningPointUTXOSetFlow) sendPruningPointUTXOSet(
 		outpointAndUTXOEntryPairs :=
 			appmessage.DomainOutpointAndUTXOEntryPairsToOutpointAndUTXOEntryPairs(pruningPointUTXOs)
 
-		err = flow.outgoingRoute.Enqueue(appmessage.NewMsgPruningPointUTXOSetChunk(outpointAndUTXOEntryPairs))
+		var chunk *appmessage.MsgPruningPointUTXOSetChunk
+		if !atomicStateSent && len(atomicStateBytes) != 0 {
+			chunk = appmessage.NewMsgPruningPointUTXOSetChunkWithAtomicState(outpointAndUTXOEntryPairs, atomicStateBytes, true)
+			atomicStateSent = true
+		} else {
+			chunk = appmessage.NewMsgPruningPointUTXOSetChunk(outpointAndUTXOEntryPairs)
+		}
+
+		err = flow.outgoingRoute.Enqueue(chunk)
 		if err != nil {
 			return err
 		}

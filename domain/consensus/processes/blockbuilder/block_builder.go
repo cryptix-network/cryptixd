@@ -39,6 +39,7 @@ type blockBuilder struct {
 	ghostdagDataStore           model.GHOSTDAGDataStore
 	daaBlocksStore              model.DAABlocksStore
 	payloadHfActivationDAAScore uint64
+	atomicStateGrowthLimits     atomicstate.StateGrowthLimits
 }
 
 // New creates a new instance of a BlockBuilder
@@ -63,6 +64,7 @@ func New(
 	ghostdagDataStore model.GHOSTDAGDataStore,
 	daaBlocksStore model.DAABlocksStore,
 	payloadHfActivationDAAScore uint64,
+	atomicStateGrowthLimits atomicstate.StateGrowthLimits,
 ) model.BlockBuilder {
 
 	return &blockBuilder{
@@ -86,6 +88,7 @@ func New(
 		ghostdagDataStore:           ghostdagDataStore,
 		daaBlocksStore:              daaBlocksStore,
 		payloadHfActivationDAAScore: payloadHfActivationDAAScore,
+		atomicStateGrowthLimits:     atomicStateGrowthLimits,
 	}
 }
 
@@ -144,9 +147,10 @@ func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 	}
 
 	invalidTransactions := make([]ruleerrors.InvalidTransaction, 0)
+	atomicGrowth := &atomicstate.BlockStateGrowth{}
 	for _, transaction := range transactions {
 		transactionAtomicState := virtualAtomicState.Clone()
-		err := bb.validateTransaction(stagingArea, transaction, transactionAtomicState, newBlockDAAScore)
+		err := bb.validateTransaction(stagingArea, transaction, transactionAtomicState, newBlockDAAScore, atomicGrowth)
 		if err != nil {
 			ruleError := ruleerrors.RuleError{}
 			if !errors.As(err, &ruleError) {
@@ -168,7 +172,7 @@ func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 
 func (bb *blockBuilder) validateTransaction(
 	stagingArea *model.StagingArea, transaction *externalapi.DomainTransaction,
-	virtualAtomicState *atomicstate.State, newBlockDAAScore uint64) error {
+	virtualAtomicState *atomicstate.State, newBlockDAAScore uint64, atomicGrowth *atomicstate.BlockStateGrowth) error {
 
 	originalEntries := make([]externalapi.UTXOEntry, len(transaction.Inputs))
 	for i, input := range transaction.Inputs {
@@ -202,7 +206,14 @@ func (bb *blockBuilder) validateTransaction(
 		return err
 	}
 
-	err = atomicstate.ValidateAndApplyTransaction(transaction, newBlockDAAScore, bb.payloadHfActivationDAAScore, virtualAtomicState)
+	err = atomicstate.ValidateAndApplyTransactionWithGrowth(
+		transaction,
+		newBlockDAAScore,
+		bb.payloadHfActivationDAAScore,
+		virtualAtomicState,
+		atomicGrowth,
+		bb.atomicStateGrowthLimits,
+	)
 	if err != nil {
 		return errors.Wrapf(ruleerrors.ErrInvalidPayload, "atomic validation failed: %s", err)
 	}

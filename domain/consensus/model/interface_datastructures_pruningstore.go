@@ -30,7 +30,9 @@ type PruningStore interface {
 	UpdateImportedPruningPointMultiset(dbTx DBTransaction, multiset Multiset) error
 	ClearImportedPruningPointAtomicState(dbContext DBWriter) error
 	ImportedPruningPointAtomicState(dbContext DBReader) ([]byte, error)
+	ImportedPruningPointAtomicStateHash(dbContext DBReader) ([externalapi.DomainHashSize]byte, error)
 	UpdateImportedPruningPointAtomicState(dbTx DBTransaction, stateBytes []byte) error
+	UpdateImportedPruningPointAtomicStateHash(dbTx DBTransaction, stateHash [externalapi.DomainHashSize]byte) error
 	CommitImportedPruningPointUTXOSet(dbContext DBWriter) error
 	PruningPointUTXOs(dbContext DBReader, fromOutpoint *externalapi.DomainOutpoint, limit int) ([]*externalapi.OutpointAndUTXOEntryPair, error)
 	PruningPointUTXOIterator(dbContext DBReader) (externalapi.ReadOnlyUTXOSetIterator, error)

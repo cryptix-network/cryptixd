@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	atomicConsensusStateMagic      = []byte("CATCS005")
-	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-v5")
+	atomicConsensusStateMagic      = []byte("CATCSG02")
+	atomicConsensusStateHashDomain = []byte("cryptix-atomic-consensus-state-root-v2")
 	atomicStateCommitmentDomain    = []byte("cryptix-utxo-atomic-state-commitment-v1")
 )
 
@@ -22,6 +22,11 @@ const (
 	currentStateLiquidityCurveVersion = byte(1)
 	maxStateTokenVersion              = byte(99)
 	maxStateLiquidityCurveVersion     = byte(99)
+	atomicConsensusRootVersion        = byte(2)
+	atomicRootNamespaceNonce          = byte('n')
+	atomicRootNamespaceAsset          = byte('a')
+	atomicRootNamespaceBalance        = byte('b')
+	atomicRootNamespaceAnchor         = byte('c')
 )
 
 type BalanceKey struct {
@@ -124,6 +129,20 @@ type State struct {
 	Balances                map[BalanceKey]Uint128
 	AnchorCounts            map[[externalapi.DomainHashSize]byte]uint64
 	LiquidityVaultOutpoints map[externalapi.DomainOutpoint][externalapi.DomainHashSize]byte
+	rootHashOverride        *[externalapi.DomainHashSize]byte
+}
+
+type rootNamespaceAccumulator struct {
+	count uint64
+	xor   [externalapi.DomainHashSize]byte
+}
+
+type rootAccumulator struct {
+	version byte
+	nonce   rootNamespaceAccumulator
+	asset   rootNamespaceAccumulator
+	balance rootNamespaceAccumulator
+	anchor  rootNamespaceAccumulator
 }
 
 func NewState() *State {
@@ -134,6 +153,16 @@ func NewState() *State {
 		AnchorCounts:            make(map[[externalapi.DomainHashSize]byte]uint64),
 		LiquidityVaultOutpoints: make(map[externalapi.DomainOutpoint][externalapi.DomainHashSize]byte),
 	}
+}
+
+func NewRootOnlyState(stateHash [externalapi.DomainHashSize]byte) *State {
+	state := NewState()
+	state.rootHashOverride = &stateHash
+	return state
+}
+
+func (s *State) IsRootOnly() bool {
+	return s != nil && s.rootHashOverride != nil
 }
 
 func (s *State) Clone() *State {
@@ -155,6 +184,10 @@ func (s *State) Clone() *State {
 	}
 	for key, value := range s.LiquidityVaultOutpoints {
 		clone.LiquidityVaultOutpoints[key] = value
+	}
+	if s.rootHashOverride != nil {
+		rootHash := *s.rootHashOverride
+		clone.rootHashOverride = &rootHash
 	}
 	return clone
 }
@@ -190,6 +223,14 @@ func (s *State) RebuildLiquidityVaultOutpointIndex() {
 }
 
 func (s *State) CanonicalBytes() []byte {
+	if s.rootHashOverride != nil {
+		out := make([]byte, 0, len(atomicConsensusStateMagic)+4+externalapi.DomainHashSize)
+		out = append(out, atomicConsensusStateMagic...)
+		out = append(out, 'R', 'O', 'O', 'T')
+		out = append(out, (*s.rootHashOverride)[:]...)
+		return out
+	}
+
 	out := make([]byte, 0)
 	out = append(out, atomicConsensusStateMagic...)
 
@@ -261,23 +302,280 @@ func compareNonceKeys(left, right NonceKey) int {
 	return bytes.Compare(left.ScopeID[:], right.ScopeID[:])
 }
 
-func (s *State) CanonicalHash() [externalapi.DomainHashSize]byte {
-	return HashCanonicalBytes(s.CanonicalBytes())
+func rootAccumulatorFromState(state *State) rootAccumulator {
+	root := rootAccumulator{version: atomicConsensusRootVersion}
+	if state == nil {
+		return root
+	}
+	for key, value := range state.NextNonces {
+		root.applyNonce(key, 0, false, value, true)
+	}
+	for assetID, asset := range state.Assets {
+		root.applyAsset(assetID, nil, false, &asset, true)
+	}
+	for key, value := range state.Balances {
+		root.applyBalance(key, Uint128{}, false, value, true)
+	}
+	for ownerID, value := range state.AnchorCounts {
+		root.applyAnchor(ownerID, 0, false, value, true)
+	}
+	return root
 }
 
-func HashCanonicalBytes(stateBytes []byte) [externalapi.DomainHashSize]byte {
+func (r *rootAccumulator) applyNonce(key NonceKey, oldValue uint64, oldOK bool, newValue uint64, newOK bool) {
+	var oldHash, newHash [externalapi.DomainHashSize]byte
+	if oldOK {
+		oldHash = hashNonceEntry(key, oldValue)
+	}
+	if newOK {
+		newHash = hashNonceEntry(key, newValue)
+	}
+	r.applyEntry(atomicRootNamespaceNonce, oldHash, oldOK, newHash, newOK)
+}
+
+func (r *rootAccumulator) applyAsset(assetID [externalapi.DomainHashSize]byte, oldValue *AssetState, oldOK bool, newValue *AssetState, newOK bool) {
+	var oldHash, newHash [externalapi.DomainHashSize]byte
+	if oldOK {
+		oldHash = hashAssetEntry(assetID, *oldValue)
+	}
+	if newOK {
+		newHash = hashAssetEntry(assetID, *newValue)
+	}
+	r.applyEntry(atomicRootNamespaceAsset, oldHash, oldOK, newHash, newOK)
+}
+
+func (r *rootAccumulator) applyBalance(key BalanceKey, oldValue Uint128, oldOK bool, newValue Uint128, newOK bool) {
+	var oldHash, newHash [externalapi.DomainHashSize]byte
+	if oldOK {
+		oldHash = hashBalanceEntry(key, oldValue)
+	}
+	if newOK {
+		newHash = hashBalanceEntry(key, newValue)
+	}
+	r.applyEntry(atomicRootNamespaceBalance, oldHash, oldOK, newHash, newOK)
+}
+
+func (r *rootAccumulator) applyAnchor(ownerID [externalapi.DomainHashSize]byte, oldValue uint64, oldOK bool, newValue uint64, newOK bool) {
+	var oldHash, newHash [externalapi.DomainHashSize]byte
+	if oldOK {
+		oldHash = hashAnchorEntry(ownerID, oldValue)
+	}
+	if newOK {
+		newHash = hashAnchorEntry(ownerID, newValue)
+	}
+	r.applyEntry(atomicRootNamespaceAnchor, oldHash, oldOK, newHash, newOK)
+}
+
+func (r *rootAccumulator) applyEntry(namespace byte, oldHash [externalapi.DomainHashSize]byte, oldOK bool, newHash [externalapi.DomainHashSize]byte, newOK bool) {
+	if oldOK && newOK && oldHash == newHash {
+		return
+	}
+	acc := r.namespace(namespace)
+	if oldOK {
+		acc.count--
+		xorHash(acc.xor[:], oldHash[:])
+	}
+	if newOK {
+		acc.count++
+		xorHash(acc.xor[:], newHash[:])
+	}
+}
+
+func (r *rootAccumulator) namespace(namespace byte) *rootNamespaceAccumulator {
+	switch namespace {
+	case atomicRootNamespaceNonce:
+		return &r.nonce
+	case atomicRootNamespaceAsset:
+		return &r.asset
+	case atomicRootNamespaceBalance:
+		return &r.balance
+	case atomicRootNamespaceAnchor:
+		return &r.anchor
+	default:
+		panic("unknown atomic root namespace")
+	}
+}
+
+func (r rootAccumulator) Hash() [externalapi.DomainHashSize]byte {
+	hasher := newAtomicRootHasher()
+	hashByte(hasher, r.version)
+
+	hashByte(hasher, atomicRootNamespaceNonce)
+	hashUint64ToHasher(hasher, r.nonce.count)
+	_, _ = hasher.Write(r.nonce.xor[:])
+
+	hashByte(hasher, atomicRootNamespaceAsset)
+	hashUint64ToHasher(hasher, r.asset.count)
+	_, _ = hasher.Write(r.asset.xor[:])
+
+	hashByte(hasher, atomicRootNamespaceBalance)
+	hashUint64ToHasher(hasher, r.balance.count)
+	_, _ = hasher.Write(r.balance.xor[:])
+
+	hashByte(hasher, atomicRootNamespaceAnchor)
+	hashUint64ToHasher(hasher, r.anchor.count)
+	_, _ = hasher.Write(r.anchor.xor[:])
+
+	var out [externalapi.DomainHashSize]byte
+	copy(out[:], hasher.Sum(nil))
+	return out
+}
+
+func hashNonceEntry(key NonceKey, nonce uint64) [externalapi.DomainHashSize]byte {
+	hasher := newAtomicEntryHasher(atomicRootNamespaceNonce)
+	_, _ = hasher.Write(key.OwnerID[:])
+	hashByte(hasher, byte(key.ScopeKind))
+	_, _ = hasher.Write(key.ScopeID[:])
+	hashUint64ToHasher(hasher, nonce)
+	return finalizeAtomicHash(hasher)
+}
+
+func hashAssetEntry(assetID [externalapi.DomainHashSize]byte, asset AssetState) [externalapi.DomainHashSize]byte {
+	hasher := newAtomicEntryHasher(atomicRootNamespaceAsset)
+	_, _ = hasher.Write(assetID[:])
+	hashAssetToHasher(hasher, asset)
+	return finalizeAtomicHash(hasher)
+}
+
+func hashBalanceEntry(key BalanceKey, amount Uint128) [externalapi.DomainHashSize]byte {
+	hasher := newAtomicEntryHasher(atomicRootNamespaceBalance)
+	_, _ = hasher.Write(key.AssetID[:])
+	_, _ = hasher.Write(key.OwnerID[:])
+	hashUint128ToHasher(hasher, amount)
+	return finalizeAtomicHash(hasher)
+}
+
+func hashAnchorEntry(ownerID [externalapi.DomainHashSize]byte, count uint64) [externalapi.DomainHashSize]byte {
+	hasher := newAtomicEntryHasher(atomicRootNamespaceAnchor)
+	_, _ = hasher.Write(ownerID[:])
+	hashUint64ToHasher(hasher, count)
+	return finalizeAtomicHash(hasher)
+}
+
+func newAtomicRootHasher() hashWriter {
 	hasher, err := blake2b.New256(nil)
 	if err != nil {
 		panic(err)
 	}
 	_, _ = hasher.Write(atomicConsensusStateHashDomain)
-	var lenBytes [8]byte
-	binary.LittleEndian.PutUint64(lenBytes[:], uint64(len(stateBytes)))
-	_, _ = hasher.Write(lenBytes[:])
-	_, _ = hasher.Write(stateBytes)
+	return hasher
+}
+
+func newAtomicEntryHasher(namespace byte) hashWriter {
+	hasher := newAtomicRootHasher()
+	hashByte(hasher, namespace)
+	return hasher
+}
+
+type hashWriter interface {
+	Write([]byte) (int, error)
+	Sum([]byte) []byte
+}
+
+func finalizeAtomicHash(hasher hashWriter) [externalapi.DomainHashSize]byte {
 	var out [externalapi.DomainHashSize]byte
 	copy(out[:], hasher.Sum(nil))
 	return out
+}
+
+func hashAssetToHasher(hasher hashWriter, asset AssetState) {
+	hashByte(hasher, byte(asset.AssetClass))
+	hashByte(hasher, asset.TokenVersion)
+	_, _ = hasher.Write(asset.MintAuthorityOwnerID[:])
+	hashByte(hasher, byte(asset.SupplyMode))
+	hashUint128ToHasher(hasher, asset.MaxSupply)
+	hashUint128ToHasher(hasher, asset.TotalSupply)
+	hashLenToHasher(hasher, len(asset.PlatformTag))
+	_, _ = hasher.Write(asset.PlatformTag)
+	if asset.Liquidity == nil {
+		hashByte(hasher, 0)
+		return
+	}
+	hashByte(hasher, 1)
+	hashLiquidityPoolToHasher(hasher, *asset.Liquidity)
+}
+
+func hashLiquidityPoolToHasher(hasher hashWriter, pool LiquidityPoolState) {
+	hashUint64ToHasher(hasher, pool.PoolNonce)
+	hashByte(hasher, pool.CurveVersion)
+	hashByte(hasher, pool.CurveMode)
+	hashUint64ToHasher(hasher, pool.IndividualVirtualCPayReservesSompi)
+	hashUint16ToHasher(hasher, pool.IndividualVirtualTokenMultiplierBPS)
+	hashUint64ToHasher(hasher, pool.RealCPayReservesSompi)
+	hashUint128ToHasher(hasher, pool.RealTokenReserves)
+	hashUint64ToHasher(hasher, pool.VirtualCPayReserves)
+	hashUint128ToHasher(hasher, pool.VirtualTokenReserves)
+	hashUint64ToHasher(hasher, pool.UnclaimedFeeTotalSompi)
+	hashUint16ToHasher(hasher, pool.FeeBPS)
+	hashLenToHasher(hasher, len(pool.FeeRecipients))
+	for _, recipient := range pool.FeeRecipients {
+		_, _ = hasher.Write(recipient.OwnerID[:])
+		hashByte(hasher, recipient.AddressVersion)
+		hashLenToHasher(hasher, len(recipient.AddressPayload))
+		_, _ = hasher.Write(recipient.AddressPayload)
+		hashUint64ToHasher(hasher, recipient.UnclaimedSompi)
+	}
+	_, _ = hasher.Write(pool.VaultOutpoint.TransactionID.ByteSlice())
+	hashUint32ToHasher(hasher, pool.VaultOutpoint.Index)
+	hashUint64ToHasher(hasher, pool.VaultValueSompi)
+	hashUint64ToHasher(hasher, pool.UnlockTargetSompi)
+	if pool.Unlocked {
+		hashByte(hasher, 1)
+	} else {
+		hashByte(hasher, 0)
+	}
+}
+
+func hashByte(hasher hashWriter, value byte) {
+	_, _ = hasher.Write([]byte{value})
+}
+
+func hashLenToHasher(hasher hashWriter, length int) {
+	hashUint64ToHasher(hasher, uint64(length))
+}
+
+func hashUint16ToHasher(hasher hashWriter, value uint16) {
+	var bytes [2]byte
+	binary.LittleEndian.PutUint16(bytes[:], value)
+	_, _ = hasher.Write(bytes[:])
+}
+
+func hashUint32ToHasher(hasher hashWriter, value uint32) {
+	var bytes [4]byte
+	binary.LittleEndian.PutUint32(bytes[:], value)
+	_, _ = hasher.Write(bytes[:])
+}
+
+func hashUint64ToHasher(hasher hashWriter, value uint64) {
+	var bytes [8]byte
+	binary.LittleEndian.PutUint64(bytes[:], value)
+	_, _ = hasher.Write(bytes[:])
+}
+
+func hashUint128ToHasher(hasher hashWriter, value Uint128) {
+	bytes := value.ToLE()
+	_, _ = hasher.Write(bytes[:])
+}
+
+func xorHash(target []byte, value []byte) {
+	for i := range target {
+		target[i] ^= value[i]
+	}
+}
+
+func (s *State) CanonicalHash() [externalapi.DomainHashSize]byte {
+	if s != nil && s.rootHashOverride != nil {
+		return *s.rootHashOverride
+	}
+	return rootAccumulatorFromState(s).Hash()
+}
+
+func HashCanonicalBytes(stateBytes []byte) [externalapi.DomainHashSize]byte {
+	state, err := FromCanonicalBytes(stateBytes)
+	if err != nil {
+		panic(err)
+	}
+	return state.CanonicalHash()
 }
 
 func HeaderCommitment(utxoCommitment *externalapi.DomainHash, atomicStateHash [externalapi.DomainHashSize]byte, payloadHFActive bool) *externalapi.DomainHash {
@@ -308,6 +606,23 @@ func FromCanonicalBytes(stateBytes []byte) (*State, error) {
 	}
 	if !bytes.Equal(magic, atomicConsensusStateMagic) {
 		return nil, fmt.Errorf("invalid atomic consensus state magic")
+	}
+	if len(stateBytes)-reader.cursor == 4+externalapi.DomainHashSize {
+		tag, err := reader.readBytes(4)
+		if err != nil {
+			return nil, err
+		}
+		if bytes.Equal(tag, []byte{'R', 'O', 'O', 'T'}) {
+			rootHash, err := reader.read32()
+			if err != nil {
+				return nil, err
+			}
+			if err := reader.finish(); err != nil {
+				return nil, err
+			}
+			return NewRootOnlyState(rootHash), nil
+		}
+		reader.cursor -= 4
 	}
 	state := NewState()
 

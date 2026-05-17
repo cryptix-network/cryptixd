@@ -54,6 +54,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/reachabilitymanager"
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/syncmanager"
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/transactionvalidator"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/dagconfig"
 	infrastructuredatabase "github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/infrastructure/db/database/ldb"
@@ -286,12 +287,20 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		daaBlocksStore,
 		pruningStore,
 		finalityStore)
+	atomicStateGrowthLimits := atomicstate.StateGrowthLimits{
+		MaxNewAssets:          config.AtomicMaxNewAssetsPerBlock,
+		MaxNewBalanceKeys:     config.AtomicMaxNewBalanceKeysPerBlock,
+		MaxNewNonceKeys:       config.AtomicMaxNewNonceKeysPerBlock,
+		MaxNewPools:           config.AtomicMaxNewPoolsPerBlock,
+		MaxNewAnchorOwnerKeys: config.AtomicMaxNewAnchorOwnerKeysPerBlock,
+	}
 	consensusStateManager, err := consensusstatemanager.New(
 		dbManager,
 		config.MaxBlockParents,
 		config.MergeSetSizeLimit,
 		genesisHash,
 		config.PayloadHfActivationDAAScore,
+		atomicStateGrowthLimits,
 
 		ghostdagManager,
 		dagTopologyManager,
@@ -428,6 +437,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		ghostdagDataStore,
 		daaBlocksStore,
 		config.PayloadHfActivationDAAScore,
+		atomicStateGrowthLimits,
 	)
 
 	blockProcessor := blockprocessor.New(

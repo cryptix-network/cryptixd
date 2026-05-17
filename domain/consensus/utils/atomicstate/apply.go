@@ -29,6 +29,9 @@ func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore 
 		return fmt.Errorf("nil atomic state")
 	}
 	payloadHFActive := povDAAScore >= payloadHFActivationDAAScore
+	if payloadHFActive && state.IsRootOnly() {
+		return fmt.Errorf("root-only Atomic consensus state cannot validate post-payload-HF transaction effects without a materialized Atomic state")
+	}
 	liquidityVaultOutputCount := 0
 	for _, output := range tx.Outputs {
 		if scriptClass(output.ScriptPublicKey) == liquidityVaultTy {
