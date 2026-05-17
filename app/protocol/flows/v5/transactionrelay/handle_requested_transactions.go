@@ -33,12 +33,17 @@ func (flow *handleRequestedTransactionsFlow) start() error {
 			tx, _, ok := flow.Domain().MiningManager().GetTransaction(transactionID, true, false)
 
 			if !ok {
+				log.Debugf("Requested transaction not found in mempool: tx=%s", transactionID)
 				msgTransactionNotFound := appmessage.NewMsgTransactionNotFound(transactionID)
 				err := flow.outgoingRoute.Enqueue(msgTransactionNotFound)
 				if err != nil {
 					return err
 				}
 				continue
+			}
+			if catSummary, isCAT := describeCATTransaction(tx); isCAT {
+				log.Infof("Serving requested CAT transaction from mempool: tx=%s %s",
+					transactionID, catSummary)
 			}
 			err := flow.outgoingRoute.Enqueue(appmessage.DomainTransactionToMsgTx(tx))
 			if err != nil {

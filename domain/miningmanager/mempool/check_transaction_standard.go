@@ -8,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
@@ -91,6 +92,9 @@ func (mp *mempool) checkTransactionStandardInIsolation(transaction *externalapi.
 		}
 		scriptClass := txscript.GetScriptClass(output.ScriptPublicKey.Script)
 		if scriptClass == txscript.NonStandardTy {
+			if isStandardCATLiquidityVaultOutput(transaction, output) {
+				continue
+			}
 			str := fmt.Sprintf("transaction output %d: non-standard script form", i)
 			return transactionRuleError(RejectNonstandard, str)
 		}
@@ -177,6 +181,9 @@ func (mp *mempool) checkTransactionStandardInContext(transaction *externalapi.Do
 			}
 
 		case txscript.NonStandardTy:
+			if isStandardCATLiquidityVaultInput(transaction, originScriptPubKey) {
+				continue
+			}
 			str := fmt.Sprintf("transaction input #%d has a non-standard script form", i)
 			return transactionRuleError(RejectNonstandard, str)
 		}
@@ -211,4 +218,48 @@ func (mp *mempool) minimumRequiredTransactionRelayFee(mass uint64) uint64 {
 	}
 
 	return minimumFee
+}
+
+func isStandardCATLiquidityVaultOutput(transaction *externalapi.DomainTransaction, output *externalapi.DomainTransactionOutput) bool {
+	if output == nil || output.ScriptPublicKey == nil || !atomicstate.IsLiquidityVaultScript(output.ScriptPublicKey.Script) {
+		return false
+	}
+	parsedPayload, ok := parsedCATPayload(transaction)
+	if !ok {
+		return false
+	}
+	switch parsedPayload.Op.(type) {
+	case atomicstate.CreateLiquidityAssetOp, atomicstate.BuyLiquidityExactInOp,
+		atomicstate.SellLiquidityExactInOp, atomicstate.ClaimLiquidityFeesOp:
+		return true
+	default:
+		return false
+	}
+}
+
+func isStandardCATLiquidityVaultInput(transaction *externalapi.DomainTransaction, scriptPublicKey *externalapi.ScriptPublicKey) bool {
+	if scriptPublicKey == nil || !atomicstate.IsLiquidityVaultScript(scriptPublicKey.Script) {
+		return false
+	}
+	parsedPayload, ok := parsedCATPayload(transaction)
+	if !ok {
+		return false
+	}
+	switch parsedPayload.Op.(type) {
+	case atomicstate.BuyLiquidityExactInOp, atomicstate.SellLiquidityExactInOp, atomicstate.ClaimLiquidityFeesOp:
+		return true
+	default:
+		return false
+	}
+}
+
+func parsedCATPayload(transaction *externalapi.DomainTransaction) (*atomicstate.ParsedPayload, bool) {
+	if transaction == nil || !subnetworks.IsPayload(transaction.SubnetworkID) {
+		return nil, false
+	}
+	parsedPayload, err := atomicstate.ParsePayload(transaction.Payload)
+	if err != nil || parsedPayload == nil {
+		return nil, false
+	}
+	return parsedPayload, true
 }

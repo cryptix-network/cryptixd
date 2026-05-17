@@ -32,7 +32,7 @@ func HandleRequestBlockLocator(context RequestBlockLocatorContext, incomingRoute
 
 func (flow *handleRequestBlockLocatorFlow) start() error {
 	for {
-		highHash, limit, err := flow.receiveGetBlockLocator()
+		highHash, limit, responseID, err := flow.receiveGetBlockLocator()
 		if err != nil {
 			return err
 		}
@@ -47,26 +47,28 @@ func (flow *handleRequestBlockLocatorFlow) start() error {
 				"locator between the pruning point and %s", highHash)
 		}
 
-		err = flow.sendBlockLocator(locator)
+		err = flow.sendBlockLocator(locator, responseID)
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func (flow *handleRequestBlockLocatorFlow) receiveGetBlockLocator() (highHash *externalapi.DomainHash, limit uint32, err error) {
+func (flow *handleRequestBlockLocatorFlow) receiveGetBlockLocator() (
+	highHash *externalapi.DomainHash, limit uint32, responseID uint32, err error) {
 
 	message, err := flow.incomingRoute.Dequeue()
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, 0, err
 	}
 	msgGetBlockLocator := message.(*appmessage.MsgRequestBlockLocator)
 
-	return msgGetBlockLocator.HighHash, msgGetBlockLocator.Limit, nil
+	return msgGetBlockLocator.HighHash, msgGetBlockLocator.Limit, msgGetBlockLocator.RequestID(), nil
 }
 
-func (flow *handleRequestBlockLocatorFlow) sendBlockLocator(locator externalapi.BlockLocator) error {
+func (flow *handleRequestBlockLocatorFlow) sendBlockLocator(locator externalapi.BlockLocator, responseID uint32) error {
 	msgBlockLocator := appmessage.NewMsgBlockLocator(locator)
+	msgBlockLocator.SetResponseID(responseID)
 	err := flow.outgoingRoute.Enqueue(msgBlockLocator)
 	if err != nil {
 		return err

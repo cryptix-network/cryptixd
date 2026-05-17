@@ -1,6 +1,8 @@
 package consensusstatemanager
 
 import (
+	"time"
+
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
@@ -14,6 +16,9 @@ type consensusStateManager struct {
 	databaseContext             model.DBManager
 	payloadHfActivationDAAScore uint64
 	atomicStateGrowthLimits     atomicstate.StateGrowthLimits
+	lastAtomicConsensusLogTime  time.Time
+	lastAtomicConsensusLogState atomicConsensusStateSummary
+	hasAtomicConsensusLogState  bool
 
 	ghostdagManager       model.GHOSTDAGManager
 	dagTopologyManager    model.DAGTopologyManager

@@ -40,6 +40,7 @@ func HandleIBDBlockRequests(context HandleIBDBlockRequestsContext, incomingRoute
 
 			blockMessage := appmessage.DomainBlockToMsgBlock(block)
 			ibdBlockMessage := appmessage.NewMsgIBDBlock(blockMessage)
+			ibdBlockMessage.SetResponseID(msgRequestIBDBlocks.RequestID())
 			err = outgoingRoute.Enqueue(ibdBlockMessage)
 			if err != nil {
 				return err

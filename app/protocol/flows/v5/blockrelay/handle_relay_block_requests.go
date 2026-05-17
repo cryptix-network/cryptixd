@@ -46,7 +46,9 @@ func HandleRelayBlockRequests(context RelayBlockRequestsContext, incomingRoute *
 					return err
 				}
 			}
-			err = outgoingRoute.Enqueue(appmessage.DomainBlockToMsgBlock(block))
+			blockMessage := appmessage.DomainBlockToMsgBlock(block)
+			blockMessage.SetResponseID(getRelayBlocksMessage.RequestID())
+			err = outgoingRoute.Enqueue(blockMessage)
 			if err != nil {
 				return err
 			}

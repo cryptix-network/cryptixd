@@ -80,6 +80,20 @@ func (csm *consensusStateManager) importPruningPointUTXOSet(stagingArea *model.S
 		return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet, "the expected multiset hash of the pruning "+
 			"point UTXO set is %s but got %s", newPruningPointHeader.UTXOCommitment(), expectedUTXOCommitment)
 	}
+	importSummary := summarizeAtomicConsensusState(importedPruningPointAtomicState)
+	atomicLog.Infof("Atomic pruning-point state accepted: pruning_point=%s daa=%d hf_active=%t root=%s root_only=%t "+
+		"assets=%d balances=%d nonces=%d anchors=%d vaults=%d",
+		newPruningPoint,
+		newPruningPointHeader.DAAScore(),
+		payloadHFActive,
+		importSummary.rootHex(),
+		importSummary.rootOnly,
+		importSummary.assets,
+		importSummary.balances,
+		importSummary.nonces,
+		importSummary.anchors,
+		importSummary.vaults,
+	)
 	log.Debugf("The new pruning point UTXO commitment validation passed")
 
 	log.Debugf("Setting the pruning point as the only virtual parent")
@@ -238,7 +252,12 @@ func (csm *consensusStateManager) importVirtualUTXOSetAndPruningPointUTXOSet(pru
 	}
 
 	log.Debugf("Finishing to import virtual UTXO set and pruning point UTXO set")
-	return csm.consensusStateStore.FinishImportingPruningPointUTXOSet(csm.databaseContext)
+	err = csm.consensusStateStore.FinishImportingPruningPointUTXOSet(csm.databaseContext)
+	if err != nil {
+		return err
+	}
+	atomicLog.Infof("Atomic pruning-point import completed: pruning_point=%s", pruningPoint)
+	return nil
 }
 
 func (csm *consensusStateManager) RecoverUTXOIfRequired() error {
@@ -247,7 +266,11 @@ func (csm *consensusStateManager) RecoverUTXOIfRequired() error {
 		return err
 	}
 	if !hadStartedImportingPruningPointUTXOSet {
-		return csm.recoverPreHFVirtualAtomicState()
+		err := csm.recoverPreHFVirtualAtomicState()
+		if err != nil {
+			return err
+		}
+		return csm.logAtomicStartupState()
 	}
 
 	log.Warnf("Unimported pruning point UTXO set detected. Attempting to recover...")
@@ -261,7 +284,11 @@ func (csm *consensusStateManager) RecoverUTXOIfRequired() error {
 		return err
 	}
 	log.Warnf("Unimported UTXO set successfully recovered")
-	return csm.recoverPreHFVirtualAtomicState()
+	err = csm.recoverPreHFVirtualAtomicState()
+	if err != nil {
+		return err
+	}
+	return csm.logAtomicStartupState()
 }
 
 func (csm *consensusStateManager) recoverPreHFVirtualAtomicState() error {
@@ -274,6 +301,8 @@ func (csm *consensusStateManager) recoverPreHFVirtualAtomicState() error {
 		return err
 	}
 	if virtualDAAScore >= csm.payloadHfActivationDAAScore {
+		atomicLog.Infof("Atomic pre-HF recovery skipped: virtual DAA %d is at/after payload HF activation %d",
+			virtualDAAScore, csm.payloadHfActivationDAAScore)
 		return nil
 	}
 
@@ -295,10 +324,16 @@ func (csm *consensusStateManager) recoverPreHFVirtualAtomicState() error {
 		return err
 	}
 	if err == nil && currentAtomicState.CanonicalHash() == reconstructedAtomicState.CanonicalHash() {
+		summary := summarizeAtomicConsensusState(currentAtomicState)
+		atomicLog.Infof("Atomic pre-HF virtual state already matches the UTXO set: daa=%d root=%s anchors=%d",
+			virtualDAAScore, summary.rootHex(), summary.anchors)
 		return nil
 	}
 
 	log.Warnf("Reconstructing pre-payload-HF virtual Atomic consensus state from the current UTXO set")
+	summary := summarizeAtomicConsensusState(reconstructedAtomicState)
+	atomicLog.Warnf("Atomic pre-HF virtual state reconstructed from UTXO set: daa=%d root=%s anchors=%d",
+		virtualDAAScore, summary.rootHex(), summary.anchors)
 	csm.atomicStateStore.Stage(stagingArea, model.VirtualBlockHash, reconstructedAtomicState)
 	return staging.CommitAllChanges(csm.databaseContext, stagingArea)
 }

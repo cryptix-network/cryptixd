@@ -68,11 +68,6 @@ func (f *FlowContext) HandleBlockProducerClaim(peer *peerpkg.Peer, message *appm
 	if err := f.refreshStrongNodeClaimsWindow(); err != nil {
 		log.Warnf("failed refreshing strong-node claim window before ingest: %s", err)
 	}
-	expectedNodeID := peer.UnifiedNodeID()
-	if f.IsPayloadHfActive() && expectedNodeID == nil {
-		return protocolerrors.New(true, "block producer claim peer has no verified unified node ID")
-	}
-
 	known := false
 	if len(message.BlockHash) == 32 {
 		if blockHash, err := externalapi.NewDomainHashFromByteSlice(message.BlockHash); err == nil {
@@ -82,7 +77,11 @@ func (f *FlowContext) HandleBlockProducerClaim(peer *peerpkg.Peer, message *appm
 		}
 	}
 
-	outcome := f.strongNodeClaims.IngestClaim(message, f.IsPayloadHfActive(), known, expectedNodeID)
+	// Block producer claims are gossip. A peer may legitimately forward a valid claim
+	// that was signed by another node, so do not bind the claim node ID to the
+	// transport peer's handshake identity here. The claim still verifies its own
+	// network, node PoW and signature.
+	outcome := f.strongNodeClaims.IngestClaim(message, f.IsPayloadHfActive(), known, nil)
 	switch outcome.Status {
 	case strongnodeclaims.IngestIgnored, strongnodeclaims.IngestDropped:
 		return nil

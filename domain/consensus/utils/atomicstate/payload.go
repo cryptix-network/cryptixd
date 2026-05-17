@@ -942,6 +942,11 @@ func isLiquidityVault(script []byte) bool {
 		script[6] == txscript.OpTrue
 }
 
+// IsLiquidityVaultScript returns whether the script is the reserved CAT liquidity-vault script form.
+func IsLiquidityVaultScript(script []byte) bool {
+	return isLiquidityVault(script)
+}
+
 func takeBytes(payload []byte, cursor *int, length int) ([]byte, bool) {
 	if length < 0 || *cursor+length > len(payload) {
 		return nil, false

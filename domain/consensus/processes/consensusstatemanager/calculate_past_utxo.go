@@ -10,6 +10,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 )
 
@@ -297,6 +298,29 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 		if err != nil {
 			log.Tracef("Atomic validation failed for transaction %s in block %s: %s", transactionID, blockHash, err)
 			return false, accumulatedMassBefore, nil
+		}
+		if !blockHash.Equal(model.VirtualBlockHash) &&
+			blockDAAScore >= csm.payloadHfActivationDAAScore &&
+			subnetworks.IsPayload(transaction.SubnetworkID) &&
+			len(transaction.Payload) > 0 {
+			parsedPayload, parseErr := atomicstate.ParsePayload(transaction.Payload)
+			if parseErr == nil && parsedPayload != nil {
+				stateRoot := accumulatedAtomicState.CanonicalHash()
+				growthUsed := atomicGrowth.Used()
+				atomicLog.Infof("Atomic transaction accepted: tx=%s block=%s daa=%d op=%T root=%x "+
+					"block_growth_assets=%d block_growth_balances=%d block_growth_nonces=%d block_growth_pools=%d block_growth_anchor_owners=%d",
+					transactionID,
+					blockHash,
+					blockDAAScore,
+					parsedPayload.Op,
+					stateRoot[:],
+					growthUsed.NewAssets,
+					growthUsed.NewBalanceKeys,
+					growthUsed.NewNonceKeys,
+					growthUsed.NewPools,
+					growthUsed.NewAnchorOwnerKeys,
+				)
+			}
 		}
 	}
 

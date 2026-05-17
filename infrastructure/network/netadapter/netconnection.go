@@ -185,6 +185,12 @@ func (c *NetConnection) IsOutbound() bool {
 	return c.connection.IsOutbound()
 }
 
+// IsConnected returns whether the underlying connection is still open and this
+// connection's protocol router has not been closed by the application layer.
+func (c *NetConnection) IsConnected() bool {
+	return c.connection.IsConnected() && atomic.LoadUint32(&c.isRouterClosed) == 0
+}
+
 // NetAddress returns the NetAddress associated with this connection
 func (c *NetConnection) NetAddress() *appmessage.NetAddress {
 	return appmessage.NewNetAddress(c.connection.Address())

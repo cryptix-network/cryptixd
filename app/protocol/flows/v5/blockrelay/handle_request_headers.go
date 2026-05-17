@@ -40,7 +40,7 @@ func HandleRequestHeaders(context RequestHeadersContext, incomingRoute *router.R
 
 func (flow *handleRequestHeadersFlow) start() error {
 	for {
-		lowHash, highHash, err := receiveRequestHeaders(flow.incomingRoute)
+		lowHash, highHash, responseID, err := receiveRequestHeaders(flow.incomingRoute)
 		if err != nil {
 			return err
 		}
@@ -96,6 +96,7 @@ func (flow *handleRequestHeadersFlow) start() error {
 			}
 
 			blockHeadersMessage := appmessage.NewBlockHeadersMessage(blockHeaders)
+			blockHeadersMessage.SetResponseID(responseID)
 			err = flow.outgoingRoute.Enqueue(blockHeadersMessage)
 			if err != nil {
 				return err
@@ -114,7 +115,9 @@ func (flow *handleRequestHeadersFlow) start() error {
 			lowHash = blockHashes[len(blockHashes)-1]
 		}
 
-		err = flow.outgoingRoute.Enqueue(appmessage.NewMsgDoneHeaders())
+		doneHeadersMessage := appmessage.NewMsgDoneHeaders()
+		doneHeadersMessage.SetResponseID(responseID)
+		err = flow.outgoingRoute.Enqueue(doneHeadersMessage)
 		if err != nil {
 			return err
 		}
@@ -122,13 +125,13 @@ func (flow *handleRequestHeadersFlow) start() error {
 }
 
 func receiveRequestHeaders(incomingRoute *router.Route) (lowHash *externalapi.DomainHash,
-	highHash *externalapi.DomainHash, err error) {
+	highHash *externalapi.DomainHash, responseID uint32, err error) {
 
 	message, err := incomingRoute.Dequeue()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	msgRequestIBDBlocks := message.(*appmessage.MsgRequestHeaders)
 
-	return msgRequestIBDBlocks.LowHash, msgRequestIBDBlocks.HighHash, nil
+	return msgRequestIBDBlocks.LowHash, msgRequestIBDBlocks.HighHash, msgRequestIBDBlocks.RequestID(), nil
 }

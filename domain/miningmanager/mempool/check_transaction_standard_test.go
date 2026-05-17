@@ -6,6 +6,7 @@ package mempool
 
 import (
 	"bytes"
+	"encoding/binary"
 	"math"
 	"testing"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/pkg/errors"
 )
@@ -219,6 +221,10 @@ func TestCheckTransactionStandardInIsolation(t *testing.T) {
 		Value:           100000000, // 1 CPAY
 		ScriptPublicKey: dummyScriptPublicKey,
 	}
+	liquidityVaultTxOut := externalapi.DomainTransactionOutput{
+		Value:           constants.SompiPerCryptix,
+		ScriptPublicKey: testCATLiquidityVaultScriptPublicKey(),
+	}
 
 	tests := []struct {
 		name       string
@@ -305,6 +311,29 @@ func TestCheckTransactionStandardInIsolation(t *testing.T) {
 			isStandard: false,
 			code:       RejectNonstandard,
 		},
+		{
+			name: "CAT liquidity vault output",
+			tx: &externalapi.DomainTransaction{
+				Version:      0,
+				Inputs:       []*externalapi.DomainTransactionInput{&dummyTxIn},
+				Outputs:      []*externalapi.DomainTransactionOutput{&liquidityVaultTxOut},
+				SubnetworkID: subnetworks.SubnetworkIDPayload,
+				Payload:      testCATSellLiquidityExactInPayload(),
+			},
+			height:     300000,
+			isStandard: true,
+		},
+		{
+			name: "Native liquidity vault output",
+			tx: &externalapi.DomainTransaction{
+				Version: 0,
+				Inputs:  []*externalapi.DomainTransactionInput{&dummyTxIn},
+				Outputs: []*externalapi.DomainTransactionOutput{&liquidityVaultTxOut},
+			},
+			height:     300000,
+			isStandard: false,
+			code:       RejectNonstandard,
+		},
 	}
 
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
@@ -363,4 +392,100 @@ func TestCheckTransactionStandardInIsolation(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestCheckTransactionStandardInContextAllowsCATLiquidityVaultInput(t *testing.T) {
+	liquidityVaultScriptPublicKey := testCATLiquidityVaultScriptPublicKey()
+	tx := &externalapi.DomainTransaction{
+		Version: 0,
+		Inputs: []*externalapi.DomainTransactionInput{{
+			PreviousOutpoint: externalapi.DomainOutpoint{TransactionID: externalapi.DomainTransactionID{}, Index: 0},
+			UTXOEntry:        utxo.NewUTXOEntry(constants.SompiPerCryptix, liquidityVaultScriptPublicKey, false, 1),
+			Sequence:         constants.MaxTxInSequenceNum,
+		}},
+		Outputs: []*externalapi.DomainTransactionOutput{{
+			Value:           constants.SompiPerCryptix,
+			ScriptPublicKey: liquidityVaultScriptPublicKey,
+		}},
+		SubnetworkID: subnetworks.SubnetworkIDPayload,
+		Payload:      testCATSellLiquidityExactInPayload(),
+		Mass:         100,
+		Fee:          1000,
+	}
+
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		factory := consensus.NewFactory()
+		tc, teardown, err := factory.NewTestConsensus(consensusConfig, "TestCheckTransactionStandardInContextAllowsCATLiquidityVaultInput")
+		if err != nil {
+			t.Fatalf("Error setting up consensus: %+v", err)
+		}
+		defer teardown(false)
+
+		mempoolConfig := DefaultConfig(tc.DAGParams())
+		tcAsConsensus := tc.(externalapi.Consensus)
+		tcAsConsensusPointer := &tcAsConsensus
+		mempool := New(mempoolConfig, consensusreference.NewConsensusReference(&tcAsConsensusPointer)).(*mempool)
+
+		if err := mempool.checkTransactionStandardInContext(tx); err != nil {
+			t.Fatalf("checkTransactionStandardInContext returned an unexpected error: %v", err)
+		}
+
+		nonCATTx := *tx
+		nonCATTx.SubnetworkID = subnetworks.SubnetworkIDNative
+		nonCATTx.Payload = nil
+		err = mempool.checkTransactionStandardInContext(&nonCATTx)
+		if err == nil {
+			t.Fatalf("checkTransactionStandardInContext accepted a native transaction spending a liquidity vault input")
+		}
+		var ruleErr RuleError
+		if !errors.As(err, &ruleErr) {
+			t.Fatalf("checkTransactionStandardInContext returned unexpected error type %T", err)
+		}
+		txRuleErr, ok := ruleErr.Err.(TxRuleError)
+		if !ok {
+			t.Fatalf("checkTransactionStandardInContext returned unexpected rule error type %T", ruleErr.Err)
+		}
+		if txRuleErr.RejectCode != RejectNonstandard {
+			t.Fatalf("checkTransactionStandardInContext returned reject code %s, expected %s", txRuleErr.RejectCode, RejectNonstandard)
+		}
+	})
+}
+
+func testCATLiquidityVaultScriptPublicKey() *externalapi.ScriptPublicKey {
+	return &externalapi.ScriptPublicKey{
+		Script: []byte{txscript.OpData4, 'C', 'L', 'V', '1', txscript.OpDrop, txscript.OpTrue},
+	}
+}
+
+func testCATSellLiquidityExactInPayload() []byte {
+	payload := make([]byte, 16)
+	copy(payload[0:3], []byte("CAT"))
+	payload[3] = 1
+	payload[4] = 7
+	binary.LittleEndian.PutUint64(payload[8:16], 1)
+
+	payload = append(payload, make([]byte, externalapi.DomainHashSize)...)
+	payload = appendUint64LE(payload, 1)
+	payload = appendUint128LE(payload, 1)
+	payload = appendUint64LE(payload, 1)
+	payload = appendUint16LE(payload, 0)
+	return payload
+}
+
+func appendUint64LE(payload []byte, value uint64) []byte {
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], value)
+	return append(payload, buf[:]...)
+}
+
+func appendUint128LE(payload []byte, value uint64) []byte {
+	var buf [16]byte
+	binary.LittleEndian.PutUint64(buf[:8], value)
+	return append(payload, buf[:]...)
+}
+
+func appendUint16LE(payload []byte, value uint16) []byte {
+	var buf [2]byte
+	binary.LittleEndian.PutUint16(buf[:], value)
+	return append(payload, buf[:]...)
 }

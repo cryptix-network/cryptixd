@@ -5,3 +5,4 @@ import (
 )
 
 var log = logger.RegisterSubSystem("BDAG")
+var atomicLog = logger.RegisterSubSystem("ATOM")

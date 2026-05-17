@@ -104,6 +104,8 @@ func (csm *consensusStateManager) updateVirtualWithParents(
 		return nil, err
 	}
 
+	csm.logAtomicVirtualState(stagingArea, "virtual_update", virtualUTXODiff)
+
 	return virtualUTXODiff, nil
 }
 

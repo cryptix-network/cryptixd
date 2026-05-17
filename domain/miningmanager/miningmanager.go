@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
 	miningmanagermodel "github.com/cryptix-network/cryptixd/domain/miningmanager/model"
 )
@@ -52,6 +53,10 @@ func (mm *miningManager) GetBlockTemplate(coinbaseData *externalapi.DomainCoinba
 	if immutableCachedTemplate != nil {
 		mm.cacheLock.Unlock()
 		if immutableCachedTemplate.CoinbaseData.Equal(coinbaseData) {
+			if payloadCount := countTemplatePayloadTransactions(immutableCachedTemplate.Block); payloadCount > 0 {
+				log.Infof("Serving cached block template with payload/CAT transactions: payload_txs=%d total_txs=%d is_nearly_synced=%t",
+					payloadCount, len(immutableCachedTemplate.Block.Transactions), immutableCachedTemplate.IsNearlySynced)
+			}
 			return immutableCachedTemplate.Block, immutableCachedTemplate.IsNearlySynced, nil
 		}
 		// Coinbase data is new -- make the minimum changes required
@@ -73,6 +78,10 @@ func (mm *miningManager) GetBlockTemplate(coinbaseData *externalapi.DomainCoinba
 	}
 	// Cache the built template
 	mm.setImmutableCachedTemplate(blockTemplate)
+	if payloadCount := countTemplatePayloadTransactions(blockTemplate.Block); payloadCount > 0 {
+		log.Infof("Built new block template with payload/CAT transactions: payload_txs=%d total_txs=%d is_nearly_synced=%t",
+			payloadCount, len(blockTemplate.Block.Transactions), blockTemplate.IsNearlySynced)
+	}
 	return blockTemplate.Block, blockTemplate.IsNearlySynced, nil
 }
 
@@ -97,6 +106,19 @@ func (mm *miningManager) getImmutableCachedTemplate() *externalapi.DomainBlockTe
 func (mm *miningManager) setImmutableCachedTemplate(blockTemplate *externalapi.DomainBlockTemplate) {
 	mm.cachingTime = time.Now()
 	mm.cachedBlockTemplate = blockTemplate
+}
+
+func countTemplatePayloadTransactions(block *externalapi.DomainBlock) int {
+	if block == nil {
+		return 0
+	}
+	count := 0
+	for _, tx := range block.Transactions {
+		if subnetworks.IsPayload(tx.SubnetworkID) && len(tx.Payload) > 0 {
+			count++
+		}
+	}
+	return count
 }
 
 func (mm *miningManager) GetBlockTemplateBuilder() miningmanagermodel.BlockTemplateBuilder {

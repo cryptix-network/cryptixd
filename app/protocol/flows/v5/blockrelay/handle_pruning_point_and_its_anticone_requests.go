@@ -26,10 +26,12 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 
 	for {
 		err := func() error {
-			_, err := incomingRoute.Dequeue()
+			message, err := incomingRoute.Dequeue()
 			if err != nil {
 				return err
 			}
+			requestMessage := message.(*appmessage.MsgRequestPruningPointAndItsAnticone)
+			responseID := requestMessage.RequestID()
 
 			if !atomic.CompareAndSwapUint32(&isBusy, 0, 1) {
 				return protocolerrors.Errorf(false, "node is busy with other pruning point anticone requests")
@@ -48,7 +50,9 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 				msgPruningPointHeaders[i] = appmessage.DomainBlockHeaderToBlockHeader(header)
 			}
 
-			err = outgoingRoute.Enqueue(appmessage.NewMsgPruningPoints(msgPruningPointHeaders))
+			pruningPointsMessage := appmessage.NewMsgPruningPoints(msgPruningPointHeaders)
+			pruningPointsMessage.SetResponseID(responseID)
+			err = outgoingRoute.Enqueue(pruningPointsMessage)
 			if err != nil {
 				return err
 			}
@@ -117,6 +121,7 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 			}
 
 			msgTrustedData := appmessage.DomainTrustedDataToTrustedData(daaWindowBlocks, ghostdagData)
+			msgTrustedData.SetResponseID(responseID)
 			atomicStateBytes, atomicStateHash, hasAtomicState, err := pruningPointAtomicStateForTrustedData(context, pointAndItsAnticone[0])
 			if err != nil {
 				return err
@@ -151,7 +156,10 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 					return protocolerrors.Errorf(false, "pruning point anticone block %s not found", blockHash)
 				}
 
-				err = outgoingRoute.Enqueue(appmessage.DomainBlockWithTrustedDataToBlockWithTrustedDataV4(block, trustedDataDAABlockIndexes[*blockHash], trustedDataGHOSTDAGDataIndexes[*blockHash]))
+				blockWithTrustedDataMessage := appmessage.DomainBlockWithTrustedDataToBlockWithTrustedDataV4(
+					block, trustedDataDAABlockIndexes[*blockHash], trustedDataGHOSTDAGDataIndexes[*blockHash])
+				blockWithTrustedDataMessage.SetResponseID(responseID)
+				err = outgoingRoute.Enqueue(blockWithTrustedDataMessage)
 				if err != nil {
 					return err
 				}
@@ -170,7 +178,9 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 				}
 			}
 
-			err = outgoingRoute.Enqueue(appmessage.NewMsgDoneBlocksWithTrustedData())
+			doneBlocksWithTrustedDataMessage := appmessage.NewMsgDoneBlocksWithTrustedData()
+			doneBlocksWithTrustedDataMessage.SetResponseID(responseID)
+			err = outgoingRoute.Enqueue(doneBlocksWithTrustedDataMessage)
 			if err != nil {
 				return err
 			}

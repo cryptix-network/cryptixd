@@ -158,6 +158,11 @@ func setupRPC(
 		shutDownChan,
 	)
 	protocolManager.SetOnNewBlockTemplateHandler(rpcManager.NotifyNewBlockTemplate)
+	protocolManager.SetOnTransactionAddedToMempoolHandler(func() {
+		if err := rpcManager.NotifyNewBlockTemplate(); err != nil {
+			log.Warnf("Failed to notify new block template after mempool transaction: %s", err)
+		}
+	})
 	protocolManager.SetOnPruningPointUTXOSetOverrideHandler(rpcManager.NotifyPruningPointUTXOSetOverride)
 
 	return rpcManager

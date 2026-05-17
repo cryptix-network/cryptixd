@@ -2,6 +2,7 @@ package blocktemplatebuilder
 
 import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/coinbasemanager"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
@@ -139,6 +140,11 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 			gasLimit:          gasLimit,
 		})
 	}
+	candidatePayloadTxs := countPayloadTransactions(mempoolTransactions)
+	if candidatePayloadTxs > 0 {
+		log.Infof("Block template sees payload/CAT candidates: total_candidates=%d payload_candidates=%d",
+			len(mempoolTransactions), candidatePayloadTxs)
+	}
 
 	// Sort the candidate txs by subnetworkID.
 	sort.Slice(candidateTxs, func(i, j int) bool {
@@ -149,6 +155,16 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 		len(candidateTxs))
 
 	blockTxs := btb.selectTransactions(candidateTxs)
+	selectedPayloadTxs := countPayloadTransactions(blockTxs.selectedTxs)
+	if candidatePayloadTxs > 0 {
+		if selectedPayloadTxs == 0 {
+			log.Warnf("Block template did not select any payload/CAT candidates: total_candidates=%d payload_candidates=%d total_selected=%d",
+				len(mempoolTransactions), candidatePayloadTxs, len(blockTxs.selectedTxs))
+		} else {
+			log.Infof("Block template selected payload/CAT transactions: payload_selected=%d total_selected=%d txs=%v",
+				selectedPayloadTxs, len(blockTxs.selectedTxs), payloadTransactionIDs(blockTxs.selectedTxs))
+		}
+	}
 	blockTemplate, err := btb.consensusReference.Consensus().BuildBlockTemplate(coinbaseData, blockTxs.selectedTxs)
 
 	invalidTxsErr := ruleerrors.ErrInvalidTransactionsInNewBlock{}
@@ -173,6 +189,26 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 		len(blockTemplate.Block.Transactions), blockTxs.totalFees, blockTxs.totalMass, difficulty.CompactToBig(blockTemplate.Block.Header.Bits()))
 
 	return blockTemplate, nil
+}
+
+func countPayloadTransactions(txs []*consensusexternalapi.DomainTransaction) int {
+	count := 0
+	for _, tx := range txs {
+		if subnetworks.IsPayload(tx.SubnetworkID) && len(tx.Payload) > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func payloadTransactionIDs(txs []*consensusexternalapi.DomainTransaction) []string {
+	ids := make([]string, 0)
+	for _, tx := range txs {
+		if subnetworks.IsPayload(tx.SubnetworkID) && len(tx.Payload) > 0 {
+			ids = append(ids, consensushashing.TransactionID(tx).String())
+		}
+	}
+	return ids
 }
 
 // ModifyBlockTemplate modifies an existing block template to the requested coinbase data and updates the timestamp

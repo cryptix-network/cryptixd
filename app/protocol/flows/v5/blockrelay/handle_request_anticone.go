@@ -38,7 +38,7 @@ func HandleRequestAnticone(context RequestAnticoneContext, incomingRoute *router
 
 func (flow *handleRequestAnticoneFlow) start() error {
 	for {
-		blockHash, contextHash, err := receiveRequestAnticone(flow.incomingRoute)
+		blockHash, contextHash, responseID, err := receiveRequestAnticone(flow.incomingRoute)
 		if err != nil {
 			return err
 		}
@@ -70,12 +70,15 @@ func (flow *handleRequestAnticoneFlow) start() error {
 		})
 
 		blockHeadersMessage := appmessage.NewBlockHeadersMessage(blockHeaders)
+		blockHeadersMessage.SetResponseID(responseID)
 		err = flow.outgoingRoute.Enqueue(blockHeadersMessage)
 		if err != nil {
 			return err
 		}
 
-		err = flow.outgoingRoute.Enqueue(appmessage.NewMsgDoneHeaders())
+		doneHeadersMessage := appmessage.NewMsgDoneHeaders()
+		doneHeadersMessage.SetResponseID(responseID)
+		err = flow.outgoingRoute.Enqueue(doneHeadersMessage)
 		if err != nil {
 			return err
 		}
@@ -83,13 +86,13 @@ func (flow *handleRequestAnticoneFlow) start() error {
 }
 
 func receiveRequestAnticone(incomingRoute *router.Route) (blockHash *externalapi.DomainHash,
-	contextHash *externalapi.DomainHash, err error) {
+	contextHash *externalapi.DomainHash, responseID uint32, err error) {
 
 	message, err := incomingRoute.Dequeue()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	msgRequestAnticone := message.(*appmessage.MsgRequestAnticone)
 
-	return msgRequestAnticone.BlockHash, msgRequestAnticone.ContextHash, nil
+	return msgRequestAnticone.BlockHash, msgRequestAnticone.ContextHash, msgRequestAnticone.RequestID(), nil
 }

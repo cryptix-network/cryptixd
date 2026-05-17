@@ -23,15 +23,17 @@ type HandleSnapshotRequestsContext interface {
 // HandleSnapshotRequests serves anti-fraud snapshots to requesting peers.
 func HandleSnapshotRequests(context HandleSnapshotRequestsContext, incomingRoute *router.Route, outgoingRoute *router.Route) error {
 	for {
-		_, err := incomingRoute.Dequeue()
+		message, err := incomingRoute.Dequeue()
 		if err != nil {
 			return err
 		}
+		requestMessage := message.(*appmessage.MsgRequestAntiFraudSnapshotV1)
 
 		snapshot := context.ConnectionManager().AntiFraudSnapshotForPeer()
 		if snapshot == nil {
 			continue
 		}
+		snapshot.SetResponseID(requestMessage.RequestID())
 		if err := outgoingRoute.Enqueue(snapshot); err != nil {
 			return err
 		}

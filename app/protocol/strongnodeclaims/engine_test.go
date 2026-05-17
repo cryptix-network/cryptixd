@@ -244,6 +244,24 @@ func TestClaimMustMatchExpectedPeerNodeID(t *testing.T) {
 	}
 }
 
+func TestForwardedClaimDoesNotRequirePeerNodeIDMatch(t *testing.T) {
+	tempDir := t.TempDir()
+	engine := New(true, "cryptix-devnet", tempDir)
+
+	claim := mustBuildSignedClaim(
+		t,
+		2,
+		"9e335f14f1a549c374a273b014e4e6658c666b9be6bb7478085510abcba7fae2",
+		"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+		1588910,
+	)
+
+	outcome := engine.IngestClaim(claim, true, true, nil)
+	if outcome.Status != IngestAccepted {
+		t.Fatalf("expected forwarded claim to be accepted without peer ID binding, got %+v", outcome)
+	}
+}
+
 func TestKnownAndPendingClaimsAreCappedPerBlock(t *testing.T) {
 	var blockHash [32]byte
 	state := newEngineState()

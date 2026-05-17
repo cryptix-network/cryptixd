@@ -31,6 +31,10 @@ type difficultyManager struct {
 	genesisBits                    uint32
 }
 
+// Keep this in consensus parity with rusty-cryptix
+// consensus::config::constants::MIN_DIFFICULTY_WINDOW_LEN.
+const minDifficultyWindowLen = 10
+
 // New instantiates a new DifficultyManager
 func New(databaseContext model.DBReader,
 	ghostdagManager model.GHOSTDAGManager,
@@ -105,14 +109,9 @@ func (dm *difficultyManager) requiredDifficultyFromTargetsWindow(targetsWindow b
 		return dm.genesisBits, nil
 	}
 
-	// in the past this was < 2 as the comment explains, we changed it to under the window size to
-	// make the hashrate(which is ~1.5GH/s) constant in the first 2641 blocks so that we won't have a lot of tips
-
-	// We need at least 2 blocks to get a timestamp interval
-	// We could instead clamp the timestamp difference to `targetTimePerBlock`,
-	// but then everything will cancel out and we'll get the target from the last block, which will be the same as genesis.
-	// We add 64 as a safety margin
-	if len(targetsWindow) < 2 || len(targetsWindow) < dm.difficultyAdjustmentWindowSize {
+	// Rust consensus starts applying DAA once a small minimum window is available,
+	// not only after the full 2641-block legacy window is filled.
+	if len(targetsWindow) < minDifficultyWindowLen {
 		return dm.genesisBits, nil
 	}
 

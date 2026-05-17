@@ -1,13 +1,17 @@
 package transactionrelay
 
 import (
+	"fmt"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/protocol/common"
 	"github.com/cryptix-network/cryptixd/app/protocol/flowcontext"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
@@ -56,6 +60,7 @@ func (flow *handleRelayedTransactionsFlow) start() error {
 		}
 		// Transaction relay is disabled if the node is out of sync and thus not mining
 		if !isNearlySynced {
+			log.Infof("Ignoring relayed transaction inventory while not nearly synced: tx_count=%d", len(inv.TxIDs))
 			continue
 		}
 
@@ -90,6 +95,7 @@ func (flow *handleRelayedTransactionsFlow) requestInvTransactions(
 		return idsToRequest, nil
 	}
 
+	log.Infof("Requesting relayed transactions: requested=%d inv_count=%d", len(idsToRequest), len(inv.TxIDs))
 	msgGetTransactions := appmessage.NewMsgRequestTransactions(idsToRequest)
 	err = flow.outgoingRoute.Enqueue(msgGetTransactions)
 	if err != nil {
@@ -182,6 +188,11 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 			return protocolerrors.Errorf(true, "expected transaction %s, but got %s",
 				expectedID, txID)
 		}
+		catSummary, isCAT := describeCATTransaction(tx)
+		if isCAT {
+			log.Infof("Received relayed CAT transaction: tx=%s %s inputs=%d outputs=%d",
+				txID, catSummary, len(tx.Inputs), len(tx.Outputs))
+		}
 
 		acceptedTransactions, err :=
 			flow.Domain().MiningManager().ValidateAndInsertTransaction(tx, false, true)
@@ -199,10 +210,25 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 			}
 
 			if !shouldBan {
+				if isCAT {
+					log.Warnf("Rejected relayed CAT transaction from mempool: tx=%s %s err=%s", txID, catSummary, ruleErr)
+				} else {
+					log.Debugf("Rejected relayed transaction %s from mempool: %s", txID, ruleErr)
+				}
 				continue
 			}
 
 			return protocolerrors.Errorf(true, "rejected transaction %s: %s", txID, ruleErr)
+		}
+		if len(acceptedTransactions) == 0 {
+			continue
+		}
+		if isCAT {
+			log.Infof("Accepted relayed CAT transaction into mempool: tx=%s %s accepted_total=%d",
+				txID, catSummary, len(acceptedTransactions))
+		} else {
+			log.Debugf("Accepted relayed transaction %s into mempool (%d total accepted including unorphaned)",
+				txID, len(acceptedTransactions))
 		}
 		err = flow.broadcastAcceptedTransactions(consensushashing.TransactionIDs(acceptedTransactions))
 		if err != nil {
@@ -211,4 +237,20 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 		flow.OnTransactionAddedToMempool()
 	}
 	return nil
+}
+
+func describeCATTransaction(tx *externalapi.DomainTransaction) (string, bool) {
+	if !subnetworks.IsPayload(tx.SubnetworkID) || len(tx.Payload) == 0 {
+		return "", false
+	}
+
+	parsedPayload, err := atomicstate.ParsePayload(tx.Payload)
+	if err != nil {
+		return fmt.Sprintf("cat=parse_error:%s payload_bytes=%d", err, len(tx.Payload)), true
+	}
+	if parsedPayload == nil {
+		return "", false
+	}
+
+	return fmt.Sprintf("op=%T nonce=%d payload_bytes=%d", parsedPayload.Op, parsedPayload.Nonce, len(tx.Payload)), true
 }

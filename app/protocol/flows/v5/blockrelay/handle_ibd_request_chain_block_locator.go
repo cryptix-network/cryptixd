@@ -34,7 +34,7 @@ func HandleRequestIBDChainBlockLocator(context RequestIBDChainBlockLocatorContex
 
 func (flow *handleRequestIBDChainBlockLocatorFlow) start() error {
 	for {
-		highHash, lowHash, err := flow.receiveRequestIBDChainBlockLocator()
+		highHash, lowHash, responseID, err := flow.receiveRequestIBDChainBlockLocator()
 		if err != nil {
 			return err
 		}
@@ -57,26 +57,28 @@ func (flow *handleRequestIBDChainBlockLocatorFlow) start() error {
 				"locator between %s and %s", lowHash, highHash)
 		}
 
-		err = flow.sendIBDChainBlockLocator(locator)
+		err = flow.sendIBDChainBlockLocator(locator, responseID)
 		if err != nil {
 			return err
 		}
 	}
 }
 
-func (flow *handleRequestIBDChainBlockLocatorFlow) receiveRequestIBDChainBlockLocator() (highHash, lowHash *externalapi.DomainHash, err error) {
+func (flow *handleRequestIBDChainBlockLocatorFlow) receiveRequestIBDChainBlockLocator() (
+	highHash, lowHash *externalapi.DomainHash, responseID uint32, err error) {
 
 	message, err := flow.incomingRoute.Dequeue()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	msgGetBlockLocator := message.(*appmessage.MsgRequestIBDChainBlockLocator)
 
-	return msgGetBlockLocator.HighHash, msgGetBlockLocator.LowHash, nil
+	return msgGetBlockLocator.HighHash, msgGetBlockLocator.LowHash, msgGetBlockLocator.RequestID(), nil
 }
 
-func (flow *handleRequestIBDChainBlockLocatorFlow) sendIBDChainBlockLocator(locator externalapi.BlockLocator) error {
+func (flow *handleRequestIBDChainBlockLocatorFlow) sendIBDChainBlockLocator(locator externalapi.BlockLocator, responseID uint32) error {
 	msgIBDChainBlockLocator := appmessage.NewMsgIBDChainBlockLocator(locator)
+	msgIBDChainBlockLocator.SetResponseID(responseID)
 	err := flow.outgoingRoute.Enqueue(msgIBDChainBlockLocator)
 	if err != nil {
 		return err

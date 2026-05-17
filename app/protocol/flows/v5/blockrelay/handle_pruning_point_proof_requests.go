@@ -18,10 +18,11 @@ func HandlePruningPointProofRequests(context PruningPointProofRequestsContext, i
 	outgoingRoute *router.Route, peer *peerpkg.Peer) error {
 
 	for {
-		_, err := incomingRoute.Dequeue()
+		message, err := incomingRoute.Dequeue()
 		if err != nil {
 			return err
 		}
+		requestMessage := message.(*appmessage.MsgRequestPruningPointProof)
 
 		log.Debugf("Got request for pruning point proof from %s", peer)
 
@@ -30,6 +31,7 @@ func HandlePruningPointProofRequests(context PruningPointProofRequestsContext, i
 			return err
 		}
 		pruningPointProofMessage := appmessage.DomainPruningPointProofToMsgPruningPointProof(pruningPointProof)
+		pruningPointProofMessage.SetResponseID(requestMessage.RequestID())
 		err = outgoingRoute.Enqueue(pruningPointProofMessage)
 		if err != nil {
 			return err

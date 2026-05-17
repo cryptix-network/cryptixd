@@ -1,11 +1,14 @@
 package flowcontext
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 )
 
 // TransactionIDPropagationInterval is the interval between transaction IDs propagations
@@ -16,6 +19,14 @@ func (f *FlowContext) AddTransaction(tx *externalapi.DomainTransaction, allowOrp
 	acceptedTransactions, err := f.Domain().MiningManager().ValidateAndInsertTransaction(tx, true, allowOrphan)
 	if err != nil {
 		return err
+	}
+
+	if len(acceptedTransactions) > 0 {
+		if catSummary, isCAT := describeCATTransaction(tx); isCAT {
+			log.Infof("Accepted local CAT transaction into mempool: tx=%s %s accepted_total=%d",
+				consensushashing.TransactionID(tx), catSummary, len(acceptedTransactions))
+		}
+		f.OnTransactionAddedToMempool()
 	}
 
 	acceptedTransactionIDs := consensushashing.TransactionIDs(acceptedTransactions)
@@ -36,6 +47,10 @@ func (f *FlowContext) SharedRequestedTransactions() *SharedRequestedTransactions
 // OnTransactionAddedToMempool notifies the handler function that a transaction
 // has been added to the mempool
 func (f *FlowContext) OnTransactionAddedToMempool() {
+	f.Domain().MiningManager().ClearBlockTemplate()
+	log.Infof("Mempool changed: cleared cached block template (tx_pool=%d orphan_pool=%d)",
+		f.Domain().MiningManager().TransactionCount(true, false),
+		f.Domain().MiningManager().TransactionCount(false, true))
 	if f.onTransactionAddedToMempoolHandler != nil {
 		f.onTransactionAddedToMempoolHandler()
 	}
@@ -78,4 +93,20 @@ func (f *FlowContext) maybePropagateTransactions() error {
 	f.lastTransactionIDPropagationTime = time.Now()
 
 	return nil
+}
+
+func describeCATTransaction(tx *externalapi.DomainTransaction) (string, bool) {
+	if !subnetworks.IsPayload(tx.SubnetworkID) || len(tx.Payload) == 0 {
+		return "", false
+	}
+
+	parsedPayload, err := atomicstate.ParsePayload(tx.Payload)
+	if err != nil {
+		return fmt.Sprintf("cat=parse_error:%s payload_bytes=%d", err, len(tx.Payload)), true
+	}
+	if parsedPayload == nil {
+		return "", false
+	}
+
+	return fmt.Sprintf("op=%T nonce=%d payload_bytes=%d", parsedPayload.Op, parsedPayload.Nonce, len(tx.Payload)), true
 }

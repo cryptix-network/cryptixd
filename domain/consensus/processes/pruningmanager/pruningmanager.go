@@ -1011,7 +1011,14 @@ func (pm *pruningManager) AppendImportedPruningPointAtomicState(stateBytes []byt
 		return err
 	}
 
-	return dbTx.Commit()
+	err = dbTx.Commit()
+	if err != nil {
+		return err
+	}
+	stateHash := state.CanonicalHash()
+	atomicLog.Infof("Imported pruning-point Atomic state bytes: bytes=%d root=%x root_only=%t",
+		len(stateBytes), stateHash[:], state.IsRootOnly())
+	return nil
 }
 
 func (pm *pruningManager) AppendImportedPruningPointAtomicStateHash(stateHash [externalapi.DomainHashSize]byte) error {
@@ -1026,7 +1033,12 @@ func (pm *pruningManager) AppendImportedPruningPointAtomicStateHash(stateHash [e
 		return err
 	}
 
-	return dbTx.Commit()
+	err = dbTx.Commit()
+	if err != nil {
+		return err
+	}
+	atomicLog.Infof("Imported pruning-point Atomic state root: root=%x", stateHash[:])
+	return nil
 }
 
 func (pm *pruningManager) UpdatePruningPointIfRequired() error {
