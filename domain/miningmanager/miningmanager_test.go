@@ -135,6 +135,17 @@ func TestPayloadTransactionTemplateBuild(t *testing.T) {
 
 func newTestMiningManager(t *testing.T, consensusConfig *consensus.Config, name string) miningmanager.MiningManager {
 	t.Helper()
+	miningManager, _ := newTestMiningManagerWithConfig(t, consensusConfig, name, nil)
+	return miningManager
+}
+
+func newTestMiningManagerWithConfig(
+	t *testing.T,
+	consensusConfig *consensus.Config,
+	name string,
+	configureMempool func(*mempool.Config),
+) (miningmanager.MiningManager, testapi.TestConsensus) {
+	t.Helper()
 
 	factory := consensus.NewFactory()
 	tc, teardown, err := factory.NewTestConsensus(consensusConfig, name)
@@ -149,7 +160,11 @@ func newTestMiningManager(t *testing.T, consensusConfig *consensus.Config, name 
 	tcAsConsensus := tc.(externalapi.Consensus)
 	tcAsConsensusPointer := &tcAsConsensus
 	consensusReference := consensusreference.NewConsensusReference(&tcAsConsensusPointer)
-	return miningFactory.NewMiningManager(consensusReference, &consensusConfig.Params, mempool.DefaultConfig(&consensusConfig.Params))
+	mempoolConfig := mempool.DefaultConfig(&consensusConfig.Params)
+	if configureMempool != nil {
+		configureMempool(mempoolConfig)
+	}
+	return miningFactory.NewMiningManager(consensusReference, &consensusConfig.Params, mempoolConfig), tc
 }
 
 func TestAtomicMempoolRejectsDuplicateAssetNonceSlot(t *testing.T) {
@@ -261,6 +276,121 @@ func TestAtomicMempoolRemovesAcceptedLiquidityPoolConflict(t *testing.T) {
 		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
 		if len(transactionsFromMempool) != 0 {
 			t.Fatalf("expected accepted liquidity pool conflict to evict local tx, got %d transactions", len(transactionsFromMempool))
+		}
+	})
+}
+
+func TestAtomicMempoolCountLimitRejectsSameDomainCATWithoutEviction(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, _ := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicMempoolCountLimitRejectsSameDomainCATWithoutEviction",
+			func(config *mempool.Config) {
+				config.MaximumTransactionCount = 1
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x34
+		firstTx := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		firstTx.Fee = 10
+		highFeeSameAsset := createCATTransactionWithUTXOEntry(t, 2, createCATTransferPayload(assetID, 2))
+		highFeeSameAsset.Fee = 500_000
+
+		_, err := miningManager.ValidateAndInsertTransaction(firstTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction firstTx: %v", err)
+		}
+		_, err = miningManager.ValidateAndInsertTransaction(highFeeSameAsset, false, true)
+		if err == nil {
+			t.Fatalf("expected same-domain CAT to be rejected when no non-conflicting eviction candidate exists")
+		}
+
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 1 || *consensushashing.TransactionID(transactionsFromMempool[0]) != *consensushashing.TransactionID(firstTx) {
+			t.Fatalf("expected first same-domain CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
+func TestAtomicMempoolCountLimitCanEvictDifferentDomainCAT(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, _ := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicMempoolCountLimitCanEvictDifferentDomainCAT",
+			func(config *mempool.Config) {
+				config.MaximumTransactionCount = 1
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var firstAssetID [externalapi.DomainHashSize]byte
+		firstAssetID[0] = 0x35
+		var secondAssetID [externalapi.DomainHashSize]byte
+		secondAssetID[0] = 0x36
+		firstTx := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(firstAssetID, 1))
+		firstTx.Fee = 10
+		highFeeOtherAsset := createCATTransactionWithUTXOEntry(t, 2, createCATTransferPayload(secondAssetID, 1))
+		highFeeOtherAsset.Fee = 500_000
+
+		_, err := miningManager.ValidateAndInsertTransaction(firstTx, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction firstTx: %v", err)
+		}
+		_, err = miningManager.ValidateAndInsertTransaction(highFeeOtherAsset, false, true)
+		if err != nil {
+			t.Fatalf("expected different-domain CAT to enter by evicting lower-fee CAT from another domain: %v", err)
+		}
+
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 1 || *consensushashing.TransactionID(transactionsFromMempool[0]) != *consensushashing.TransactionID(highFeeOtherAsset) {
+			t.Fatalf("expected high-fee different-domain CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
+func TestAtomicMempoolRemovesAcceptedSameAssetDomainConflict(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolRemovesAcceptedSameAssetDomainConflict")
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x37
+		var otherAssetID [externalapi.DomainHashSize]byte
+		otherAssetID[0] = 0x38
+		localSameAsset := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		localOtherAsset := createCATTransactionWithUTXOEntry(t, 2, createCATTransferPayload(otherAssetID, 1))
+		acceptedFromAnotherNode := createCATTransactionWithUTXOEntry(t, 3, createCATTransferPayload(assetID, 2))
+
+		if _, err := miningManager.ValidateAndInsertTransaction(localSameAsset, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction localSameAsset: %v", err)
+		}
+		if _, err := miningManager.ValidateAndInsertTransaction(localOtherAsset, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction localOtherAsset: %v", err)
+		}
+
+		_, err := miningManager.HandleNewBlockTransactions([]*externalapi.DomainTransaction{
+			{},
+			acceptedFromAnotherNode,
+		})
+		if err != nil {
+			t.Fatalf("HandleNewBlockTransactions: %v", err)
+		}
+
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 1 || *consensushashing.TransactionID(transactionsFromMempool[0]) != *consensushashing.TransactionID(localOtherAsset) {
+			t.Fatalf("expected only other-asset CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
 		}
 	})
 }

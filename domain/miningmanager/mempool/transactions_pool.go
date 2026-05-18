@@ -2,7 +2,6 @@ package mempool
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/pkg/errors"
 
@@ -20,7 +19,6 @@ type transactionsPool struct {
 	atomicSlotOwners              map[atomicMempoolSlot]externalapi.DomainTransactionID
 	atomicSlotsByTransactionID    map[externalapi.DomainTransactionID][]atomicMempoolSlot
 	lastExpireScanDAAScore        uint64
-	lastExpireScanTime            time.Time
 }
 
 func newTransactionsPool(mp *mempool) *transactionsPool {
@@ -33,7 +31,6 @@ func newTransactionsPool(mp *mempool) *transactionsPool {
 		atomicSlotOwners:              map[atomicMempoolSlot]externalapi.DomainTransactionID{},
 		atomicSlotsByTransactionID:    map[externalapi.DomainTransactionID][]atomicMempoolSlot{},
 		lastExpireScanDAAScore:        0,
-		lastExpireScanTime:            time.Now(),
 	}
 }
 
@@ -144,8 +141,7 @@ func (tp *transactionsPool) expireOldTransactions() error {
 		return err
 	}
 
-	if virtualDAAScore-tp.lastExpireScanDAAScore < tp.mempool.config.TransactionExpireScanIntervalDAAScore ||
-		time.Since(tp.lastExpireScanTime).Seconds() < float64(tp.mempool.config.TransactionExpireScanIntervalSeconds) {
+	if virtualDAAScore-tp.lastExpireScanDAAScore < tp.mempool.config.TransactionExpireScanIntervalDAAScore {
 		return nil
 	}
 
@@ -157,9 +153,13 @@ func (tp *transactionsPool) expireOldTransactions() error {
 
 		// Remove all transactions whose addedAtDAAScore is older then TransactionExpireIntervalDAAScore
 		daaScoreSinceAdded := virtualDAAScore - mempoolTransaction.AddedAtDAAScore()
-		if daaScoreSinceAdded > tp.mempool.config.TransactionExpireIntervalDAAScore {
+		expireInterval := tp.mempool.config.TransactionExpireIntervalDAAScore
+		if isCATTransaction(mempoolTransaction.Transaction()) {
+			expireInterval = tp.mempool.config.AtomicTransactionExpireIntervalDAAScore
+		}
+		if daaScoreSinceAdded > expireInterval {
 			log.Debugf("Removing transaction %s, because it expired. DAAScore moved by %d, expire interval: %d",
-				mempoolTransaction.TransactionID(), daaScoreSinceAdded, tp.mempool.config.TransactionExpireIntervalDAAScore)
+				mempoolTransaction.TransactionID(), daaScoreSinceAdded, expireInterval)
 			err = tp.mempool.removeTransaction(mempoolTransaction.TransactionID(), true)
 			if err != nil {
 				return err
@@ -168,7 +168,6 @@ func (tp *transactionsPool) expireOldTransactions() error {
 	}
 
 	tp.lastExpireScanDAAScore = virtualDAAScore
-	tp.lastExpireScanTime = time.Now()
 	return nil
 }
 
@@ -214,23 +213,59 @@ func (tp *transactionsPool) getRedeemers(transaction *model.MempoolTransaction) 
 	return redeemers
 }
 
-func (tp *transactionsPool) limitTransactionCount() error {
+func (tp *transactionsPool) limitTransactionCount(admittedTransaction *model.MempoolTransaction) error {
 	currentIndex := 0
+	blockedByPolicy := false
+	var admittedDomains []atomicMempoolDomain
+	var admittedTransactionID *externalapi.DomainTransactionID
+	if admittedTransaction != nil {
+		admittedTransactionID = admittedTransaction.TransactionID()
+		var err error
+		admittedDomains, err = atomicMempoolDomains(admittedTransaction.Transaction())
+		if err != nil {
+			return err
+		}
+	}
 
 	for uint64(len(tp.allTransactions)) > tp.mempool.config.MaximumTransactionCount {
 		var transactionToRemove *model.MempoolTransaction
 		for {
+			if currentIndex >= len(tp.allTransactions) {
+				if !blockedByPolicy {
+					log.Warnf(
+						"Number of high-priority transactions in mempool (%d) is higher than maximum allowed (%d)",
+						len(tp.allTransactions), tp.mempool.config.MaximumTransactionCount)
+					return nil
+				}
+				return transactionRuleError(RejectInsufficientFee, fmt.Sprintf(
+					"mempool is full and no removable low-priority transaction is available"))
+			}
 			transactionToRemove = tp.transactionsOrderedByFeeRate.GetByIndex(currentIndex)
-			if !transactionToRemove.IsHighPriority() {
+			if admittedTransactionID != nil && transactionToRemove.TransactionID().Equal(admittedTransactionID) {
+				if admittedTransaction.IsHighPriority() {
+					currentIndex++
+					continue
+				}
+				blockedByPolicy = true
+				return transactionRuleError(RejectInsufficientFee, fmt.Sprintf(
+					"transaction %s rejected: mempool is full and it would be the eviction candidate",
+					admittedTransactionID))
+			}
+			canRemove := !transactionToRemove.IsHighPriority()
+			if canRemove && len(admittedDomains) > 0 {
+				transactionDomains, err := atomicMempoolDomains(transactionToRemove.Transaction())
+				if err != nil {
+					return err
+				}
+				if atomicMempoolDomainsConflict(admittedDomains, transactionDomains) {
+					blockedByPolicy = true
+					canRemove = false
+				}
+			}
+			if canRemove {
 				break
 			}
 			currentIndex++
-			if currentIndex >= len(tp.allTransactions) {
-				log.Warnf(
-					"Number of high-priority transactions in mempool (%d) is higher than maximum allowed (%d)",
-					len(tp.allTransactions), tp.mempool.config.MaximumTransactionCount)
-				return nil
-			}
 		}
 
 		log.Debugf("Removing transaction %s, because mempoolTransaction count (%d) exceeded the limit (%d)",
@@ -244,6 +279,31 @@ func (tp *transactionsPool) limitTransactionCount() error {
 		}
 	}
 	return nil
+}
+
+func (tp *transactionsPool) atomicDomainConflictOwners(domains []atomicMempoolDomain) []externalapi.DomainTransactionID {
+	if len(domains) == 0 {
+		return nil
+	}
+
+	owners := make([]externalapi.DomainTransactionID, 0)
+	for transactionID, slots := range tp.atomicSlotsByTransactionID {
+		if atomicMempoolDomainsConflict(domains, atomicMempoolDomainsFromSlots(slots)) {
+			owners = append(owners, transactionID)
+		}
+	}
+	return owners
+}
+
+func atomicMempoolDomainsConflict(left []atomicMempoolDomain, right []atomicMempoolDomain) bool {
+	for _, leftDomain := range left {
+		for _, rightDomain := range right {
+			if leftDomain == rightDomain {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (tp *transactionsPool) getTransaction(transactionID *externalapi.DomainTransactionID, clone bool) (*externalapi.DomainTransaction, bool) {

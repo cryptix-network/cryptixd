@@ -67,6 +67,17 @@ func (mp *mempool) removeDoubleSpends(transaction *externalapi.DomainTransaction
 }
 
 func (mp *mempool) removeAcceptedAtomicConflicts(transaction *externalapi.DomainTransaction) error {
+	domains, err := atomicMempoolDomainsFromPayload(transaction)
+	if err != nil {
+		return err
+	}
+	for _, conflictingTransactionID := range mp.transactionsPool.atomicDomainConflictOwners(domains) {
+		err := mp.removeTransaction(&conflictingTransactionID, true)
+		if err != nil {
+			return err
+		}
+	}
+
 	slot, ok, err := atomicMempoolLiquidityPoolSlot(transaction)
 	if err != nil {
 		return err

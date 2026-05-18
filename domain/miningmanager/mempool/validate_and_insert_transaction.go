@@ -48,17 +48,22 @@ func (mp *mempool) validateAndInsertTransaction(transaction *externalapi.DomainT
 		return nil, err
 	}
 
+	err = mp.transactionsPool.limitTransactionCount(mempoolTransaction)
+	if err != nil {
+		removeErr := mp.removeTransaction(mempoolTransaction.TransactionID(), true)
+		if removeErr != nil {
+			log.Warnf("Failed to remove rejected transaction %s after mempool limit failure: %s",
+				mempoolTransaction.TransactionID(), removeErr)
+		}
+		return nil, err
+	}
+
 	acceptedOrphans, err := mp.orphansPool.processOrphansAfterAcceptedTransaction(mempoolTransaction.Transaction())
 	if err != nil {
 		return nil, err
 	}
 
 	acceptedTransactions = append([]*externalapi.DomainTransaction{transaction.Clone()}, acceptedOrphans...) //these pointer leave the mempool, hence we clone.
-
-	err = mp.transactionsPool.limitTransactionCount()
-	if err != nil {
-		return nil, err
-	}
 
 	return acceptedTransactions, nil
 }

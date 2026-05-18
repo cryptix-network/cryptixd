@@ -21,7 +21,12 @@ func HandleSubmitTransaction(context *rpccontext.Context, _ *router.Router, requ
 	}
 
 	transactionID := consensushashing.TransactionID(domainTransaction)
-	err = context.ProtocolManager.AddTransaction(domainTransaction, submitTransactionRequest.AllowOrphan)
+	allowOrphan := submitTransactionRequest.AllowOrphan && context.Config.AllowRPCOrphans && !context.Config.SafeRPC
+	if submitTransactionRequest.AllowOrphan && !allowOrphan {
+		log.Debugf("SubmitTransaction RPC command called with AllowOrphan enabled while RPC orphan admission is disabled -- switching to forbid orphan")
+	}
+
+	err = context.ProtocolManager.AddTransaction(domainTransaction, allowOrphan)
 	if err != nil {
 		if !errors.As(err, &mempool.RuleError{}) {
 			return nil, err
