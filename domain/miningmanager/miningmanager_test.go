@@ -195,6 +195,53 @@ func TestAtomicMempoolRejectsDuplicateAssetNonceSlot(t *testing.T) {
 	})
 }
 
+func TestAtomicDuplicateNonceDoesNotEvictPendingFutureNonceWhenFull(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, _ := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicDuplicateNonceDoesNotEvictPendingFutureNonceWhenFull",
+			func(config *mempool.Config) {
+				config.MaximumTransactionCount = 2
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x12
+		firstTx := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		futureTx := createCATTransactionWithUTXOEntry(t, 2, createCATTransferPayload(assetID, 2))
+		duplicateFirstTx := createCATTransactionWithUTXOEntry(t, 3, createCATTransferPayload(assetID, 1))
+		duplicateFirstTx.Fee = 500_000
+
+		if _, err := miningManager.ValidateAndInsertTransaction(firstTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction firstTx: %v", err)
+		}
+		if _, err := miningManager.ValidateAndInsertTransaction(futureTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction futureTx: %v", err)
+		}
+
+		_, err := miningManager.ValidateAndInsertTransaction(duplicateFirstTx, false, true)
+		if err == nil {
+			t.Fatalf("expected duplicate CAT nonce slot rejection")
+		}
+		if !strings.Contains(err.Error(), "atomic slot nonce:asset") {
+			t.Fatalf("expected duplicate CAT asset nonce slot error, got: %v", err)
+		}
+
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 2 {
+			t.Fatalf("expected duplicate rejection to keep two pending txs, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+		if !contains(futureTx, transactionsFromMempool) {
+			t.Fatalf("duplicate same-nonce CAT must not evict pending future nonce, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
 func TestAtomicMempoolRejectsDuplicateOwnerNonceSlot(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		consensusConfig.BlockCoinbaseMaturity = 0
@@ -280,7 +327,7 @@ func TestAtomicMempoolRemovesAcceptedLiquidityPoolConflict(t *testing.T) {
 	})
 }
 
-func TestAtomicMempoolCountLimitRejectsSameDomainCATWithoutEviction(t *testing.T) {
+func TestAtomicMempoolCountLimitPreservesPendingNonceChain(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		consensusConfig.BlockCoinbaseMaturity = 0
 		consensusConfig.PayloadHfActivationDAAScore = 0
@@ -288,7 +335,7 @@ func TestAtomicMempoolCountLimitRejectsSameDomainCATWithoutEviction(t *testing.T
 		miningManager, _ := newTestMiningManagerWithConfig(
 			t,
 			consensusConfig,
-			"TestAtomicMempoolCountLimitRejectsSameDomainCATWithoutEviction",
+			"TestAtomicMempoolCountLimitPreservesPendingNonceChain",
 			func(config *mempool.Config) {
 				config.MaximumTransactionCount = 1
 				config.MinimumRelayTransactionFee = 0
@@ -308,17 +355,17 @@ func TestAtomicMempoolCountLimitRejectsSameDomainCATWithoutEviction(t *testing.T
 		}
 		_, err = miningManager.ValidateAndInsertTransaction(highFeeSameAsset, false, true)
 		if err == nil {
-			t.Fatalf("expected same-domain CAT to be rejected when no non-conflicting eviction candidate exists")
+			t.Fatalf("expected future CAT nonce to be rejected when only its pending predecessor could be evicted")
 		}
 
 		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
 		if len(transactionsFromMempool) != 1 || *consensushashing.TransactionID(transactionsFromMempool[0]) != *consensushashing.TransactionID(firstTx) {
-			t.Fatalf("expected first same-domain CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+			t.Fatalf("expected pending predecessor CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
 		}
 	})
 }
 
-func TestAtomicMempoolCountLimitCanEvictDifferentDomainCAT(t *testing.T) {
+func TestAtomicMempoolCountLimitCanEvictDifferentAssetCAT(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		consensusConfig.BlockCoinbaseMaturity = 0
 		consensusConfig.PayloadHfActivationDAAScore = 0
@@ -326,7 +373,7 @@ func TestAtomicMempoolCountLimitCanEvictDifferentDomainCAT(t *testing.T) {
 		miningManager, _ := newTestMiningManagerWithConfig(
 			t,
 			consensusConfig,
-			"TestAtomicMempoolCountLimitCanEvictDifferentDomainCAT",
+			"TestAtomicMempoolCountLimitCanEvictDifferentAssetCAT",
 			func(config *mempool.Config) {
 				config.MaximumTransactionCount = 1
 				config.MinimumRelayTransactionFee = 0
@@ -348,33 +395,33 @@ func TestAtomicMempoolCountLimitCanEvictDifferentDomainCAT(t *testing.T) {
 		}
 		_, err = miningManager.ValidateAndInsertTransaction(highFeeOtherAsset, false, true)
 		if err != nil {
-			t.Fatalf("expected different-domain CAT to enter by evicting lower-fee CAT from another domain: %v", err)
+			t.Fatalf("expected different-asset CAT to enter by evicting lower-fee CAT from another asset: %v", err)
 		}
 
 		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
 		if len(transactionsFromMempool) != 1 || *consensushashing.TransactionID(transactionsFromMempool[0]) != *consensushashing.TransactionID(highFeeOtherAsset) {
-			t.Fatalf("expected high-fee different-domain CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+			t.Fatalf("expected high-fee different-asset CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
 		}
 	})
 }
 
-func TestAtomicMempoolRemovesAcceptedSameAssetDomainConflict(t *testing.T) {
+func TestAtomicMempoolKeepsFutureSameAssetNonceAfterAcceptedPredecessor(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		consensusConfig.BlockCoinbaseMaturity = 0
 		consensusConfig.PayloadHfActivationDAAScore = 0
 
-		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolRemovesAcceptedSameAssetDomainConflict")
+		miningManager := newTestMiningManager(t, consensusConfig, "TestAtomicMempoolKeepsFutureSameAssetNonceAfterAcceptedPredecessor")
 
 		var assetID [externalapi.DomainHashSize]byte
 		assetID[0] = 0x37
 		var otherAssetID [externalapi.DomainHashSize]byte
 		otherAssetID[0] = 0x38
-		localSameAsset := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		localFutureSameAsset := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 2))
 		localOtherAsset := createCATTransactionWithUTXOEntry(t, 2, createCATTransferPayload(otherAssetID, 1))
-		acceptedFromAnotherNode := createCATTransactionWithUTXOEntry(t, 3, createCATTransferPayload(assetID, 2))
+		acceptedFromAnotherNode := createCATTransactionWithUTXOEntry(t, 3, createCATTransferPayload(assetID, 1))
 
-		if _, err := miningManager.ValidateAndInsertTransaction(localSameAsset, false, true); err != nil {
-			t.Fatalf("ValidateAndInsertTransaction localSameAsset: %v", err)
+		if _, err := miningManager.ValidateAndInsertTransaction(localFutureSameAsset, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction localFutureSameAsset: %v", err)
 		}
 		if _, err := miningManager.ValidateAndInsertTransaction(localOtherAsset, false, true); err != nil {
 			t.Fatalf("ValidateAndInsertTransaction localOtherAsset: %v", err)
@@ -389,8 +436,11 @@ func TestAtomicMempoolRemovesAcceptedSameAssetDomainConflict(t *testing.T) {
 		}
 
 		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
-		if len(transactionsFromMempool) != 1 || *consensushashing.TransactionID(transactionsFromMempool[0]) != *consensushashing.TransactionID(localOtherAsset) {
-			t.Fatalf("expected only other-asset CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		if !contains(localFutureSameAsset, transactionsFromMempool) {
+			t.Fatalf("expected future same-asset CAT nonce to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+		if !contains(localOtherAsset, transactionsFromMempool) {
+			t.Fatalf("expected other-asset CAT to remain in mempool, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
 		}
 	})
 }

@@ -23,20 +23,6 @@ type atomicMempoolSlot struct {
 	poolNonce uint64
 }
 
-type atomicMempoolDomainKind byte
-
-const (
-	atomicMempoolDomainKindOwner atomicMempoolDomainKind = iota
-	atomicMempoolDomainKindAsset
-	atomicMempoolDomainKindLiquidityPool
-)
-
-type atomicMempoolDomain struct {
-	kind    atomicMempoolDomainKind
-	ownerID [externalapi.DomainHashSize]byte
-	assetID [externalapi.DomainHashSize]byte
-}
-
 func (slot atomicMempoolSlot) String() string {
 	switch slot.kind {
 	case atomicMempoolSlotKindNonce:
@@ -109,71 +95,6 @@ func isCATTransaction(transaction *externalapi.DomainTransaction) bool {
 		subnetworks.IsPayload(transaction.SubnetworkID) &&
 		len(transaction.Payload) >= 3 &&
 		string(transaction.Payload[:3]) == "CAT"
-}
-
-func atomicMempoolDomains(transaction *externalapi.DomainTransaction) ([]atomicMempoolDomain, error) {
-	slots, err := atomicMempoolSlots(transaction)
-	if err != nil {
-		return nil, err
-	}
-	return atomicMempoolDomainsFromSlots(slots), nil
-}
-
-func atomicMempoolDomainsFromSlots(slots []atomicMempoolSlot) []atomicMempoolDomain {
-	domains := make([]atomicMempoolDomain, 0, len(slots))
-	for _, slot := range slots {
-		switch slot.kind {
-		case atomicMempoolSlotKindNonce:
-			if slot.nonceKey.ScopeKind == atomicstate.NonceScopeAsset {
-				domains = append(domains, atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: slot.nonceKey.ScopeID})
-			} else {
-				domains = append(domains, atomicMempoolDomain{kind: atomicMempoolDomainKindOwner, ownerID: slot.nonceKey.OwnerID})
-			}
-		case atomicMempoolSlotKindLiquidityPool:
-			domains = append(domains, atomicMempoolDomain{kind: atomicMempoolDomainKindLiquidityPool, assetID: slot.assetID})
-		}
-	}
-	return domains
-}
-
-func atomicMempoolDomainsFromPayload(transaction *externalapi.DomainTransaction) ([]atomicMempoolDomain, error) {
-	if transaction == nil || !subnetworks.IsPayload(transaction.SubnetworkID) {
-		return nil, nil
-	}
-
-	parsed, err := atomicstate.ParsePayload(transaction.Payload)
-	if err != nil {
-		return nil, fmt.Errorf("invalid CAT payload: %s", err)
-	}
-	if parsed == nil {
-		return nil, nil
-	}
-
-	domains := make([]atomicMempoolDomain, 0, 2)
-	switch op := parsed.Op.(type) {
-	case atomicstate.TransferOp:
-		domains = append(domains, atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: op.AssetID})
-	case atomicstate.MintOp:
-		domains = append(domains, atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: op.AssetID})
-	case atomicstate.BurnOp:
-		domains = append(domains, atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: op.AssetID})
-	case atomicstate.BuyLiquidityExactInOp:
-		domains = append(domains,
-			atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: op.AssetID},
-			atomicMempoolDomain{kind: atomicMempoolDomainKindLiquidityPool, assetID: op.AssetID},
-		)
-	case atomicstate.SellLiquidityExactInOp:
-		domains = append(domains,
-			atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: op.AssetID},
-			atomicMempoolDomain{kind: atomicMempoolDomainKindLiquidityPool, assetID: op.AssetID},
-		)
-	case atomicstate.ClaimLiquidityFeesOp:
-		domains = append(domains,
-			atomicMempoolDomain{kind: atomicMempoolDomainKindAsset, assetID: op.AssetID},
-			atomicMempoolDomain{kind: atomicMempoolDomainKindLiquidityPool, assetID: op.AssetID},
-		)
-	}
-	return domains, nil
 }
 
 func atomicMempoolLiquidityPoolSlot(transaction *externalapi.DomainTransaction) (atomicMempoolSlot, bool, error) {

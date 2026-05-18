@@ -216,12 +216,12 @@ func (tp *transactionsPool) getRedeemers(transaction *model.MempoolTransaction) 
 func (tp *transactionsPool) limitTransactionCount(admittedTransaction *model.MempoolTransaction) error {
 	currentIndex := 0
 	blockedByPolicy := false
-	var admittedDomains []atomicMempoolDomain
+	var admittedSlots []atomicMempoolSlot
 	var admittedTransactionID *externalapi.DomainTransactionID
 	if admittedTransaction != nil {
 		admittedTransactionID = admittedTransaction.TransactionID()
 		var err error
-		admittedDomains, err = atomicMempoolDomains(admittedTransaction.Transaction())
+		admittedSlots, err = atomicMempoolSlots(admittedTransaction.Transaction())
 		if err != nil {
 			return err
 		}
@@ -252,12 +252,12 @@ func (tp *transactionsPool) limitTransactionCount(admittedTransaction *model.Mem
 					admittedTransactionID))
 			}
 			canRemove := !transactionToRemove.IsHighPriority()
-			if canRemove && len(admittedDomains) > 0 {
-				transactionDomains, err := atomicMempoolDomains(transactionToRemove.Transaction())
+			if canRemove && len(admittedSlots) > 0 {
+				transactionSlots, err := atomicMempoolSlots(transactionToRemove.Transaction())
 				if err != nil {
 					return err
 				}
-				if atomicMempoolDomainsConflict(admittedDomains, transactionDomains) {
+				if atomicSlotsBlockCapacityEviction(admittedSlots, transactionSlots) {
 					blockedByPolicy = true
 					canRemove = false
 				}
@@ -281,29 +281,30 @@ func (tp *transactionsPool) limitTransactionCount(admittedTransaction *model.Mem
 	return nil
 }
 
-func (tp *transactionsPool) atomicDomainConflictOwners(domains []atomicMempoolDomain) []externalapi.DomainTransactionID {
-	if len(domains) == 0 {
-		return nil
-	}
-
-	owners := make([]externalapi.DomainTransactionID, 0)
-	for transactionID, slots := range tp.atomicSlotsByTransactionID {
-		if atomicMempoolDomainsConflict(domains, atomicMempoolDomainsFromSlots(slots)) {
-			owners = append(owners, transactionID)
-		}
-	}
-	return owners
-}
-
-func atomicMempoolDomainsConflict(left []atomicMempoolDomain, right []atomicMempoolDomain) bool {
-	for _, leftDomain := range left {
-		for _, rightDomain := range right {
-			if leftDomain == rightDomain {
+func atomicSlotsBlockCapacityEviction(incoming []atomicMempoolSlot, existing []atomicMempoolSlot) bool {
+	for _, incomingSlot := range incoming {
+		for _, existingSlot := range existing {
+			if atomicSlotBlocksCapacityEviction(incomingSlot, existingSlot) {
 				return true
 			}
 		}
 	}
 	return false
+}
+
+func atomicSlotBlocksCapacityEviction(incoming atomicMempoolSlot, existing atomicMempoolSlot) bool {
+	if incoming.kind != existing.kind {
+		return false
+	}
+
+	switch incoming.kind {
+	case atomicMempoolSlotKindNonce:
+		return incoming.nonceKey == existing.nonceKey && existing.nonce <= incoming.nonce
+	case atomicMempoolSlotKindLiquidityPool:
+		return incoming.assetID == existing.assetID && existing.poolNonce <= incoming.poolNonce
+	default:
+		return false
+	}
 }
 
 func (tp *transactionsPool) getTransaction(transactionID *externalapi.DomainTransactionID, clone bool) (*externalapi.DomainTransaction, bool) {
