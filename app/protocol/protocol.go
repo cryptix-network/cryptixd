@@ -148,8 +148,8 @@ func (m *Manager) routerInitializer(router *routerpkg.Router, netConnection *net
 			log.Debugf("Peer %s supports post-HF quantum-safe handshake fallback negotiation", peer)
 		}
 		switch peer.ProtocolVersion() {
-		case 5, 6, 7, 8, 9:
-			// Protocol versions 5/6/7/8/9 currently use the v5 flow set in this node implementation.
+		case 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18:
+			// Protocol versions 5 through 18 currently use the v5 flow set in this node implementation.
 			flows = v5.Register(m, router, errChan, &isStopping)
 		default:
 			panic(errors.Errorf("no way to handle protocol version %d", peer.ProtocolVersion()))

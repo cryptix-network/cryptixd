@@ -222,6 +222,52 @@ func TestRequestNextPruningPointAtomicStateChunkRoundTrip(t *testing.T) {
 	}
 }
 
+func TestAtomicStateHashMessagesRoundTrip(t *testing.T) {
+	blockHash := testDomainHash(t, 0x66)
+	stateHash := bytes.Repeat([]byte{0x77}, externalapi.DomainHashSize)
+	anchorDAAScore := uint64(12345)
+
+	messages := []appmessage.Message{
+		appmessage.NewMsgRequestConsensusAtomicStateHash(blockHash, anchorDAAScore),
+		appmessage.NewMsgConsensusAtomicStateHash(blockHash, stateHash, true, anchorDAAScore),
+		appmessage.NewMsgRequestAtomicTokenStateHash(blockHash, anchorDAAScore),
+		appmessage.NewMsgAtomicTokenStateHash(blockHash, stateHash, true, anchorDAAScore),
+	}
+
+	for _, input := range messages {
+		protoMessage, err := FromAppMessage(input)
+		if err != nil {
+			t.Fatalf("FromAppMessage(%T) failed: %v", input, err)
+		}
+
+		appMsg, err := protoMessage.ToAppMessage()
+		if err != nil {
+			t.Fatalf("ToAppMessage(%T) failed: %v", input, err)
+		}
+
+		switch got := appMsg.(type) {
+		case *appmessage.MsgRequestConsensusAtomicStateHash:
+			if !bytes.Equal(got.BlockHash.ByteSlice(), blockHash.ByteSlice()) || got.AnchorDAAScore != anchorDAAScore {
+				t.Fatalf("consensus request block hash mismatch")
+			}
+		case *appmessage.MsgConsensusAtomicStateHash:
+			if !bytes.Equal(got.BlockHash.ByteSlice(), blockHash.ByteSlice()) || !bytes.Equal(got.StateHash, stateHash) || !got.HasState || got.AnchorDAAScore != anchorDAAScore {
+				t.Fatalf("consensus response mismatch")
+			}
+		case *appmessage.MsgRequestAtomicTokenStateHash:
+			if !bytes.Equal(got.BlockHash.ByteSlice(), blockHash.ByteSlice()) || got.AnchorDAAScore != anchorDAAScore {
+				t.Fatalf("token request block hash mismatch")
+			}
+		case *appmessage.MsgAtomicTokenStateHash:
+			if !bytes.Equal(got.BlockHash.ByteSlice(), blockHash.ByteSlice()) || !bytes.Equal(got.StateHash, stateHash) || !got.HasState || got.AnchorDAAScore != anchorDAAScore {
+				t.Fatalf("token response mismatch")
+			}
+		default:
+			t.Fatalf("unexpected message type %T", appMsg)
+		}
+	}
+}
+
 func TestEnvelopeIDsRoundTrip(t *testing.T) {
 	input := appmessage.NewMsgRequestAntiFraudSnapshotV1()
 	input.SetRequestID(123)

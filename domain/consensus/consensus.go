@@ -62,6 +62,10 @@ type consensus struct {
 	daaBlocksStore                      model.DAABlocksStore
 	blocksWithTrustedDataDAAWindowStore model.BlocksWithTrustedDataDAAWindowStore
 
+	atomicTokenMetadataCache     map[[externalapi.DomainHashSize]byte]atomicstate.AssetPermanentMetadata
+	atomicTokenMetadataMissCache map[[externalapi.DomainHashSize]byte]string
+	atomicTokenAnchorCountCache  map[[externalapi.DomainHashSize]byte]map[[externalapi.DomainHashSize]byte]uint64
+
 	consensusEventsChan chan externalapi.ConsensusEvent
 	virtualNotUpdated   bool
 }
@@ -612,7 +616,7 @@ func (s *consensus) GetPruningPointAtomicState(expectedPruningPointHash *externa
 	if err != nil {
 		return nil, err
 	}
-	return atomicstate.NewRootOnlyState(atomicState.CanonicalHash()).CanonicalBytes(), nil
+	return atomicState.CanonicalBytes(), nil
 }
 
 func (s *consensus) GetPruningPointAtomicStateHash(expectedPruningPointHash *externalapi.DomainHash) ([externalapi.DomainHashSize]byte, error) {
@@ -637,6 +641,52 @@ func (s *consensus) GetPruningPointAtomicStateHash(expectedPruningPointHash *ext
 		return [externalapi.DomainHashSize]byte{}, err
 	}
 	return atomicState.CanonicalHash(), nil
+}
+
+func (s *consensus) GetAtomicStateHash(blockHash *externalapi.DomainHash) ([externalapi.DomainHashSize]byte, bool, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, blockHash)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return [externalapi.DomainHashSize]byte{}, false, nil
+		}
+		return [externalapi.DomainHashSize]byte{}, false, err
+	}
+	return atomicState.CanonicalHash(), true, nil
+}
+
+func (s *consensus) GetAtomicTokenStateHash(blockHash *externalapi.DomainHash) ([externalapi.DomainHashSize]byte, bool, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, blockHash)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return [externalapi.DomainHashSize]byte{}, false, nil
+		}
+		return [externalapi.DomainHashSize]byte{}, false, err
+	}
+	stateHash, ok, _, err := s.atomicTokenStateHashWithRecoveredMetadata(stagingArea, blockHash, atomicState)
+	return stateHash, ok, err
+}
+
+func (s *consensus) GetAtomicTokenStateHashAvailability(blockHash *externalapi.DomainHash) (bool, string, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, blockHash)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return false, "consensus Atomic state is not retained for this block", nil
+		}
+		return false, "", err
+	}
+	return s.atomicTokenStateHashAvailabilityWithRecoveredMetadata(stagingArea, blockHash, atomicState)
 }
 
 func (s *consensus) GetVirtualUTXOs(expectedVirtualParents []*externalapi.DomainHash,
@@ -749,6 +799,14 @@ func (s *consensus) GetVirtualSelectedParent() (*externalapi.DomainHash, error) 
 		return nil, err
 	}
 	return virtualGHOSTDAGData.SelectedParent(), nil
+}
+
+func (s *consensus) GetVirtualFinalityPoint() (*externalapi.DomainHash, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+	return s.finalityManager.VirtualFinalityPoint(stagingArea)
 }
 
 func (s *consensus) Tips() ([]*externalapi.DomainHash, error) {

@@ -139,6 +139,25 @@ func registerBlockRelayFlows(m protocolManager, router *routerpkg.Router, isStop
 			},
 		),
 
+		m.RegisterFlow("HandleAtomicStateHashRequests", router,
+			[]appmessage.MessageCommand{
+				appmessage.CmdRequestConsensusAtomicStateHash,
+				appmessage.CmdRequestAtomicTokenStateHash,
+			}, isStopping, errChan,
+			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+				return blockrelay.HandleAtomicStateHashRequests(m.Context(), incomingRoute, outgoingRoute)
+			},
+		),
+
+		m.RegisterFlow("AuditAtomicState", router,
+			[]appmessage.MessageCommand{
+				appmessage.CmdAtomicTokenStateHash,
+			}, isStopping, errChan,
+			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
+				return blockrelay.AuditAtomicState(m.Context(), incomingRoute, outgoingRoute, peer)
+			},
+		),
+
 		m.RegisterFlow("HandleIBDBlockLocator", router,
 			[]appmessage.MessageCommand{appmessage.CmdIBDBlockLocator}, isStopping, errChan,
 			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {

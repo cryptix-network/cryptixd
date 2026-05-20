@@ -545,6 +545,10 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		daaBlocksStore:                      daaBlocksStore,
 		blocksWithTrustedDataDAAWindowStore: daaWindowStore,
 
+		atomicTokenMetadataCache:     make(map[[externalapi.DomainHashSize]byte]atomicstate.AssetPermanentMetadata),
+		atomicTokenMetadataMissCache: make(map[[externalapi.DomainHashSize]byte]string),
+		atomicTokenAnchorCountCache:  make(map[[externalapi.DomainHashSize]byte]map[[externalapi.DomainHashSize]byte]uint64),
+
 		consensusEventsChan: consensusEventsChan,
 		virtualNotUpdated:   true,
 	}

@@ -37,7 +37,7 @@ type handleIBDFlow struct {
 }
 
 const (
-	maxImportedAtomicStateBytes uint64 = 8 << 30
+	maxImportedAtomicStateBytes uint64 = 128 << 30
 	trustedAtomicStateChunkSize        = 4 * 1024 * 1024
 )
 

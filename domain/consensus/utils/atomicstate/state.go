@@ -113,13 +113,21 @@ type LiquidityPoolState struct {
 }
 
 type AssetState struct {
+	CreatorOwnerID       [externalapi.DomainHashSize]byte
 	AssetClass           AssetClass
 	TokenVersion         byte
 	MintAuthorityOwnerID [externalapi.DomainHashSize]byte
+	Decimals             byte
 	SupplyMode           SupplyMode
 	MaxSupply            Uint128
 	TotalSupply          Uint128
+	Name                 []byte
+	Symbol               []byte
+	Metadata             []byte
 	PlatformTag          []byte
+	CreatedBlockHash     *[externalapi.DomainHashSize]byte
+	CreatedDAAScore      *uint64
+	CreatedAt            *uint64
 	Liquidity            *LiquidityPoolState
 }
 
@@ -194,7 +202,22 @@ func (s *State) Clone() *State {
 
 func (a AssetState) clone() AssetState {
 	out := a
+	out.Name = append([]byte(nil), a.Name...)
+	out.Symbol = append([]byte(nil), a.Symbol...)
+	out.Metadata = append([]byte(nil), a.Metadata...)
 	out.PlatformTag = append([]byte(nil), a.PlatformTag...)
+	if a.CreatedBlockHash != nil {
+		createdBlockHash := *a.CreatedBlockHash
+		out.CreatedBlockHash = &createdBlockHash
+	}
+	if a.CreatedDAAScore != nil {
+		createdDAAScore := *a.CreatedDAAScore
+		out.CreatedDAAScore = &createdDAAScore
+	}
+	if a.CreatedAt != nil {
+		createdAt := *a.CreatedAt
+		out.CreatedAt = &createdAt
+	}
 	if a.Liquidity != nil {
 		pool := *a.Liquidity
 		pool.FeeRecipients = make([]LiquidityFeeRecipientState, len(a.Liquidity.FeeRecipients))
@@ -557,6 +580,24 @@ func hashUint128ToHasher(hasher hashWriter, value Uint128) {
 	_, _ = hasher.Write(bytes[:])
 }
 
+func hashOptionalHashToHasher(hasher hashWriter, value *[externalapi.DomainHashSize]byte) {
+	if value == nil {
+		hashByte(hasher, 0)
+		return
+	}
+	hashByte(hasher, 1)
+	_, _ = hasher.Write(value[:])
+}
+
+func hashOptionalUint64ToHasher(hasher hashWriter, value *uint64) {
+	if value == nil {
+		hashByte(hasher, 0)
+		return
+	}
+	hashByte(hasher, 1)
+	hashUint64ToHasher(hasher, *value)
+}
+
 func xorHash(target []byte, value []byte) {
 	for i := range target {
 		target[i] ^= value[i]
@@ -599,6 +640,18 @@ func (s *State) HeaderCommitment(utxoCommitment *externalapi.DomainHash, payload
 }
 
 func FromCanonicalBytes(stateBytes []byte) (*State, error) {
+	state, err := fromCanonicalBytesWithFormat(stateBytes, false)
+	if err == nil {
+		return state, nil
+	}
+	legacyState, legacyErr := fromCanonicalBytesWithFormat(stateBytes, true)
+	if legacyErr == nil {
+		return legacyState, nil
+	}
+	return nil, err
+}
+
+func fromCanonicalBytesWithFormat(stateBytes []byte, legacyFormat bool) (*State, error) {
 	reader := atomicStateReader{bytes: stateBytes}
 	magic, err := reader.readBytes(len(atomicConsensusStateMagic))
 	if err != nil {
@@ -666,7 +719,7 @@ func FromCanonicalBytes(stateBytes []byte) (*State, error) {
 		if err != nil {
 			return nil, err
 		}
-		asset, err := reader.readAsset()
+		asset, err := reader.readAsset(legacyFormat)
 		if err != nil {
 			return nil, err
 		}
@@ -754,14 +807,25 @@ func writeUint128(out *[]byte, value Uint128) {
 }
 
 func writeAsset(out *[]byte, asset AssetState) {
+	*out = append(*out, asset.CreatorOwnerID[:]...)
 	*out = append(*out, byte(asset.AssetClass))
 	*out = append(*out, asset.TokenVersion)
 	*out = append(*out, asset.MintAuthorityOwnerID[:]...)
+	*out = append(*out, asset.Decimals)
 	*out = append(*out, byte(asset.SupplyMode))
 	writeUint128(out, asset.MaxSupply)
 	writeUint128(out, asset.TotalSupply)
+	writeLen(out, len(asset.Name))
+	*out = append(*out, asset.Name...)
+	writeLen(out, len(asset.Symbol))
+	*out = append(*out, asset.Symbol...)
+	writeLen(out, len(asset.Metadata))
+	*out = append(*out, asset.Metadata...)
 	writeLen(out, len(asset.PlatformTag))
 	*out = append(*out, asset.PlatformTag...)
+	writeOptionalHash(out, asset.CreatedBlockHash)
+	writeOptionalUint64(out, asset.CreatedDAAScore)
+	writeOptionalUint64(out, asset.CreatedAt)
 	if asset.Liquidity == nil {
 		*out = append(*out, 0)
 		return
@@ -799,6 +863,24 @@ func writeLiquidityPool(out *[]byte, pool LiquidityPoolState) {
 	} else {
 		*out = append(*out, 0)
 	}
+}
+
+func writeOptionalHash(out *[]byte, value *[externalapi.DomainHashSize]byte) {
+	if value == nil {
+		*out = append(*out, 0)
+		return
+	}
+	*out = append(*out, 1)
+	*out = append(*out, value[:]...)
+}
+
+func writeOptionalUint64(out *[]byte, value *uint64) {
+	if value == nil {
+		*out = append(*out, 0)
+		return
+	}
+	*out = append(*out, 1)
+	writeUint64(out, *value)
 }
 
 type atomicStateReader struct {
@@ -869,6 +951,44 @@ func (r *atomicStateReader) readUint128() (Uint128, error) {
 	return value, nil
 }
 
+func (r *atomicStateReader) readOptionalHash32() (*[externalapi.DomainHashSize]byte, error) {
+	presence, err := r.readByte()
+	if err != nil {
+		return nil, err
+	}
+	switch presence {
+	case 0:
+		return nil, nil
+	case 1:
+		value, err := r.read32()
+		if err != nil {
+			return nil, err
+		}
+		return &value, nil
+	default:
+		return nil, fmt.Errorf("invalid optional hash presence flag `%d`", presence)
+	}
+}
+
+func (r *atomicStateReader) readOptionalUint64() (*uint64, error) {
+	presence, err := r.readByte()
+	if err != nil {
+		return nil, err
+	}
+	switch presence {
+	case 0:
+		return nil, nil
+	case 1:
+		value, err := r.readUint64()
+		if err != nil {
+			return nil, err
+		}
+		return &value, nil
+	default:
+		return nil, fmt.Errorf("invalid optional u64 presence flag `%d`", presence)
+	}
+}
+
 func (r *atomicStateReader) readLen() (uint64, error) {
 	return r.readUint64()
 }
@@ -887,7 +1007,193 @@ func validateStateLiquidityCurveVersion(version byte) error {
 	return fmt.Errorf("unsupported atomic liquidity curve version `%d`", version)
 }
 
-func (r *atomicStateReader) readAsset() (AssetState, error) {
+func (r *atomicStateReader) readAsset(legacyFormat bool) (AssetState, error) {
+	if legacyFormat {
+		return r.readLegacyAsset()
+	}
+	creatorOwnerID, err := r.read32()
+	if err != nil {
+		return AssetState{}, err
+	}
+	rawClass, err := r.readByte()
+	if err != nil {
+		return AssetState{}, err
+	}
+	var class AssetClass
+	switch rawClass {
+	case 0:
+		class = AssetClassStandard
+	case 1:
+		class = AssetClassLiquidity
+	default:
+		return AssetState{}, fmt.Errorf("invalid atomic asset class `%d`", rawClass)
+	}
+	tokenVersion, err := r.readByte()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if err := validateStateTokenVersion(tokenVersion); err != nil {
+		return AssetState{}, err
+	}
+	mintAuthorityOwnerID, err := r.read32()
+	if err != nil {
+		return AssetState{}, err
+	}
+	decimals, err := r.readByte()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if decimals > catMaxDecimals {
+		return AssetState{}, fmt.Errorf("atomic decimals `%d` above max `%d`", decimals, catMaxDecimals)
+	}
+	rawSupplyMode, err := r.readByte()
+	if err != nil {
+		return AssetState{}, err
+	}
+	var supplyMode SupplyMode
+	switch rawSupplyMode {
+	case 0:
+		supplyMode = SupplyModeUncapped
+	case 1:
+		supplyMode = SupplyModeCapped
+	default:
+		return AssetState{}, fmt.Errorf("invalid atomic supply mode `%d`", rawSupplyMode)
+	}
+	maxSupply, err := r.readUint128()
+	if err != nil {
+		return AssetState{}, err
+	}
+	totalSupply, err := r.readUint128()
+	if err != nil {
+		return AssetState{}, err
+	}
+	nameLen, err := r.readLen()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if nameLen > catMaxNameLen {
+		return AssetState{}, fmt.Errorf("atomic name length `%d` exceeds max", nameLen)
+	}
+	if nameLen > uint64(len(r.bytes)-r.cursor) {
+		return AssetState{}, fmt.Errorf("truncated atomic consensus state")
+	}
+	name, err := r.readBytes(int(nameLen))
+	if err != nil {
+		return AssetState{}, err
+	}
+	symbolLen, err := r.readLen()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if symbolLen > catMaxSymbolLen {
+		return AssetState{}, fmt.Errorf("atomic symbol length `%d` exceeds max", symbolLen)
+	}
+	if symbolLen > uint64(len(r.bytes)-r.cursor) {
+		return AssetState{}, fmt.Errorf("truncated atomic consensus state")
+	}
+	symbol, err := r.readBytes(int(symbolLen))
+	if err != nil {
+		return AssetState{}, err
+	}
+	metadataLen, err := r.readLen()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if metadataLen > catMaxMetadataLen {
+		return AssetState{}, fmt.Errorf("atomic metadata length `%d` exceeds max", metadataLen)
+	}
+	if metadataLen > uint64(len(r.bytes)-r.cursor) {
+		return AssetState{}, fmt.Errorf("truncated atomic consensus state")
+	}
+	metadata, err := r.readBytes(int(metadataLen))
+	if err != nil {
+		return AssetState{}, err
+	}
+	if !utf8.Valid(name) || !utf8.Valid(symbol) {
+		return AssetState{}, fmt.Errorf("atomic name/symbol must be valid utf-8")
+	}
+	platformTagLen, err := r.readLen()
+	if err != nil {
+		return AssetState{}, err
+	}
+	if platformTagLen > catMaxPlatformTagLen {
+		return AssetState{}, fmt.Errorf("atomic platform tag length `%d` exceeds max", platformTagLen)
+	}
+	if platformTagLen > uint64(len(r.bytes)-r.cursor) {
+		return AssetState{}, fmt.Errorf("truncated atomic consensus state")
+	}
+	platformTag, err := r.readBytes(int(platformTagLen))
+	if err != nil {
+		return AssetState{}, err
+	}
+	if !utf8.Valid(platformTag) {
+		return AssetState{}, fmt.Errorf("atomic platform tag must be valid utf-8")
+	}
+	createdBlockHash, err := r.readOptionalHash32()
+	if err != nil {
+		return AssetState{}, err
+	}
+	createdDAAScore, err := r.readOptionalUint64()
+	if err != nil {
+		return AssetState{}, err
+	}
+	createdAt, err := r.readOptionalUint64()
+	if err != nil {
+		return AssetState{}, err
+	}
+	createdCount := 0
+	if createdBlockHash != nil {
+		createdCount++
+	}
+	if createdDAAScore != nil {
+		createdCount++
+	}
+	if createdAt != nil {
+		createdCount++
+	}
+	if createdCount != 0 && createdCount != 3 {
+		return AssetState{}, fmt.Errorf("atomic asset has partial creation metadata")
+	}
+	presence, err := r.readByte()
+	if err != nil {
+		return AssetState{}, err
+	}
+	var liquidity *LiquidityPoolState
+	switch presence {
+	case 0:
+	case 1:
+		pool, err := r.readLiquidityPool()
+		if err != nil {
+			return AssetState{}, err
+		}
+		liquidity = &pool
+	default:
+		return AssetState{}, fmt.Errorf("invalid atomic liquidity presence flag `%d`", presence)
+	}
+	if class == AssetClassLiquidity && decimals != liquidityTokenDecimals {
+		return AssetState{}, fmt.Errorf("liquidity asset has non-zero decimals")
+	}
+	return AssetState{
+		CreatorOwnerID:       creatorOwnerID,
+		AssetClass:           class,
+		TokenVersion:         tokenVersion,
+		MintAuthorityOwnerID: mintAuthorityOwnerID,
+		Decimals:             decimals,
+		SupplyMode:           supplyMode,
+		MaxSupply:            maxSupply,
+		TotalSupply:          totalSupply,
+		Name:                 append([]byte(nil), name...),
+		Symbol:               append([]byte(nil), symbol...),
+		Metadata:             append([]byte(nil), metadata...),
+		PlatformTag:          append([]byte(nil), platformTag...),
+		CreatedBlockHash:     createdBlockHash,
+		CreatedDAAScore:      createdDAAScore,
+		CreatedAt:            createdAt,
+		Liquidity:            liquidity,
+	}, nil
+}
+
+func (r *atomicStateReader) readLegacyAsset() (AssetState, error) {
 	rawClass, err := r.readByte()
 	if err != nil {
 		return AssetState{}, err
@@ -966,10 +1272,15 @@ func (r *atomicStateReader) readAsset() (AssetState, error) {
 	default:
 		return AssetState{}, fmt.Errorf("invalid atomic liquidity presence flag `%d`", presence)
 	}
+	decimals := byte(0)
+	if class == AssetClassLiquidity {
+		decimals = liquidityTokenDecimals
+	}
 	return AssetState{
 		AssetClass:           class,
 		TokenVersion:         tokenVersion,
 		MintAuthorityOwnerID: mintAuthorityOwnerID,
+		Decimals:             decimals,
 		SupplyMode:           supplyMode,
 		MaxSupply:            maxSupply,
 		TotalSupply:          totalSupply,

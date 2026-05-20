@@ -175,6 +175,10 @@ const (
 	CmdFastMicroblock
 	CmdTrustedAtomicStateChunk
 	CmdRequestNextPruningPointAtomicStateChunk
+	CmdRequestConsensusAtomicStateHash
+	CmdConsensusAtomicStateHash
+	CmdRequestAtomicTokenStateHash
+	CmdAtomicTokenStateHash
 )
 
 // ProtocolMessageCommandToString maps all MessageCommands to their string representation
@@ -230,6 +234,10 @@ var ProtocolMessageCommandToString = map[MessageCommand]string{
 	CmdFastMicroblock:                              "FastMicroblock",
 	CmdTrustedAtomicStateChunk:                     "TrustedAtomicStateChunk",
 	CmdRequestNextPruningPointAtomicStateChunk:     "RequestNextPruningPointAtomicStateChunk",
+	CmdRequestConsensusAtomicStateHash:             "RequestConsensusAtomicStateHash",
+	CmdConsensusAtomicStateHash:                    "ConsensusAtomicStateHash",
+	CmdRequestAtomicTokenStateHash:                 "RequestAtomicTokenStateHash",
+	CmdAtomicTokenStateHash:                        "AtomicTokenStateHash",
 }
 
 // RPCMessageCommandToString maps all MessageCommands to their string representation

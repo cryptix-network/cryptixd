@@ -24,7 +24,33 @@ type vaultTransition struct {
 	outputValue uint64
 }
 
+type CreationContext struct {
+	SourceBlockHash     [externalapi.DomainHashSize]byte
+	SourceBlockDAAScore uint64
+	SourceBlockTime     uint64
+	HasSource           bool
+}
+
+func NewCreationContext(sourceBlockHash *externalapi.DomainHash, sourceBlockDAAScore uint64, sourceBlockTime uint64) CreationContext {
+	var hash [externalapi.DomainHashSize]byte
+	if sourceBlockHash != nil {
+		hash = *sourceBlockHash.ByteArray()
+	}
+	return CreationContext{
+		SourceBlockHash:     hash,
+		SourceBlockDAAScore: sourceBlockDAAScore,
+		SourceBlockTime:     sourceBlockTime,
+		HasSource:           true,
+	}
+}
+
 func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore uint64, payloadHFActivationDAAScore uint64, state *State) error {
+	return ValidateAndApplyTransactionWithCreationContext(tx, povDAAScore, payloadHFActivationDAAScore, CreationContext{}, state)
+}
+
+func ValidateAndApplyTransactionWithCreationContext(tx *externalapi.DomainTransaction, povDAAScore uint64,
+	payloadHFActivationDAAScore uint64, creationContext CreationContext, state *State) error {
+
 	if state == nil {
 		return fmt.Errorf("nil atomic state")
 	}
@@ -99,11 +125,21 @@ func ValidateAndApplyTransaction(tx *externalapi.DomainTransaction, povDAAScore 
 	}
 
 	txIDBytes := *consensushashing.TransactionID(tx).ByteArray()
-	if err := applyOp(tx, txIDBytes, ownerID, parsedPayload.Op, state); err != nil {
+	if err := applyOp(tx, txIDBytes, ownerID, parsedPayload.Op, creationContext, state); err != nil {
 		return err
 	}
 
 	state.NextNonces[nonceKey] = expectedNonce + 1
+	applyAnchorDeltas(tx, state)
+	return nil
+}
+
+// ApplyAnchorDeltasForTransaction applies only the owner-anchor UTXO count delta
+// for transactions whose payload is validated elsewhere, such as coinbase.
+func ApplyAnchorDeltasForTransaction(tx *externalapi.DomainTransaction, state *State) error {
+	if state == nil {
+		return fmt.Errorf("nil atomic state")
+	}
 	applyAnchorDeltas(tx, state)
 	return nil
 }
@@ -160,6 +196,121 @@ func resolveOwnerFromPopulatedTx(tx *externalapi.DomainTransaction, authInputInd
 			fmt.Errorf("auth input script public key is not a supported CAT owner authorization scheme (expected PubKey, PubKeyECDSA, or ScriptHash)")
 	}
 	return ownerID, nil
+}
+
+func AssetPermanentMetadataFromCreationTransaction(tx *externalapi.DomainTransaction, creationContext CreationContext) (
+	[externalapi.DomainHashSize]byte, AssetPermanentMetadata, bool, error) {
+
+	parsedPayload, err := ParsePayload(tx.Payload)
+	if err != nil || parsedPayload == nil {
+		return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+	}
+
+	assetID := *consensushashing.TransactionID(tx).ByteArray()
+
+	switch op := parsedPayload.Op.(type) {
+	case CreateAssetOp:
+		metadata, err := assetPermanentMetadataBase(tx, parsedPayload.AuthInputIndex, creationContext)
+		if err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		if err := validateStateTokenVersion(op.TokenVersion); err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		metadata.AssetClass = AssetClassStandard
+		metadata.TokenVersion = op.TokenVersion
+		metadata.MintAuthorityOwnerID = op.MintAuthorityOwnerID
+		metadata.Decimals = op.Decimals
+		metadata.SupplyMode = payloadSupplyModeToState(op.SupplyMode)
+		metadata.MaxSupply = op.MaxSupply
+		metadata.Name = append([]byte(nil), op.Name...)
+		metadata.Symbol = append([]byte(nil), op.Symbol...)
+		metadata.Metadata = append([]byte(nil), op.Metadata...)
+		metadata.PlatformTag = append([]byte(nil), op.PlatformTag...)
+		return assetID, metadata, true, nil
+	case CreateAssetWithMintOp:
+		metadata, err := assetPermanentMetadataBase(tx, parsedPayload.AuthInputIndex, creationContext)
+		if err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		if err := validateStateTokenVersion(op.TokenVersion); err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		metadata.AssetClass = AssetClassStandard
+		metadata.TokenVersion = op.TokenVersion
+		metadata.MintAuthorityOwnerID = op.MintAuthorityOwnerID
+		metadata.Decimals = op.Decimals
+		metadata.SupplyMode = payloadSupplyModeToState(op.SupplyMode)
+		metadata.MaxSupply = op.MaxSupply
+		metadata.Name = append([]byte(nil), op.Name...)
+		metadata.Symbol = append([]byte(nil), op.Symbol...)
+		metadata.Metadata = append([]byte(nil), op.Metadata...)
+		metadata.PlatformTag = append([]byte(nil), op.PlatformTag...)
+		return assetID, metadata, true, nil
+	case CreateLiquidityAssetOp:
+		metadata, err := assetPermanentMetadataBase(tx, parsedPayload.AuthInputIndex, creationContext)
+		if err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		if err := validateStateTokenVersion(op.TokenVersion); err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		feeRecipients, err := buildFeeRecipientState(op.Recipients)
+		if err != nil {
+			return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, err
+		}
+		metadata.AssetClass = AssetClassLiquidity
+		metadata.TokenVersion = op.TokenVersion
+		metadata.MintAuthorityOwnerID = [externalapi.DomainHashSize]byte{}
+		metadata.Decimals = op.Decimals
+		metadata.SupplyMode = SupplyModeCapped
+		metadata.MaxSupply = op.MaxSupply
+		metadata.Name = append([]byte(nil), op.Name...)
+		metadata.Symbol = append([]byte(nil), op.Symbol...)
+		metadata.Metadata = append([]byte(nil), op.Metadata...)
+		metadata.PlatformTag = append([]byte(nil), op.PlatformTag...)
+		metadata.HasLiquidity = true
+		metadata.Liquidity = AssetLiquidityPermanentMetadata{
+			CurveVersion:                        op.CurveVersion,
+			CurveMode:                           op.CurveMode,
+			IndividualVirtualCPayReservesSompi:  op.IndividualVirtualCPayReservesSompi,
+			IndividualVirtualTokenMultiplierBPS: op.IndividualVirtualTokenMultiplierBPS,
+			FeeBPS:                              op.FeeBPS,
+			FeeRecipients:                       liquidityFeeRecipientPermanentMetadata(feeRecipients),
+			UnlockTargetSompi:                   op.UnlockTargetSompi,
+		}
+		return assetID, metadata, true, nil
+	default:
+		return [externalapi.DomainHashSize]byte{}, AssetPermanentMetadata{}, false, nil
+	}
+}
+
+func liquidityFeeRecipientPermanentMetadata(recipients []LiquidityFeeRecipientState) []LiquidityFeeRecipientPermanentMetadata {
+	out := make([]LiquidityFeeRecipientPermanentMetadata, len(recipients))
+	for i, recipient := range recipients {
+		out[i] = LiquidityFeeRecipientPermanentMetadata{
+			OwnerID:        recipient.OwnerID,
+			AddressVersion: recipient.AddressVersion,
+			AddressPayload: append([]byte(nil), recipient.AddressPayload...),
+		}
+	}
+	return out
+}
+
+func assetPermanentMetadataBase(tx *externalapi.DomainTransaction, authInputIndex uint16, creationContext CreationContext) (AssetPermanentMetadata, error) {
+	ownerID, err := resolveOwnerFromPopulatedTx(tx, authInputIndex)
+	if err != nil {
+		return AssetPermanentMetadata{}, err
+	}
+	if !creationContext.HasSource {
+		return AssetPermanentMetadata{}, fmt.Errorf("creation context is missing source block metadata")
+	}
+	return AssetPermanentMetadata{
+		CreatorOwnerID:   ownerID,
+		CreatedBlockHash: creationContext.SourceBlockHash,
+		CreatedDAAScore:  creationContext.SourceBlockDAAScore,
+		CreatedAt:        creationContext.SourceBlockTime,
+	}, nil
 }
 
 func validateReplacementAnchor(tx *externalapi.DomainTransaction, ownerID [externalapi.DomainHashSize]byte, state *State) error {
@@ -224,7 +375,9 @@ func applyAnchorDeltas(tx *externalapi.DomainTransaction, state *State) {
 	}
 }
 
-func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHashSize]byte, ownerID [externalapi.DomainHashSize]byte, op PayloadOp, state *State) error {
+func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHashSize]byte,
+	ownerID [externalapi.DomainHashSize]byte, op PayloadOp, creationContext CreationContext, state *State) error {
+
 	switch op := op.(type) {
 	case CreateAssetOp:
 		assetID := txIDBytes
@@ -235,13 +388,21 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 			return err
 		}
 		return insertAssetState(state, assetID, AssetState{
+			CreatorOwnerID:       ownerID,
 			AssetClass:           AssetClassStandard,
 			TokenVersion:         op.TokenVersion,
 			MintAuthorityOwnerID: op.MintAuthorityOwnerID,
+			Decimals:             op.Decimals,
 			SupplyMode:           payloadSupplyModeToState(op.SupplyMode),
 			MaxSupply:            op.MaxSupply,
 			TotalSupply:          Uint128{},
+			Name:                 append([]byte(nil), op.Name...),
+			Symbol:               append([]byte(nil), op.Symbol...),
+			Metadata:             append([]byte(nil), op.Metadata...),
 			PlatformTag:          op.PlatformTag,
+			CreatedBlockHash:     creationContext.createdBlockHash(),
+			CreatedDAAScore:      creationContext.createdDAAScore(),
+			CreatedAt:            creationContext.createdAt(),
 			Liquidity:            nil,
 		})
 
@@ -268,18 +429,26 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 			totalSupply = op.InitialMintAmount
 		}
 		return insertAssetState(state, assetID, AssetState{
+			CreatorOwnerID:       ownerID,
 			AssetClass:           AssetClassStandard,
 			TokenVersion:         op.TokenVersion,
 			MintAuthorityOwnerID: op.MintAuthorityOwnerID,
+			Decimals:             op.Decimals,
 			SupplyMode:           supplyMode,
 			MaxSupply:            op.MaxSupply,
 			TotalSupply:          totalSupply,
+			Name:                 append([]byte(nil), op.Name...),
+			Symbol:               append([]byte(nil), op.Symbol...),
+			Metadata:             append([]byte(nil), op.Metadata...),
 			PlatformTag:          op.PlatformTag,
+			CreatedBlockHash:     creationContext.createdBlockHash(),
+			CreatedDAAScore:      creationContext.createdDAAScore(),
+			CreatedAt:            creationContext.createdAt(),
 			Liquidity:            nil,
 		})
 
 	case CreateLiquidityAssetOp:
-		return applyCreateLiquidityAsset(tx, txIDBytes, ownerID, op, state)
+		return applyCreateLiquidityAsset(tx, txIDBytes, ownerID, op, creationContext, state)
 
 	case TransferOp:
 		if _, ok := state.Assets[op.AssetID]; !ok {
@@ -381,7 +550,9 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 	}
 }
 
-func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, ownerID [externalapi.DomainHashSize]byte, op CreateLiquidityAssetOp, state *State) error {
+func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, ownerID [externalapi.DomainHashSize]byte,
+	op CreateLiquidityAssetOp, creationContext CreationContext, state *State) error {
+
 	if _, ok := state.Assets[assetID]; ok {
 		return fmt.Errorf("asset `%x` already exists", assetID)
 	}
@@ -483,13 +654,21 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	txID := consensushashing.TransactionID(tx)
 	unlocked := op.UnlockTargetSompi == 0 || realCPayReservesSompi >= op.UnlockTargetSompi
 	asset := AssetState{
+		CreatorOwnerID:       ownerID,
 		AssetClass:           AssetClassLiquidity,
 		TokenVersion:         op.TokenVersion,
 		MintAuthorityOwnerID: [externalapi.DomainHashSize]byte{},
+		Decimals:             op.Decimals,
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            op.MaxSupply,
 		TotalSupply:          totalSupply,
+		Name:                 append([]byte(nil), op.Name...),
+		Symbol:               append([]byte(nil), op.Symbol...),
+		Metadata:             append([]byte(nil), op.Metadata...),
 		PlatformTag:          op.PlatformTag,
+		CreatedBlockHash:     creationContext.createdBlockHash(),
+		CreatedDAAScore:      creationContext.createdDAAScore(),
+		CreatedAt:            creationContext.createdAt(),
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:                           1,
 			CurveVersion:                        op.CurveVersion,
@@ -762,6 +941,30 @@ func payloadSupplyModeToState(mode PayloadSupplyMode) SupplyMode {
 		return SupplyModeCapped
 	}
 	return SupplyModeUncapped
+}
+
+func (context CreationContext) createdBlockHash() *[externalapi.DomainHashSize]byte {
+	if !context.HasSource {
+		return nil
+	}
+	hash := context.SourceBlockHash
+	return &hash
+}
+
+func (context CreationContext) createdDAAScore() *uint64 {
+	if !context.HasSource {
+		return nil
+	}
+	daaScore := context.SourceBlockDAAScore
+	return &daaScore
+}
+
+func (context CreationContext) createdAt() *uint64 {
+	if !context.HasSource {
+		return nil
+	}
+	timestamp := context.SourceBlockTime
+	return &timestamp
 }
 
 func insertAssetState(state *State, assetID [externalapi.DomainHashSize]byte, asset AssetState) error {

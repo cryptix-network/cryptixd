@@ -92,6 +92,26 @@ func ValidateAndApplyTransactionWithGrowth(
 	growth *BlockStateGrowth,
 	limits StateGrowthLimits,
 ) error {
+	return ValidateAndApplyTransactionWithGrowthAndCreationContext(
+		tx,
+		povDAAScore,
+		payloadHFActivationDAAScore,
+		CreationContext{},
+		state,
+		growth,
+		limits,
+	)
+}
+
+func ValidateAndApplyTransactionWithGrowthAndCreationContext(
+	tx *externalapi.DomainTransaction,
+	povDAAScore uint64,
+	payloadHFActivationDAAScore uint64,
+	creationContext CreationContext,
+	state *State,
+	growth *BlockStateGrowth,
+	limits StateGrowthLimits,
+) error {
 	delta, err := EstimateStateGrowthForTransaction(tx, povDAAScore, payloadHFActivationDAAScore, state)
 	if err != nil {
 		return err
@@ -99,7 +119,7 @@ func ValidateAndApplyTransactionWithGrowth(
 	if err := growth.EnsureCanAdd(delta, limits); err != nil {
 		return err
 	}
-	if err := ValidateAndApplyTransaction(tx, povDAAScore, payloadHFActivationDAAScore, state); err != nil {
+	if err := ValidateAndApplyTransactionWithCreationContext(tx, povDAAScore, payloadHFActivationDAAScore, creationContext, state); err != nil {
 		return err
 	}
 	growth.Commit(delta)

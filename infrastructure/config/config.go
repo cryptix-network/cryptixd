@@ -54,7 +54,7 @@ const (
 	defaultSigCacheMaxSize  = 100_000
 	sampleConfigFilename    = "sample-cryptixd.conf"
 	defaultMaxUTXOCacheSize = 5_000_000_000
-	defaultProtocolVersion  = 9
+	defaultProtocolVersion  = 18
 )
 
 var (
@@ -78,62 +78,65 @@ var RunServiceCommand func(string) error
 //
 // See loadConfig for details on the configuration load process.
 type Flags struct {
-	ShowVersion                     bool          `short:"V" long:"version" description:"Display version information and exit"`
-	ConfigFile                      string        `short:"C" long:"configfile" description:"Path to configuration file"`
-	AppDir                          string        `short:"b" long:"appdir" description:"Directory to store data"`
-	LogDir                          string        `long:"logdir" description:"Directory to log output."`
-	AddPeers                        []string      `short:"a" long:"addpeer" description:"Add a peer to connect with at startup"`
-	ConnectPeers                    []string      `long:"connect" description:"Connect only to the specified peers at startup"`
-	DisableListen                   bool          `long:"nolisten" description:"Disable listening for incoming connections -- NOTE: Listening is automatically disabled if the --connect or --proxy options are used without also specifying listen interfaces via --listen"`
-	Listeners                       []string      `long:"listen" description:"Add an interface/port to listen for connections (default all interfaces port: 19101, testnet: 19102)"`
-	TargetOutboundPeers             int           `long:"outpeers" description:"Target number of outbound peers"`
-	MaxInboundPeers                 int           `long:"maxinpeers" description:"Max number of inbound peers"`
-	EnableBanning                   bool          `long:"enablebanning" description:"Enable banning of misbehaving peers"`
-	BanDuration                     time.Duration `long:"banduration" description:"How long to ban misbehaving peers. Valid time units are {s, m, h}. Minimum 1 second"`
-	BanThreshold                    uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
-	EnableExternalBanlist           bool          `long:"external-banlist" description:"Enable external antifraud connection banlist seed synchronization (IP and node ID)"`
-	EnableBanserver                 bool          `long:"banserver" description:"Enable the primary AntiFraud seed endpoint for the signed connection banlist"`
-	DisableExternalBanlist          bool          `long:"no-external-banlist" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
-	DisableBanserver                bool          `long:"no-banserver" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
-	AntiFraudNoSeed                 bool          `long:"antifraud-no-seed" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
-	Whitelists                      []string      `long:"whitelist" description:"Add an IP network or IP that will not be banned. (eg. 192.168.1.0/24 or ::1)"`
-	RPCListeners                    []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: 19201, testnet: 19202)"`
-	RPCCert                         string        `long:"rpccert" description:"File containing the certificate file"`
-	RPCKey                          string        `long:"rpckey" description:"File containing the certificate key"`
-	RPCMaxClients                   int           `long:"rpcmaxclients" description:"Max number of RPC clients for standard connections"`
-	RPCMaxWebsockets                int           `long:"rpcmaxwebsockets" description:"Max number of RPC websocket connections"`
-	RPCMaxConcurrentReqs            int           `long:"rpcmaxconcurrentreqs" description:"Max number of concurrent RPC requests that may be processed concurrently"`
-	DisableRPC                      bool          `long:"norpc" description:"Disable built-in RPC server"`
-	SafeRPC                         bool          `long:"saferpc" description:"Disable RPC commands which affect the state of the node"`
-	AllowRPCOrphans                 bool          `long:"allow-rpc-orphans" hidden:"true" description:"Allow RPC-submitted transactions to enter the orphan transaction pool"`
-	DisableDNSSeed                  bool          `long:"nodnsseed" description:"Disable DNS seeding for peers"`
-	DNSSeed                         string        `long:"dnsseed" description:"Override DNS seeds with specified hostname (Only 1 hostname allowed)"`
-	GRPCSeed                        string        `long:"grpcseed" description:"Hostname of gRPC server for seeding peers"`
-	ExternalIPs                     []string      `long:"externalip" description:"Add an ip to the list of local addresses we claim to listen on to peers"`
-	Proxy                           string        `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
-	ProxyUser                       string        `long:"proxyuser" description:"Username for proxy server"`
-	ProxyPass                       string        `long:"proxypass" default-mask:"-" description:"Password for proxy server"`
-	DbType                          string        `long:"dbtype" description:"Database backend to use for the Block DAG"`
-	Profile                         string        `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65536"`
-	LogLevel                        string        `short:"d" long:"loglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
-	Upnp                            bool          `long:"upnp" description:"Use UPnP to map our listening port outside of NAT"`
-	MinRelayTxFee                   float64       `long:"minrelaytxfee" description:"The minimum transaction fee in CPAY/kB to be considered a non-zero fee."`
-	MaxOrphanTxs                    uint64        `long:"maxorphantx" description:"Max number of orphan transactions to keep in memory"`
-	BlockMaxMass                    uint64        `long:"blockmaxmass" description:"Maximum transaction mass to be used when creating a block"`
-	UserAgentComments               []string      `long:"uacomment" description:"Comment to add to the user agent -- See BIP 14 for more information."`
-	NoPeerBloomFilters              bool          `long:"nopeerbloomfilters" description:"Disable bloom filtering support"`
-	SigCacheMaxSize                 uint          `long:"sigcachemaxsize" description:"The maximum number of entries in the signature verification cache"`
-	BlocksOnly                      bool          `long:"blocksonly" description:"Do not accept transactions from remote peers."`
-	RelayNonStd                     bool          `long:"relaynonstd" description:"Relay non-standard transactions regardless of the default settings for the active network."`
-	RejectNonStd                    bool          `long:"rejectnonstd" description:"Reject non-standard transactions regardless of the default settings for the active network."`
-	ResetDatabase                   bool          `long:"reset-db" description:"Reset database before starting node. It's needed when switching between subnetworks."`
-	MaxUTXOCacheSize                uint64        `long:"maxutxocachesize" description:"Max size of loaded UTXO into ram from the disk in bytes"`
-	UTXOIndex                       bool          `long:"utxoindex" description:"Enable the UTXO index"`
-	IsArchivalNode                  bool          `long:"archival" description:"Run as an archival node: don't delete old block data when moving the pruning point (Warning: heavy disk usage)'"`
-	AllowSubmitBlockWhenNotSynced   bool          `long:"allow-submit-block-when-not-synced" hidden:"true" description:"Allow the node to accept blocks from RPC while not synced (this flag is mainly used for testing)"`
-	EnableSanityCheckPruningUTXOSet bool          `long:"enable-sanity-check-pruning-utxo" hidden:"true" description:"When moving the pruning point - check that the utxo set matches the utxo commitment"`
-	ProtocolVersion                 uint32        `long:"protocol-version" description:"Use non default p2p protocol version"`
-	PayloadHfActivationDAAScore     *uint64       `long:"payload-hf-activation-daa-score" description:"Override payload hardfork activation DAA score for this node instance"`
+	ShowVersion                         bool          `short:"V" long:"version" description:"Display version information and exit"`
+	ConfigFile                          string        `short:"C" long:"configfile" description:"Path to configuration file"`
+	AppDir                              string        `short:"b" long:"appdir" description:"Directory to store data"`
+	LogDir                              string        `long:"logdir" description:"Directory to log output."`
+	AddPeers                            []string      `short:"a" long:"addpeer" description:"Add a peer to connect with at startup"`
+	ConnectPeers                        []string      `long:"connect" description:"Connect only to the specified peers at startup"`
+	DisableListen                       bool          `long:"nolisten" description:"Disable listening for incoming connections -- NOTE: Listening is automatically disabled if the --connect or --proxy options are used without also specifying listen interfaces via --listen"`
+	Listeners                           []string      `long:"listen" description:"Add an interface/port to listen for connections (default all interfaces port: 19101, testnet: 19102)"`
+	TargetOutboundPeers                 int           `long:"outpeers" description:"Target number of outbound peers"`
+	MaxInboundPeers                     int           `long:"maxinpeers" description:"Max number of inbound peers"`
+	EnableBanning                       bool          `long:"enablebanning" description:"Enable banning of misbehaving peers"`
+	BanDuration                         time.Duration `long:"banduration" description:"How long to ban misbehaving peers. Valid time units are {s, m, h}. Minimum 1 second"`
+	BanThreshold                        uint32        `long:"banthreshold" description:"Maximum allowed ban score before disconnecting and banning misbehaving peers."`
+	EnableExternalBanlist               bool          `long:"external-banlist" description:"Enable external antifraud connection banlist seed synchronization (IP and node ID)"`
+	EnableBanserver                     bool          `long:"banserver" description:"Enable the primary AntiFraud seed endpoint for the signed connection banlist"`
+	DisableExternalBanlist              bool          `long:"no-external-banlist" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
+	DisableBanserver                    bool          `long:"no-banserver" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
+	AntiFraudNoSeed                     bool          `long:"antifraud-no-seed" description:"Disable the AntiFraud seed endpoint and use peer-majority snapshots only"`
+	Whitelists                          []string      `long:"whitelist" description:"Add an IP network or IP that will not be banned. (eg. 192.168.1.0/24 or ::1)"`
+	RPCListeners                        []string      `long:"rpclisten" description:"Add an interface/port to listen for RPC connections (default port: 19201, testnet: 19202)"`
+	RPCCert                             string        `long:"rpccert" description:"File containing the certificate file"`
+	RPCKey                              string        `long:"rpckey" description:"File containing the certificate key"`
+	RPCMaxClients                       int           `long:"rpcmaxclients" description:"Max number of RPC clients for standard connections"`
+	RPCMaxWebsockets                    int           `long:"rpcmaxwebsockets" description:"Max number of RPC websocket connections"`
+	RPCMaxConcurrentReqs                int           `long:"rpcmaxconcurrentreqs" description:"Max number of concurrent RPC requests that may be processed concurrently"`
+	DisableRPC                          bool          `long:"norpc" description:"Disable built-in RPC server"`
+	SafeRPC                             bool          `long:"saferpc" description:"Disable RPC commands which affect the state of the node"`
+	AllowRPCOrphans                     bool          `long:"allow-rpc-orphans" hidden:"true" description:"Allow RPC-submitted transactions to enter the orphan transaction pool"`
+	DisableDNSSeed                      bool          `long:"nodnsseed" description:"Disable DNS seeding for peers"`
+	DNSSeed                             string        `long:"dnsseed" description:"Override DNS seeds with specified hostname (Only 1 hostname allowed)"`
+	GRPCSeed                            string        `long:"grpcseed" description:"Hostname of gRPC server for seeding peers"`
+	AtomicBootstrapPeers                []string      `long:"atomic-bootstrap-peer" description:"Optional Atomic bootstrap RPC peer source. Accepted for CLI compatibility; P2P Atomic audit does not require RPC."`
+	AtomicBootstrapAllowPeerFallback    bool          `long:"atomic-bootstrap-allow-peer-fallback" description:"Allow peer-only Atomic P2P bootstrap/audit when DNS seed bootstrap is disabled"`
+	AtomicBootstrapPeerQuorumMinSources uint          `long:"atomic-bootstrap-peer-quorum-min-sources" description:"Minimum independent peer/non-seed sources required for Atomic P2P bootstrap/audit"`
+	ExternalIPs                         []string      `long:"externalip" description:"Add an ip to the list of local addresses we claim to listen on to peers"`
+	Proxy                               string        `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
+	ProxyUser                           string        `long:"proxyuser" description:"Username for proxy server"`
+	ProxyPass                           string        `long:"proxypass" default-mask:"-" description:"Password for proxy server"`
+	DbType                              string        `long:"dbtype" description:"Database backend to use for the Block DAG"`
+	Profile                             string        `long:"profile" description:"Enable HTTP profiling on given port -- NOTE port must be between 1024 and 65536"`
+	LogLevel                            string        `short:"d" long:"loglevel" description:"Logging level for all subsystems {trace, debug, info, warn, error, critical} -- You may also specify <subsystem>=<level>,<subsystem2>=<level>,... to set the log level for individual subsystems -- Use show to list available subsystems"`
+	Upnp                                bool          `long:"upnp" description:"Use UPnP to map our listening port outside of NAT"`
+	MinRelayTxFee                       float64       `long:"minrelaytxfee" description:"The minimum transaction fee in CPAY/kB to be considered a non-zero fee."`
+	MaxOrphanTxs                        uint64        `long:"maxorphantx" description:"Max number of orphan transactions to keep in memory"`
+	BlockMaxMass                        uint64        `long:"blockmaxmass" description:"Maximum transaction mass to be used when creating a block"`
+	UserAgentComments                   []string      `long:"uacomment" description:"Comment to add to the user agent -- See BIP 14 for more information."`
+	NoPeerBloomFilters                  bool          `long:"nopeerbloomfilters" description:"Disable bloom filtering support"`
+	SigCacheMaxSize                     uint          `long:"sigcachemaxsize" description:"The maximum number of entries in the signature verification cache"`
+	BlocksOnly                          bool          `long:"blocksonly" description:"Do not accept transactions from remote peers."`
+	RelayNonStd                         bool          `long:"relaynonstd" description:"Relay non-standard transactions regardless of the default settings for the active network."`
+	RejectNonStd                        bool          `long:"rejectnonstd" description:"Reject non-standard transactions regardless of the default settings for the active network."`
+	ResetDatabase                       bool          `long:"reset-db" description:"Reset database before starting node. It's needed when switching between subnetworks."`
+	MaxUTXOCacheSize                    uint64        `long:"maxutxocachesize" description:"Max size of loaded UTXO into ram from the disk in bytes"`
+	UTXOIndex                           bool          `long:"utxoindex" description:"Enable the UTXO index"`
+	IsArchivalNode                      bool          `long:"archival" description:"Run as an archival node: don't delete old block data when moving the pruning point (Warning: heavy disk usage)'"`
+	AllowSubmitBlockWhenNotSynced       bool          `long:"allow-submit-block-when-not-synced" hidden:"true" description:"Allow the node to accept blocks from RPC while not synced (this flag is mainly used for testing)"`
+	EnableSanityCheckPruningUTXOSet     bool          `long:"enable-sanity-check-pruning-utxo" hidden:"true" description:"When moving the pruning point - check that the utxo set matches the utxo commitment"`
+	ProtocolVersion                     uint32        `long:"protocol-version" description:"Use non default p2p protocol version"`
+	PayloadHfActivationDAAScore         *uint64       `long:"payload-hf-activation-daa-score" description:"Override payload hardfork activation DAA score for this node instance"`
 	NetworkFlags
 	ServiceOptions *ServiceOptions
 }
@@ -182,26 +185,27 @@ func newConfigParser(cfgFlags *Flags, options flags.Options) *flags.Parser {
 
 func defaultFlags() *Flags {
 	return &Flags{
-		ConfigFile:            defaultConfigFile,
-		LogLevel:              defaultLogLevel,
-		TargetOutboundPeers:   defaultTargetOutboundPeers,
-		MaxInboundPeers:       defaultMaxInboundPeers,
-		BanDuration:           defaultBanDuration,
-		BanThreshold:          defaultBanThreshold,
-		EnableExternalBanlist: defaultEnableExternalBanlist,
-		RPCMaxClients:         DefaultMaxRPCClients,
-		RPCMaxWebsockets:      defaultMaxRPCWebsockets,
-		RPCMaxConcurrentReqs:  defaultMaxRPCConcurrentReqs,
-		AppDir:                defaultDataDir,
-		RPCKey:                defaultRPCKeyFile,
-		RPCCert:               defaultRPCCertFile,
-		BlockMaxMass:          defaultBlockMaxMass,
-		MaxOrphanTxs:          defaultMaxOrphanTransactions,
-		SigCacheMaxSize:       defaultSigCacheMaxSize,
-		MinRelayTxFee:         defaultMinRelayTxFee,
-		MaxUTXOCacheSize:      defaultMaxUTXOCacheSize,
-		ServiceOptions:        &ServiceOptions{},
-		ProtocolVersion:       defaultProtocolVersion,
+		ConfigFile:                          defaultConfigFile,
+		LogLevel:                            defaultLogLevel,
+		TargetOutboundPeers:                 defaultTargetOutboundPeers,
+		MaxInboundPeers:                     defaultMaxInboundPeers,
+		BanDuration:                         defaultBanDuration,
+		BanThreshold:                        defaultBanThreshold,
+		EnableExternalBanlist:               defaultEnableExternalBanlist,
+		RPCMaxClients:                       DefaultMaxRPCClients,
+		RPCMaxWebsockets:                    defaultMaxRPCWebsockets,
+		RPCMaxConcurrentReqs:                defaultMaxRPCConcurrentReqs,
+		AppDir:                              defaultDataDir,
+		RPCKey:                              defaultRPCKeyFile,
+		RPCCert:                             defaultRPCCertFile,
+		BlockMaxMass:                        defaultBlockMaxMass,
+		MaxOrphanTxs:                        defaultMaxOrphanTransactions,
+		SigCacheMaxSize:                     defaultSigCacheMaxSize,
+		MinRelayTxFee:                       defaultMinRelayTxFee,
+		MaxUTXOCacheSize:                    defaultMaxUTXOCacheSize,
+		ServiceOptions:                      &ServiceOptions{},
+		ProtocolVersion:                     defaultProtocolVersion,
+		AtomicBootstrapPeerQuorumMinSources: 2,
 	}
 }
 
@@ -445,6 +449,25 @@ func LoadConfig() (*Config, error) {
 	if len(cfg.ConnectPeers) > 0 {
 		cfg.DisableDNSSeed = true
 		cfg.TargetOutboundPeers = 0
+	}
+
+	if cfg.AtomicBootstrapPeerQuorumMinSources == 0 {
+		cfg.AtomicBootstrapPeerQuorumMinSources = 1
+	}
+
+	switch {
+	case cfg.DisableDNSSeed && cfg.AtomicBootstrapAllowPeerFallback:
+		log.Infof("Cryptix Atomic P2P audit: peer-only fallback ENABLED; minimum independent peer sources = %d",
+			cfg.AtomicBootstrapPeerQuorumMinSources)
+	case cfg.DisableDNSSeed:
+		log.Infof("Cryptix Atomic P2P audit: disabled because --nodnsseed is set without --atomic-bootstrap-allow-peer-fallback")
+	default:
+		log.Infof("Cryptix Atomic P2P audit: seed-connected peer quorum mode; minimum independent peer sources = %d",
+			cfg.AtomicBootstrapPeerQuorumMinSources)
+	}
+	if len(cfg.AtomicBootstrapPeers) > 0 {
+		log.Infof("Cryptix Atomic optional RPC bootstrap peers configured: %d; P2P audit remains available without RPC",
+			len(cfg.AtomicBootstrapPeers))
 	}
 
 	// Add the default listener if none were specified. The default

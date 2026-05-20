@@ -17,7 +17,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-const maxImportedAtomicStateBytes uint64 = 8 << 30
+const maxImportedAtomicStateBytes uint64 = 128 << 30
 
 // pruningManager resolves and manages the current pruning point
 type pruningManager struct {

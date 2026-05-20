@@ -114,13 +114,21 @@ func atomicInteropVectorState(t *testing.T) *State {
 	state.NextNonces[OwnerNonceKey(bytes32(0x61))] = 3
 	state.NextNonces[AssetNonceKey(bytes32(0x60), standardAssetID)] = 99
 	state.Assets[liquidityAssetID] = AssetState{
+		CreatorOwnerID:       bytes32(0xA2),
 		AssetClass:           AssetClassLiquidity,
 		TokenVersion:         currentStateTokenVersion,
 		MintAuthorityOwnerID: bytes32(0x00),
+		Decimals:             0,
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            liquidityMaxSupply,
 		TotalSupply:          liquidityTotal,
+		Name:                 []byte("Interop Liquidity Token"),
+		Symbol:               []byte("ILT"),
+		Metadata:             []byte("{\"pool\":17}"),
 		PlatformTag:          nil,
+		CreatedBlockHash:     ptrHash(bytes32(0xC1)),
+		CreatedDAAScore:      ptrUint64(12_346),
+		CreatedAt:            ptrUint64(1_715_000_000_001),
 		Liquidity: &LiquidityPoolState{
 			PoolNonce:                           17,
 			CurveVersion:                        currentStateLiquidityCurveVersion,
@@ -154,13 +162,21 @@ func atomicInteropVectorState(t *testing.T) *State {
 		},
 	}
 	state.Assets[standardAssetID] = AssetState{
+		CreatorOwnerID:       bytes32(0xA0),
 		AssetClass:           AssetClassStandard,
 		TokenVersion:         currentStateTokenVersion,
 		MintAuthorityOwnerID: bytes32(0xA1),
+		Decimals:             8,
 		SupplyMode:           SupplyModeCapped,
 		MaxSupply:            uint128Words(0x0200, 9_999),
 		TotalSupply:          standardTotal,
+		Name:                 []byte("Interop Standard Token"),
+		Symbol:               []byte("IST"),
+		Metadata:             []byte("{\"interop\":true}"),
 		PlatformTag:          nil,
+		CreatedBlockHash:     ptrHash(bytes32(0xC0)),
+		CreatedDAAScore:      ptrUint64(12_345),
+		CreatedAt:            ptrUint64(1_715_000_000_000),
 	}
 	state.Balances[BalanceKey{AssetID: standardAssetID, OwnerID: bytes32(0xB1)}] = standardBalanceB
 	state.Balances[BalanceKey{AssetID: liquidityAssetID, OwnerID: bytes32(0xC0)}] = liquidityTotal
@@ -218,6 +234,14 @@ func bytes32(value byte) [externalapi.DomainHashSize]byte {
 		out[i] = value
 	}
 	return out
+}
+
+func ptrHash(value [externalapi.DomainHashSize]byte) *[externalapi.DomainHashSize]byte {
+	return &value
+}
+
+func ptrUint64(value uint64) *uint64 {
+	return &value
 }
 
 func repeatedBytes(value byte, length int) []byte {

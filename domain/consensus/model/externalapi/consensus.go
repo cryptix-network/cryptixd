@@ -27,6 +27,9 @@ type Consensus interface {
 	GetPruningPointUTXOs(expectedPruningPointHash *DomainHash, fromOutpoint *DomainOutpoint, limit int) ([]*OutpointAndUTXOEntryPair, error)
 	GetPruningPointAtomicState(expectedPruningPointHash *DomainHash) ([]byte, error)
 	GetPruningPointAtomicStateHash(expectedPruningPointHash *DomainHash) ([DomainHashSize]byte, error)
+	GetAtomicStateHash(blockHash *DomainHash) ([DomainHashSize]byte, bool, error)
+	GetAtomicTokenStateHash(blockHash *DomainHash) ([DomainHashSize]byte, bool, error)
+	GetAtomicTokenStateHashAvailability(blockHash *DomainHash) (bool, string, error)
 	GetVirtualUTXOs(expectedVirtualParents []*DomainHash, fromOutpoint *DomainOutpoint, limit int) ([]*OutpointAndUTXOEntryPair, error)
 	PruningPoint() (*DomainHash, error)
 	PruningPointHeaders() ([]BlockHeader, error)
@@ -37,6 +40,7 @@ type Consensus interface {
 	AppendImportedPruningPointAtomicStateHash(stateHash [DomainHashSize]byte) error
 	ValidateAndInsertImportedPruningPoint(newPruningPoint *DomainHash) error
 	GetVirtualSelectedParent() (*DomainHash, error)
+	GetVirtualFinalityPoint() (*DomainHash, error)
 	CreateBlockLocatorFromPruningPoint(highHash *DomainHash, limit uint32) (BlockLocator, error)
 	CreateHeadersSelectedChainBlockLocator(lowHash, highHash *DomainHash) (BlockLocator, error)
 	CreateFullHeadersSelectedChainBlockLocator() (BlockLocator, error)

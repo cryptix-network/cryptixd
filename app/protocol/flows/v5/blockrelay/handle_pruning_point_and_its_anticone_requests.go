@@ -6,6 +6,7 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"sync/atomic"
@@ -205,12 +206,13 @@ func pruningPointAtomicStateForTrustedData(context PruningPointAndItsAnticoneReq
 		return nil, [externalapi.DomainHashSize]byte{}, false, nil
 	}
 
-	atomicStateHash, err := context.Domain().Consensus().GetPruningPointAtomicStateHash(pruningPoint)
+	atomicStateBytes, err := context.Domain().Consensus().GetPruningPointAtomicState(pruningPoint)
 	if err != nil {
 		return nil, [externalapi.DomainHashSize]byte{}, false, err
 	}
+	atomicStateHash := atomicstate.HashCanonicalBytes(atomicStateBytes)
 
-	return nil, atomicStateHash, true, nil
+	return atomicStateBytes, atomicStateHash, true, nil
 }
 
 func sendTrustedAtomicStateChunks(incomingRoute *router.Route, outgoingRoute *router.Route,

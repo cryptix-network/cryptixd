@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/txscript"
@@ -165,6 +166,56 @@ func TestScopedNonceAllowsSameAssetNonceForDifferentOwners(t *testing.T) {
 	}
 }
 
+func TestCreateAssetStoresPermanentMetadataAndCreationContext(t *testing.T) {
+	ownerScript := testOwnerScript(0xB7)
+	ownerID := mustOwnerIDFromScript(t, ownerScript)
+	sourceHash := bytes32(0x44)
+	sourceDomainHash := externalapi.NewDomainHashFromByteArray(&sourceHash)
+	creationContext := NewCreationContext(sourceDomainHash, 123_450, 1_715_122_999_000)
+
+	state := NewState()
+	state.AnchorCounts[ownerID] = 1
+	payload := testCreateAssetPayload(
+		1,
+		8,
+		PayloadSupplyModeCapped,
+		Uint128FromUint64(1_000_000),
+		bytes32(0xA1),
+		[]byte("Permanent Token"),
+		[]byte("PERM"),
+		[]byte("{\"keep\":true}"),
+		[]byte("bridge-v1"),
+	)
+	tx := testTransferTx(ownerScript, 0x21, payload)
+	if err := ValidateAndApplyTransactionWithCreationContext(tx, 123_500, 0, creationContext, state); err != nil {
+		t.Fatalf("create asset failed: %s", err)
+	}
+
+	assetID := *consensushashing.TransactionID(tx).ByteArray()
+	asset, ok := state.Assets[assetID]
+	if !ok {
+		t.Fatalf("created asset missing from state")
+	}
+	if asset.CreatorOwnerID != ownerID {
+		t.Fatalf("creator owner mismatch")
+	}
+	if asset.Decimals != 8 || string(asset.Name) != "Permanent Token" || string(asset.Symbol) != "PERM" {
+		t.Fatalf("asset permanent fields not preserved: decimals=%d name=%q symbol=%q", asset.Decimals, asset.Name, asset.Symbol)
+	}
+	if string(asset.Metadata) != "{\"keep\":true}" || string(asset.PlatformTag) != "bridge-v1" {
+		t.Fatalf("asset metadata/platform not preserved: metadata=%q platform=%q", asset.Metadata, asset.PlatformTag)
+	}
+	if asset.CreatedBlockHash == nil || *asset.CreatedBlockHash != sourceHash {
+		t.Fatalf("created block hash mismatch")
+	}
+	if asset.CreatedDAAScore == nil || *asset.CreatedDAAScore != 123_450 {
+		t.Fatalf("created DAA mismatch")
+	}
+	if asset.CreatedAt == nil || *asset.CreatedAt != 1_715_122_999_000 {
+		t.Fatalf("created timestamp mismatch")
+	}
+}
+
 func TestLiquidityPoolNonceMismatchDoesNotAdvanceAssetNonce(t *testing.T) {
 	ownerScript := testOwnerScript(0xA6)
 	ownerID := mustOwnerIDFromScript(t, ownerScript)
@@ -229,6 +280,28 @@ func testTransferPayload(nonce uint64, assetID [externalapi.DomainHashSize]byte,
 	payload = append(payload, toOwnerID[:]...)
 	amountBytes := amount.ToLE()
 	payload = append(payload, amountBytes[:]...)
+	return payload
+}
+
+func testCreateAssetPayload(nonce uint64, decimals byte, supplyMode PayloadSupplyMode, maxSupply Uint128,
+	mintAuthorityOwnerID [externalapi.DomainHashSize]byte, name, symbol, metadata, platformTag []byte) []byte {
+
+	payload := testPayloadHeader(0, nonce)
+	payload = append(payload, currentTokenVersion, decimals, byte(supplyMode))
+	maxSupplyBytes := maxSupply.ToLE()
+	payload = append(payload, maxSupplyBytes[:]...)
+	payload = append(payload, mintAuthorityOwnerID[:]...)
+	payload = append(payload, byte(len(name)), byte(len(symbol)))
+	var metadataLen [2]byte
+	binary.LittleEndian.PutUint16(metadataLen[:], uint16(len(metadata)))
+	payload = append(payload, metadataLen[:]...)
+	payload = append(payload, name...)
+	payload = append(payload, symbol...)
+	payload = append(payload, metadata...)
+	if platformTag != nil {
+		payload = append(payload, byte(len(platformTag)))
+		payload = append(payload, platformTag...)
+	}
 	return payload
 }
 

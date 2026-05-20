@@ -69,6 +69,11 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 	}
 	log.Tracef("The past median time of %s is %d", blockHash, selectedParentMedianTime)
 	blockDAAScore := block.Header.DAAScore()
+	sourceBlockTime := uint64(0)
+	if block.Header.TimeInMilliseconds() > 0 {
+		sourceBlockTime = uint64(block.Header.TimeInMilliseconds())
+	}
+	atomicCreationContext := atomicstate.NewCreationContext(blockHash, blockDAAScore, sourceBlockTime)
 	accumulatedAtomicState := atomicState.Clone()
 	atomicGrowth := &atomicstate.BlockStateGrowth{}
 
@@ -77,7 +82,11 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 		log.Tracef("Validating transaction %s in block %s against "+
 			"the block's past UTXO", transactionID, blockHash)
 		if i == transactionhelper.CoinbaseTransactionIndex {
-			log.Tracef("Skipping transaction %s because it is the coinbase", transactionID)
+			log.Tracef("Applying Atomic anchor deltas for coinbase transaction %s", transactionID)
+			err = atomicstate.ApplyAnchorDeltasForTransaction(transaction, accumulatedAtomicState)
+			if err != nil {
+				return err
+			}
 			continue
 		}
 
@@ -96,10 +105,11 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 		log.Tracef("Validation against the block's past UTXO "+
 			"passed for transaction %s in block %s", transactionID, blockHash)
 
-		err = atomicstate.ValidateAndApplyTransactionWithGrowth(
+		err = atomicstate.ValidateAndApplyTransactionWithGrowthAndCreationContext(
 			transaction,
 			blockDAAScore,
 			csm.payloadHfActivationDAAScore,
+			atomicCreationContext,
 			accumulatedAtomicState,
 			atomicGrowth,
 			csm.atomicStateGrowthLimits,

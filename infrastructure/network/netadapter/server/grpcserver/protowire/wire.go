@@ -359,6 +359,34 @@ func toP2PPayload(message appmessage.Message) (isCryptixdMessage_Payload, error)
 			return nil, err
 		}
 		return payload, nil
+	case *appmessage.MsgRequestConsensusAtomicStateHash:
+		payload := new(CryptixdMessage_RequestConsensusAtomicStateHash)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgConsensusAtomicStateHash:
+		payload := new(CryptixdMessage_ConsensusAtomicStateHash)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgRequestAtomicTokenStateHash:
+		payload := new(CryptixdMessage_RequestAtomicTokenStateHash)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
+	case *appmessage.MsgAtomicTokenStateHash:
+		payload := new(CryptixdMessage_AtomicTokenStateHash)
+		err := payload.fromAppMessage(message)
+		if err != nil {
+			return nil, err
+		}
+		return payload, nil
 	case *appmessage.MsgBlockWithTrustedDataV4:
 		payload := new(CryptixdMessage_BlockWithTrustedDataV4)
 		err := payload.fromAppMessage(message)

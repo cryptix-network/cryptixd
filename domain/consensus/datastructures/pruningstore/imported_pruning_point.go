@@ -186,30 +186,33 @@ func (ps *pruningStore) ClearImportedPruningPointAtomicState(dbContext model.DBW
 }
 
 func (ps *pruningStore) ImportedPruningPointAtomicState(dbContext model.DBReader) ([]byte, error) {
-	stateHash, err := ps.ImportedPruningPointAtomicStateHash(dbContext)
+	stateBytes, err := dbContext.Get(ps.importedPruningPointAtomicStateKey)
 	if err != nil {
 		return nil, err
 	}
-	return atomicstate.NewRootOnlyState(stateHash).CanonicalBytes(), nil
+	if len(stateBytes) == externalapi.DomainHashSize {
+		var stateHash [externalapi.DomainHashSize]byte
+		copy(stateHash[:], stateBytes)
+		return atomicstate.NewRootOnlyState(stateHash).CanonicalBytes(), nil
+	}
+	return append([]byte(nil), stateBytes...), nil
 }
 
 func (ps *pruningStore) ImportedPruningPointAtomicStateHash(dbContext model.DBReader) ([externalapi.DomainHashSize]byte, error) {
-	stateHashBytes, err := dbContext.Get(ps.importedPruningPointAtomicStateKey)
+	stateBytes, err := dbContext.Get(ps.importedPruningPointAtomicStateKey)
 	if err != nil {
 		return [externalapi.DomainHashSize]byte{}, err
 	}
-	if len(stateHashBytes) != externalapi.DomainHashSize {
-		return [externalapi.DomainHashSize]byte{}, errors.Errorf(
-			"imported pruning point Atomic state hash has invalid length %d", len(stateHashBytes))
+	if len(stateBytes) == externalapi.DomainHashSize {
+		var stateHash [externalapi.DomainHashSize]byte
+		copy(stateHash[:], stateBytes)
+		return stateHash, nil
 	}
-	var stateHash [externalapi.DomainHashSize]byte
-	copy(stateHash[:], stateHashBytes)
-	return stateHash, nil
+	return atomicstate.HashCanonicalBytes(stateBytes), nil
 }
 
 func (ps *pruningStore) UpdateImportedPruningPointAtomicState(dbTx model.DBTransaction, stateBytes []byte) error {
-	stateHash := atomicstate.HashCanonicalBytes(stateBytes)
-	return ps.UpdateImportedPruningPointAtomicStateHash(dbTx, stateHash)
+	return dbTx.Put(ps.importedPruningPointAtomicStateKey, append([]byte(nil), stateBytes...))
 }
 
 func (ps *pruningStore) UpdateImportedPruningPointAtomicStateHash(dbTx model.DBTransaction, stateHash [externalapi.DomainHashSize]byte) error {
