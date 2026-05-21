@@ -8,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/pkg/errors"
 )
@@ -168,6 +169,29 @@ func (csm *consensusStateManager) getUnverifiedChainBlocks(stagingArea *model.St
 			return nil, err
 		}
 		if currentBlockStatus != externalapi.StatusUTXOPendingVerification {
+			if currentBlockStatus == externalapi.StatusUTXOValid {
+				hasValidDiffPath, err := csm.hasUTXODiffPathToVirtualRoot(stagingArea, currentHash)
+				if err != nil {
+					return nil, err
+				}
+				if !hasValidDiffPath {
+					log.Warnf("Block %s is marked UTXO-valid but its UTXO diff path to the virtual root is incomplete; revalidating it to repair local diff state", currentHash)
+					unverifiedBlocks = append(unverifiedBlocks, currentHash)
+
+					currentBlockGHOSTDAGData, err := csm.ghostdagDataStore.Get(csm.databaseContext, stagingArea, currentHash, false)
+					if err != nil {
+						return nil, err
+					}
+					if currentBlockGHOSTDAGData.SelectedParent() == nil {
+						log.Tracef("Genesis block reached while repairing UTXO diff path. Returning all the "+
+							"unverified blocks prior to it: %s", unverifiedBlocks)
+						return unverifiedBlocks, nil
+					}
+					currentHash = currentBlockGHOSTDAGData.SelectedParent()
+					continue
+				}
+			}
+
 			log.Tracef("Block %s has status %s. Returning all the "+
 				"unverified blocks prior to it: %s", currentHash, currentBlockStatus, unverifiedBlocks)
 			return unverifiedBlocks, nil
@@ -188,6 +212,58 @@ func (csm *consensusStateManager) getUnverifiedChainBlocks(stagingArea *model.St
 		}
 
 		currentHash = currentBlockGHOSTDAGData.SelectedParent()
+	}
+}
+
+func (csm *consensusStateManager) hasUTXODiffPathToVirtualRoot(
+	stagingArea *model.StagingArea, blockHash *externalapi.DomainHash) (bool, error) {
+
+	virtualRoot, err := csm.virtualSelectedParent(stagingArea)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return true, nil
+		}
+		return false, err
+	}
+
+	currentHash := blockHash
+	visited := make(map[externalapi.DomainHash]struct{})
+	for {
+		if _, ok := visited[*currentHash]; ok {
+			log.Warnf("Detected a cycle in the UTXO diff child path while checking block %s", blockHash)
+			return false, nil
+		}
+		visited[*currentHash] = struct{}{}
+
+		_, err := csm.utxoDiffStore.UTXODiff(csm.databaseContext, stagingArea, currentHash)
+		if err != nil {
+			if database.IsNotFoundError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+
+		hasChild, err := csm.utxoDiffStore.HasUTXODiffChild(csm.databaseContext, stagingArea, currentHash)
+		if err != nil {
+			return false, err
+		}
+		if currentHash.Equal(virtualRoot) {
+			return !hasChild, nil
+		}
+		if !hasChild {
+			return false, nil
+		}
+
+		currentHash, err = csm.utxoDiffStore.UTXODiffChild(csm.databaseContext, stagingArea, currentHash)
+		if err != nil {
+			if database.IsNotFoundError(err) {
+				return false, nil
+			}
+			return false, err
+		}
+		if currentHash == nil {
+			return false, nil
+		}
 	}
 }
 

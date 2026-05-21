@@ -6,19 +6,21 @@ import (
 )
 
 type utxoDiffStagingShard struct {
-	store              *utxoDiffStore
-	utxoDiffToAdd      map[externalapi.DomainHash]externalapi.UTXODiff
-	utxoDiffChildToAdd map[externalapi.DomainHash]*externalapi.DomainHash
-	toDelete           map[externalapi.DomainHash]struct{}
+	store                 *utxoDiffStore
+	utxoDiffToAdd         map[externalapi.DomainHash]externalapi.UTXODiff
+	utxoDiffChildToAdd    map[externalapi.DomainHash]*externalapi.DomainHash
+	utxoDiffChildToDelete map[externalapi.DomainHash]struct{}
+	toDelete              map[externalapi.DomainHash]struct{}
 }
 
 func (uds *utxoDiffStore) stagingShard(stagingArea *model.StagingArea) *utxoDiffStagingShard {
 	return stagingArea.GetOrCreateShard(uds.shardID, func() model.StagingShard {
 		return &utxoDiffStagingShard{
-			store:              uds,
-			utxoDiffToAdd:      make(map[externalapi.DomainHash]externalapi.UTXODiff),
-			utxoDiffChildToAdd: make(map[externalapi.DomainHash]*externalapi.DomainHash),
-			toDelete:           make(map[externalapi.DomainHash]struct{}),
+			store:                 uds,
+			utxoDiffToAdd:         make(map[externalapi.DomainHash]externalapi.UTXODiff),
+			utxoDiffChildToAdd:    make(map[externalapi.DomainHash]*externalapi.DomainHash),
+			utxoDiffChildToDelete: make(map[externalapi.DomainHash]struct{}),
+			toDelete:              make(map[externalapi.DomainHash]struct{}),
 		}
 	}).(*utxoDiffStagingShard)
 }
@@ -52,6 +54,14 @@ func (udss *utxoDiffStagingShard) Commit(dbTx model.DBTransaction) error {
 		udss.store.utxoDiffChildCache.Add(&hash, utxoDiffChild)
 	}
 
+	for hash := range udss.utxoDiffChildToDelete {
+		err := dbTx.Delete(udss.store.utxoDiffChildHashAsKey(&hash))
+		if err != nil {
+			return err
+		}
+		udss.store.utxoDiffChildCache.Remove(&hash)
+	}
+
 	for hash := range udss.toDelete {
 		err := dbTx.Delete(udss.store.utxoDiffHashAsKey(&hash))
 		if err != nil {
@@ -70,5 +80,8 @@ func (udss *utxoDiffStagingShard) Commit(dbTx model.DBTransaction) error {
 }
 
 func (udss *utxoDiffStagingShard) isStaged() bool {
-	return len(udss.utxoDiffToAdd) != 0 || len(udss.utxoDiffChildToAdd) != 0 || len(udss.toDelete) != 0
+	return len(udss.utxoDiffToAdd) != 0 ||
+		len(udss.utxoDiffChildToAdd) != 0 ||
+		len(udss.utxoDiffChildToDelete) != 0 ||
+		len(udss.toDelete) != 0
 }

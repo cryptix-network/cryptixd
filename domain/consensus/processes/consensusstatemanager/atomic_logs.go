@@ -139,7 +139,7 @@ func (csm *consensusStateManager) logAtomicStateSummary(
 		removedUTXOs = virtualUTXODiff.ToRemove().Len()
 	}
 
-	atomicLog.Infof("Atomic consensus state: runtime=healthy live_correct=true reason=%s daa=%d hf_active=%t root=%s root_only=%t "+
+	atomicLog.Infof("Atomic consensus state: local_state=consistent live_correct=true reason=%s daa=%d hf_active=%t root=%s root_only=%t "+
 		"assets=%d balances=%d nonces=%d anchors=%d vaults=%d selected_parent=%s parents=%d utxo_add=%d utxo_remove=%d",
 		reason,
 		daaScore,

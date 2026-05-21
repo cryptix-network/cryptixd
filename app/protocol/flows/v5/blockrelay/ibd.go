@@ -11,6 +11,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
@@ -62,15 +63,26 @@ func HandleIBD(context IBDContext, incomingRoute *router.Route, outgoingRoute *r
 }
 
 func (flow *handleIBDFlow) start() error {
+	localVirtualRecoveryTicker := time.NewTicker(30 * time.Second)
+	defer localVirtualRecoveryTicker.Stop()
+
 	for {
 		// Wait for IBD requests triggered by other flows
-		block, ok := <-flow.peer.IBDRequestChannel()
-		if !ok {
-			return nil
-		}
-		err := flow.runIBDIfNotRunning(block)
-		if err != nil {
-			return err
+		select {
+		case block, ok := <-flow.peer.IBDRequestChannel():
+			if !ok {
+				return nil
+			}
+			err := flow.runIBDIfNotRunning(block)
+			if err != nil {
+				return err
+			}
+
+		case <-localVirtualRecoveryTicker.C:
+			err := flow.recoverLocalVirtualIfNeeded()
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -110,6 +122,32 @@ func (flow *handleIBDFlow) runIBDIfNotRunning(block *externalapi.DomainBlock) er
 		return nil
 	}
 
+	if !shouldDownloadHeadersProof && flow.Config().NetParams().DisallowDirectBlocksOnTopOfGenesis {
+		isGenesisVirtualSelectedParent, err := flow.isGenesisVirtualSelectedParent()
+		if err != nil {
+			return err
+		}
+
+		if isGenesisVirtualSelectedParent {
+			hasEnoughWorkForHeadersProof, err := flow.checkIfHighHashHasMoreBlueWorkThanSelectedTipAndPruningDepthMoreBlueScore(block)
+			if err != nil {
+				return err
+			}
+			firstNonGenesisPruningPointDAAScore := flow.Config().NetParams().PruningDepth() + flow.Config().NetParams().FinalityDepth()
+			canHaveNonGenesisPruningPoint := block.Header.DAAScore() >= firstNonGenesisPruningPointDAAScore
+			if hasEnoughWorkForHeadersProof && canHaveNonGenesisPruningPoint {
+				log.Infof("Switching IBD from relay block %s to peer pruning point via headers proof because the local node is still at genesis and the peer can have a non-genesis pruning point.", relayBlockHash)
+				shouldDownloadHeadersProof = true
+			} else if canHaveNonGenesisPruningPoint && !flow.Config().AllowSubmitBlockWhenNotSynced {
+				log.Infof("Cannot IBD to %s because it won't change the pruning point. The node needs to IBD "+
+					"to the recent pruning point before normal operation can resume.", relayBlockHash)
+				return nil
+			} else {
+				log.Infof("Continuing direct IBD to relay block %s because the peer is below the first non-genesis pruning-point threshold.", relayBlockHash)
+			}
+		}
+	}
+
 	if shouldDownloadHeadersProof {
 		log.Infof("Starting IBD with headers proof")
 		err = flow.ibdWithHeadersProof(syncerHeaderSelectedTipHash, relayBlockHash, block.Header.DAAScore())
@@ -117,19 +155,6 @@ func (flow *handleIBDFlow) runIBDIfNotRunning(block *externalapi.DomainBlock) er
 			return err
 		}
 	} else {
-		if flow.Config().NetParams().DisallowDirectBlocksOnTopOfGenesis && !flow.Config().AllowSubmitBlockWhenNotSynced {
-			isGenesisVirtualSelectedParent, err := flow.isGenesisVirtualSelectedParent()
-			if err != nil {
-				return err
-			}
-
-			if isGenesisVirtualSelectedParent {
-				log.Infof("Cannot IBD to %s because it won't change the pruning point. The node needs to IBD "+
-					"to the recent pruning point before normal operation can resume.", relayBlockHash)
-				return nil
-			}
-		}
-
 		err = flow.syncPruningPointFutureHeaders(
 			flow.Domain().Consensus(),
 			syncerHeaderSelectedTipHash, highestKnownSyncerChainHash, relayBlockHash, block.Header.DAAScore())
@@ -673,6 +698,21 @@ func (flow *handleIBDFlow) syncMissingBlockBodies(highHash *externalapi.DomainHa
 		// In rare cases, all the IBD blocks might be already inserted by the time we reach this point.
 		// In these cases - GetMissingBlockBodyHashes would return an empty array.
 		log.Debugf("No missing block body hashes found.")
+		shouldResolve, virtualDAAScore, targetDAAScore, err := flow.shouldResolveVirtualToward(highHash)
+		if err != nil {
+			return err
+		}
+		if shouldResolve {
+			log.Infof("No missing block bodies found, but local virtual is behind target block %s (virtual_daa=%d, target_daa=%d); resolving virtual",
+				highHash, virtualDAAScore, targetDAAScore)
+			err := flow.resolveVirtual(targetDAAScore)
+			if err != nil {
+				if errors.Is(err, database.ErrNotFound) {
+					return protocolerrors.Errorf(false, "IBD cannot resolve virtual with existing block bodies because local UTXO diff data is incomplete: %s", err)
+				}
+				return err
+			}
+		}
 		return nil
 	}
 
@@ -692,6 +732,8 @@ func (flow *handleIBDFlow) syncMissingBlockBodies(highHash *externalapi.DomainHa
 	if err != nil {
 		return err
 	}
+	const deferredVirtualResolveIntervalBlocks = 4096
+	importedSinceVirtualResolve := 0
 
 	for offset := 0; offset < len(hashes); offset += ibdBatchSize {
 		var hashesToRequest []*externalapi.DomainHash
@@ -735,6 +777,9 @@ func (flow *handleIBDFlow) syncMissingBlockBodies(highHash *externalapi.DomainHa
 					log.Debugf("Skipping IBD Block %s as it has already been added to the DAG", blockHash)
 					continue
 				}
+				if errors.Is(err, database.ErrNotFound) {
+					return protocolerrors.Errorf(false, "IBD cannot validate block %s because local UTXO diff data is incomplete: %s", blockHash, err)
+				}
 				return protocolerrors.ConvertToBanningProtocolErrorIfRuleError(err, "invalid block %s", blockHash)
 			}
 			err = flow.OnNewBlock(block)
@@ -746,12 +791,31 @@ func (flow *handleIBDFlow) syncMissingBlockBodies(highHash *externalapi.DomainHa
 		}
 
 		progressReporter.reportProgress(len(hashesToRequest), highestProcessedDAAScore)
+
+		if !updateVirtual {
+			importedSinceVirtualResolve += len(hashesToRequest)
+			hasMoreBodies := offset+len(hashesToRequest) < len(hashes)
+			if hasMoreBodies && importedSinceVirtualResolve >= deferredVirtualResolveIntervalBlocks {
+				log.Infof("Resolving virtual during IBD after importing %d block bodies to keep local UTXO diff state complete", importedSinceVirtualResolve)
+				err := flow.resolveVirtual(highestProcessedDAAScore)
+				if err != nil {
+					if errors.Is(err, database.ErrNotFound) {
+						return protocolerrors.Errorf(false, "IBD cannot resolve virtual during body sync because local UTXO diff data is incomplete: %s", err)
+					}
+					return err
+				}
+				importedSinceVirtualResolve = 0
+			}
+		}
 	}
 
 	// We need to resolve virtual only if it wasn't updated while syncing block bodies
 	if !updateVirtual {
 		err := flow.resolveVirtual(highestProcessedDAAScore)
 		if err != nil {
+			if errors.Is(err, database.ErrNotFound) {
+				return protocolerrors.Errorf(false, "IBD cannot resolve virtual because local UTXO diff data is incomplete: %s", err)
+			}
 			return err
 		}
 	}
@@ -771,7 +835,7 @@ func (flow *handleIBDFlow) banIfBlockIsHeaderOnly(block *externalapi.DomainBlock
 func (flow *handleIBDFlow) resolveVirtual(estimatedVirtualDAAScoreTarget uint64) error {
 	err := flow.Domain().Consensus().ResolveVirtual(func(virtualDAAScoreStart uint64, virtualDAAScore uint64) {
 		var percents int
-		if estimatedVirtualDAAScoreTarget-virtualDAAScoreStart <= 0 {
+		if estimatedVirtualDAAScoreTarget <= virtualDAAScoreStart {
 			percents = 100
 		} else {
 			percents = int(float64(virtualDAAScore-virtualDAAScoreStart) / float64(estimatedVirtualDAAScoreTarget-virtualDAAScoreStart) * 100)
@@ -789,4 +853,68 @@ func (flow *handleIBDFlow) resolveVirtual(estimatedVirtualDAAScoreTarget uint64)
 
 	log.Infof("Resolved virtual")
 	return nil
+}
+
+func (flow *handleIBDFlow) shouldResolveVirtualToward(targetHash *externalapi.DomainHash) (bool, uint64, uint64, error) {
+	virtualInfo, err := flow.Domain().Consensus().GetVirtualInfo()
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	targetHeader, err := flow.Domain().Consensus().GetBlockHeader(targetHash)
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	targetDAAScore := targetHeader.DAAScore()
+	return targetDAAScore > virtualInfo.DAAScore, virtualInfo.DAAScore, targetDAAScore, nil
+}
+
+func (flow *handleIBDFlow) recoverLocalVirtualIfNeeded() error {
+	if flow.IsIBDRunning() {
+		return nil
+	}
+
+	headerSelectedTip, err := flow.Domain().Consensus().GetHeadersSelectedTip()
+	if err != nil {
+		return err
+	}
+
+	shouldResolve, virtualDAAScore, targetDAAScore, err := flow.shouldResolveVirtualToward(headerSelectedTip)
+	if err != nil {
+		return err
+	}
+	if !shouldResolve {
+		log.Infof("IBD recovery check: idle; local virtual is caught up to headers tip (virtual_daa=%d, header_tip_daa=%d)", virtualDAAScore, targetDAAScore)
+		return nil
+	}
+
+	headerTipBlock, exists, err := flow.Domain().Consensus().GetBlock(headerSelectedTip)
+	if err != nil {
+		return err
+	}
+	if !exists {
+		log.Infof("IBD recovery check: headers are ahead of virtual but header tip body is missing (virtual_daa=%d, header_tip_daa=%d, header_tip=%s); waiting for peer IBD",
+			virtualDAAScore, targetDAAScore, headerSelectedTip)
+		return nil
+	}
+
+	if !flow.TrySetIBDRunning(flow.peer) {
+		return nil
+	}
+	defer flow.UnsetIBDRunning()
+
+	headerTipHash := consensushashing.BlockHash(headerTipBlock)
+	log.Infof("IBD recovery: local block bodies are ahead of virtual (virtual_daa=%d, header_tip_daa=%d, header_tip=%s); resolving virtual now",
+		virtualDAAScore, targetDAAScore, headerTipHash)
+	err = flow.resolveVirtual(targetDAAScore)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			log.Warnf("IBD recovery could not resolve virtual because local UTXO diff data is incomplete: %s", err)
+			return nil
+		}
+		return err
+	}
+
+	return flow.OnNewBlockTemplate()
 }

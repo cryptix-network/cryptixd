@@ -29,6 +29,25 @@ func HandleGetBlockTemplate(context *rpccontext.Context, _ *router.Router, reque
 
 	coinbaseData := &externalapi.DomainCoinbaseData{ScriptPublicKey: scriptPublicKey, ExtraData: []byte(version.Version() + "/" + getBlockTemplateRequest.ExtraData)}
 
+	virtualDAAScore, err := context.Domain.Consensus().GetVirtualDAAScore()
+	if err != nil {
+		return nil, err
+	}
+	isSynced := false
+	if context.ProtocolManager.Context().HasPeers() {
+		isSynced, err = context.ProtocolManager.Context().IsNearlySynced()
+		if err != nil {
+			return nil, err
+		}
+	}
+	if virtualDAAScore >= context.Config.NetParams().PayloadHfActivationDAAScore && !isSynced {
+		log.Warnf("Rejecting getBlockTemplate while node is not nearly synced after payload HF: virtualDAAScore=%d activationDAA=%d allowSubmitBlockWhenNotSynced=%t; mining from a partial Atomic/UTXO view can create blocks with invalid state commitments",
+			virtualDAAScore, context.Config.NetParams().PayloadHfActivationDAAScore, context.Config.AllowSubmitBlockWhenNotSynced)
+		errorMessage := &appmessage.GetBlockTemplateResponseMessage{}
+		errorMessage.Error = appmessage.RPCErrorf("mining template unavailable: node is not nearly synced after payload hardfork; wait for sync/Atomic catch-up before mining")
+		return errorMessage, nil
+	}
+
 	templateBlock, isNearlySynced, err := context.Domain.MiningManager().GetBlockTemplate(coinbaseData)
 	if err != nil {
 		return nil, err

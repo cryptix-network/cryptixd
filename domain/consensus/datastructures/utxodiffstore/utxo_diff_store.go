@@ -1,12 +1,13 @@
 package utxodiffstore
 
 import (
-	"github.com/golang/protobuf/proto"
 	"github.com/cryptix-network/cryptixd/domain/consensus/database/serialization"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/lrucache"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/util/staging"
+	"github.com/golang/protobuf/proto"
 	"github.com/pkg/errors"
 )
 
@@ -43,6 +44,10 @@ func (uds *utxoDiffStore) Stage(stagingArea *model.StagingArea, blockHash *exter
 
 	if utxoDiffChild != nil {
 		stagingShard.utxoDiffChildToAdd[*blockHash] = utxoDiffChild
+		delete(stagingShard.utxoDiffChildToDelete, *blockHash)
+	} else {
+		delete(stagingShard.utxoDiffChildToAdd, *blockHash)
+		stagingShard.utxoDiffChildToDelete[*blockHash] = struct{}{}
 	}
 }
 
@@ -54,7 +59,10 @@ func (uds *utxoDiffStore) isBlockHashStaged(stagingShard *utxoDiffStagingShard, 
 	if _, ok := stagingShard.utxoDiffToAdd[*blockHash]; ok {
 		return true
 	}
-	_, ok := stagingShard.utxoDiffChildToAdd[*blockHash]
+	if _, ok := stagingShard.utxoDiffChildToAdd[*blockHash]; ok {
+		return true
+	}
+	_, ok := stagingShard.utxoDiffChildToDelete[*blockHash]
 	return ok
 }
 
@@ -87,6 +95,10 @@ func (uds *utxoDiffStore) UTXODiff(dbContext model.DBReader, stagingArea *model.
 func (uds *utxoDiffStore) UTXODiffChild(dbContext model.DBReader, stagingArea *model.StagingArea, blockHash *externalapi.DomainHash) (*externalapi.DomainHash, error) {
 	stagingShard := uds.stagingShard(stagingArea)
 
+	if _, ok := stagingShard.utxoDiffChildToDelete[*blockHash]; ok {
+		return nil, database.ErrNotFound
+	}
+
 	if utxoDiffChild, ok := stagingShard.utxoDiffChildToAdd[*blockHash]; ok {
 		return utxoDiffChild, nil
 	}
@@ -112,6 +124,10 @@ func (uds *utxoDiffStore) UTXODiffChild(dbContext model.DBReader, stagingArea *m
 func (uds *utxoDiffStore) HasUTXODiffChild(dbContext model.DBReader, stagingArea *model.StagingArea, blockHash *externalapi.DomainHash) (bool, error) {
 	stagingShard := uds.stagingShard(stagingArea)
 
+	if _, ok := stagingShard.utxoDiffChildToDelete[*blockHash]; ok {
+		return false, nil
+	}
+
 	if _, ok := stagingShard.utxoDiffChildToAdd[*blockHash]; ok {
 		return true, nil
 	}
@@ -127,15 +143,9 @@ func (uds *utxoDiffStore) HasUTXODiffChild(dbContext model.DBReader, stagingArea
 func (uds *utxoDiffStore) Delete(stagingArea *model.StagingArea, blockHash *externalapi.DomainHash) {
 	stagingShard := uds.stagingShard(stagingArea)
 
-	if uds.isBlockHashStaged(stagingShard, blockHash) {
-		if _, ok := stagingShard.utxoDiffToAdd[*blockHash]; ok {
-			delete(stagingShard.utxoDiffToAdd, *blockHash)
-		}
-		if _, ok := stagingShard.utxoDiffChildToAdd[*blockHash]; ok {
-			delete(stagingShard.utxoDiffChildToAdd, *blockHash)
-		}
-		return
-	}
+	delete(stagingShard.utxoDiffToAdd, *blockHash)
+	delete(stagingShard.utxoDiffChildToAdd, *blockHash)
+	delete(stagingShard.utxoDiffChildToDelete, *blockHash)
 	stagingShard.toDelete[*blockHash] = struct{}{}
 }
 

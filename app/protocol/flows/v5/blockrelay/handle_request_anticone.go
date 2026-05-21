@@ -46,10 +46,11 @@ func (flow *handleRequestAnticoneFlow) start() error {
 		log.Debugf("Getting past(%s) cap anticone(%s) for peer %s", contextHash, blockHash, flow.peer)
 
 		// GetAnticone is expected to be called by the syncee for getting the anticone of the header selected tip
-		// intersected by past of relayed block, and is thus expected to be bounded by mergeset limit since
-		// we relay blocks only if they enter virtual's mergeset. We add a 2 factor for possible sync gaps.
-		blockHashes, err := flow.Domain().Consensus().GetAnticone(blockHash, contextHash,
-			flow.Config().ActiveNetParams.MergeSetSizeLimit*2)
+		// intersected by past of relayed block. The traversal can pass through wider DAG regions or already
+		// disqualified side branches, so the correct safety bound is the live pruning window, not a small
+		// multiple of the merge-set limit.
+		maxTraversalAllowed := flow.Config().NetParams().PruningDepth()
+		blockHashes, err := flow.Domain().Consensus().GetAnticone(blockHash, contextHash, maxTraversalAllowed)
 		if err != nil {
 			return protocolerrors.Wrap(true, err, "Failed querying anticone")
 		}

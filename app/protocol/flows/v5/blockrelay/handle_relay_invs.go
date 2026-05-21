@@ -13,6 +13,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/hashset"
 	"github.com/cryptix-network/cryptixd/infrastructure/config"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 	"github.com/pkg/errors"
 )
@@ -91,6 +92,25 @@ func (flow *handleRelayInvsFlow) start() error {
 				return protocolerrors.Errorf(true, "sent inv of an invalid block %s",
 					inv.Hash)
 			}
+			shouldResolve, virtualDAAScore, targetDAAScore, err := flow.shouldTriggerIBDForExistingBlock(inv.Hash)
+			if err != nil {
+				return err
+			}
+			if shouldResolve {
+				block, exists, err := flow.Domain().Consensus().GetBlock(inv.Hash)
+				if err != nil {
+					return err
+				}
+				if exists {
+					log.Infof("Existing relay block %s is ahead of local virtual (virtual_daa=%d, block_daa=%d); triggering IBD/virtual recovery",
+						inv.Hash, virtualDAAScore, targetDAAScore)
+					select {
+					case flow.peer.IBDRequestChannel() <- block:
+					default:
+						log.Warnf("Could not trigger IBD/virtual recovery for existing relay block %s because the IBD request channel is busy", inv.Hash)
+					}
+				}
+			}
 			log.Debugf("Block %s already exists. continuing...", inv.Hash)
 			continue
 		}
@@ -155,6 +175,15 @@ func (flow *handleRelayInvsFlow) start() error {
 			return err
 		}
 
+		if !isNearlySynced {
+			log.Infof("Deferring relay block %s to IBD because the local node is not synced yet", inv.Hash)
+			select {
+			case flow.peer.IBDRequestChannel() <- block:
+			default:
+			}
+			continue
+		}
+
 		if flow.Config().NetParams().DisallowDirectBlocksOnTopOfGenesis && !flow.Config().AllowSubmitBlockWhenNotSynced && !flow.Config().Devnet && flow.isChildOfGenesis(block) {
 			log.Infof("Cannot process %s because it's a direct child of genesis.", consensushashing.BlockHash(block))
 			continue
@@ -198,6 +227,14 @@ func (flow *handleRelayInvsFlow) start() error {
 
 			if errors.Is(err, ruleerrors.ErrDuplicateBlock) {
 				log.Infof("Ignoring duplicate block %s", inv.Hash)
+				continue
+			}
+			if errors.Is(err, database.ErrNotFound) {
+				log.Warnf("Deferring relay block %s to IBD because local UTXO diff data is incomplete: %s", inv.Hash, err)
+				select {
+				case flow.peer.IBDRequestChannel() <- block:
+				default:
+				}
 				continue
 			}
 			return err
@@ -428,6 +465,25 @@ func (flow *handleRelayInvsFlow) isGenesisVirtualSelectedParent() (bool, error) 
 func (flow *handleRelayInvsFlow) isChildOfGenesis(block *externalapi.DomainBlock) bool {
 	parents := block.Header.DirectParents()
 	return len(parents) == 1 && parents[0].Equal(flow.Config().NetParams().GenesisHash)
+}
+
+func (flow *handleRelayInvsFlow) shouldTriggerIBDForExistingBlock(blockHash *externalapi.DomainHash) (bool, uint64, uint64, error) {
+	if flow.IsIBDRunning() {
+		return false, 0, 0, nil
+	}
+
+	virtualInfo, err := flow.Domain().Consensus().GetVirtualInfo()
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	blockHeader, err := flow.Domain().Consensus().GetBlockHeader(blockHash)
+	if err != nil {
+		return false, 0, 0, err
+	}
+
+	blockDAAScore := blockHeader.DAAScore()
+	return blockDAAScore > virtualInfo.DAAScore, virtualInfo.DAAScore, blockDAAScore, nil
 }
 
 // isBlockInOrphanResolutionRange finds out whether the given blockHash should be

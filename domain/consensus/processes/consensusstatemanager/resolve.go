@@ -113,6 +113,10 @@ func (csm *consensusStateManager) ResolveVirtual(maxBlocksToResolve uint64) (*ex
 	if err != nil {
 		return nil, false, err
 	}
+	err = csm.clearStaleVirtualSelectedParentUTXODiffChild(previousVirtualSelectedParent)
+	if err != nil {
+		return nil, false, err
+	}
 
 	if pendingTipStatus == externalapi.StatusUTXOValid && previousVirtualSelectedParent.Equal(pendingTip) {
 		return nil, true, nil
@@ -221,4 +225,28 @@ func (csm *consensusStateManager) ResolveVirtual(maxBlocksToResolve uint64) (*ex
 		VirtualUTXODiff:                   virtualUTXODiff,
 		VirtualParents:                    virtualParentsOutcome,
 	}, isCompletelyResolved, nil
+}
+
+func (csm *consensusStateManager) clearStaleVirtualSelectedParentUTXODiffChild(
+	virtualSelectedParent *externalapi.DomainHash) error {
+
+	stagingArea := model.NewStagingArea()
+	hasChild, err := csm.utxoDiffStore.HasUTXODiffChild(csm.databaseContext, stagingArea, virtualSelectedParent)
+	if err != nil {
+		return err
+	}
+	if !hasChild {
+		return nil
+	}
+
+	utxoDiff, err := csm.utxoDiffStore.UTXODiff(csm.databaseContext, stagingArea, virtualSelectedParent)
+	if err != nil {
+		return err
+	}
+
+	log.Warnf("Current virtual selected parent %s has a stale UTXO diff child; clearing it before resolving virtual",
+		virtualSelectedParent)
+	csm.stageDiff(stagingArea, virtualSelectedParent, utxoDiff, nil)
+
+	return staging.CommitAllChanges(csm.databaseContext, stagingArea)
 }

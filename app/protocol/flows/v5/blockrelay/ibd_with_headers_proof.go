@@ -78,6 +78,13 @@ func (flow *handleIBDFlow) shouldSyncAndShouldDownloadHeadersProof(
 	// we might have here info which is relevant to finality conflict decisions. This should be taken into
 	// account when we improve this aspect.
 	if !highestSharedBlockFound || !isPruningPointInSharedBlockChain {
+		firstNonGenesisPruningPointDAAScore := flow.Config().NetParams().PruningDepth() + flow.Config().NetParams().FinalityDepth()
+		if relayBlock.Header.DAAScore() < firstNonGenesisPruningPointDAAScore {
+			log.Infof("Continuing direct IBD to relay block %s because the peer is below the first non-genesis pruning-point DAA threshold (relay_daa=%d, threshold=%d)",
+				consensushashing.BlockHash(relayBlock), relayBlock.Header.DAAScore(), firstNonGenesisPruningPointDAAScore)
+			return false, true, nil
+		}
+
 		hasMoreBlueWorkThanSelectedTipAndPruningDepthMoreBlueScore, err := flow.checkIfHighHashHasMoreBlueWorkThanSelectedTipAndPruningDepthMoreBlueScore(relayBlock)
 		if err != nil {
 			return false, false, err
