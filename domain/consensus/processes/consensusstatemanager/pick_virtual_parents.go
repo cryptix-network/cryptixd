@@ -64,6 +64,15 @@ func (csm *consensusStateManager) pickVirtualParents(stagingArea *model.StagingA
 		candidate := candidates[0]
 		candidates = candidates[1:]
 
+		candidateStatus, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, candidate)
+		if err != nil {
+			return nil, err
+		}
+		if candidateStatus == externalapi.StatusDisqualifiedFromChain {
+			log.Debugf("Skipping disqualified virtual parent candidate %s", candidate)
+			continue
+		}
+
 		log.Debugf("Attempting to add %s to the virtual parents", candidate)
 		log.Debugf("The current merge set size is %d", mergeSetSize)
 
@@ -76,6 +85,14 @@ func (csm *consensusStateManager) pickVirtualParents(stagingArea *model.StagingA
 			mergeSetSize += mergeSetIncrease
 			selectedVirtualParents = append(selectedVirtualParents, candidate)
 			log.Tracef("Added block %s to the virtual parents set", candidate)
+			continue
+		}
+		newCandidateStatus, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, newCandidate)
+		if err != nil {
+			return nil, err
+		}
+		if newCandidateStatus == externalapi.StatusDisqualifiedFromChain {
+			log.Debugf("Skipping disqualified replacement virtual parent candidate %s", newCandidate)
 			continue
 		}
 		// If we already have a candidate in the past of newCandidate then skip.

@@ -1,6 +1,7 @@
 package consensusstatemanager
 
 import (
+	"encoding/hex"
 	"sort"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
@@ -76,18 +77,26 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 	atomicCreationContext := atomicstate.NewCreationContext(blockHash, blockDAAScore, sourceBlockTime)
 	accumulatedAtomicState := atomicState.Clone()
 	atomicGrowth := &atomicstate.BlockStateGrowth{}
+	seenTxIDs := make(map[externalapi.DomainTransactionID]struct{})
+	spentOutpoints := make(map[externalapi.DomainOutpoint]struct{})
 
 	for i, transaction := range block.Transactions {
 		transactionID := consensushashing.TransactionID(transaction)
 		log.Tracef("Validating transaction %s in block %s against "+
 			"the block's past UTXO", transactionID, blockHash)
 		if i == transactionhelper.CoinbaseTransactionIndex {
-			log.Tracef("Applying Atomic anchor deltas for coinbase transaction %s", transactionID)
-			err = atomicstate.ApplyAnchorDeltasForTransaction(transaction, accumulatedAtomicState)
-			if err != nil {
-				return err
-			}
+			log.Tracef("Skipping Atomic anchor deltas for coinbase transaction %s", transactionID)
 			continue
+		}
+		if _, ok := seenTxIDs[*transactionID]; ok {
+			return errors.Wrapf(ruleerrors.ErrDuplicateTx,
+				"duplicate transaction %s in block %s before Atomic validation", transactionID, blockHash)
+		}
+		seenTxIDs[*transactionID] = struct{}{}
+		if conflictingOutpoint, ok := firstConflictingSpentOutpoint(transaction, spentOutpoints); ok {
+			return errors.Wrapf(ruleerrors.ErrDoubleSpendInSameBlock,
+				"transaction %s in block %s spends outpoint %s already spent earlier in the same block",
+				transactionID, blockHash, conflictingOutpoint)
 		}
 
 		log.Tracef("Populating transaction %s with UTXO entries", transactionID)
@@ -118,6 +127,7 @@ func (csm *consensusStateManager) validateBlockTransactionsAgainstPastUTXO(stagi
 			return errors.Wrapf(ruleerrors.ErrInvalidPayload, "atomic validation failed for transaction %s in block %s: %s",
 				transactionID, blockHash, err)
 		}
+		rememberSpentOutpoints(transaction, spentOutpoints)
 	}
 	return nil
 }
@@ -149,8 +159,26 @@ func (csm *consensusStateManager) validateUTXOCommitment(
 	}
 
 	multisetHash := multiset.Hash()
-	expectedCommitment := atomicState.HeaderCommitment(multisetHash, block.Header.DAAScore() >= csm.payloadHfActivationDAAScore)
+	atomicStateHash := atomicState.CanonicalHash()
+	payloadHFActive := block.Header.DAAScore() >= csm.payloadHfActivationDAAScore
+	expectedCommitment := atomicstate.HeaderCommitment(multisetHash, atomicStateHash, payloadHFActive)
 	if !block.Header.UTXOCommitment().Equal(expectedCommitment) {
+		preHFCommitment := atomicstate.HeaderCommitment(multisetHash, atomicStateHash, false)
+		postHFCommitment := atomicstate.HeaderCommitment(multisetHash, atomicStateHash, true)
+		log.Warnf("UTXO commitment mismatch diagnostics for block %s: daa=%d payload_hf_active=%t "+
+			"header=%s raw_utxo=%s atomic_state_hash=%s pre_hf_commitment=%s post_hf_commitment=%s "+
+			"header_matches_raw=%t header_matches_pre_hf=%t header_matches_post_hf=%t",
+			blockHash,
+			block.Header.DAAScore(),
+			payloadHFActive,
+			block.Header.UTXOCommitment(),
+			multisetHash,
+			hex.EncodeToString(atomicStateHash[:]),
+			preHFCommitment,
+			postHFCommitment,
+			block.Header.UTXOCommitment().Equal(multisetHash),
+			block.Header.UTXOCommitment().Equal(preHFCommitment),
+			block.Header.UTXOCommitment().Equal(postHFCommitment))
 		return errors.Wrapf(ruleerrors.ErrBadUTXOCommitment, "block %s UTXO commitment is invalid - block "+
 			"header indicates %s, but calculated value is %s", blockHash, block.Header.UTXOCommitment(), expectedCommitment)
 	}

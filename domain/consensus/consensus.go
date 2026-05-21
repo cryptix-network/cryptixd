@@ -864,6 +864,14 @@ func (s *consensus) GetVirtualDAAScore() (uint64, error) {
 	return s.daaBlocksStore.DAAScore(s.databaseContext, stagingArea, model.VirtualBlockHash)
 }
 
+func (s *consensus) LogAtomicConsensusState(reason string) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+	return s.consensusStateManager.LogAtomicVirtualState(stagingArea, reason)
+}
+
 func (s *consensus) CreateBlockLocatorFromPruningPoint(highHash *externalapi.DomainHash, limit uint32) (externalapi.BlockLocator, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()

@@ -22,6 +22,7 @@ const (
 	atomicP2PAuditInitialDelay = 10 * time.Second
 	atomicP2PAuditInterval     = 60 * time.Second
 	atomicP2PAuditTimeout      = 15 * time.Second
+	atomicP2PAuditDeferredLog  = 5 * time.Minute
 	atomicP2PAuditDAALag       = uint64(60)
 	atomicP2PAuditMaxWalk      = 512
 	atomicP2PAuditMinSample    = 4
@@ -29,6 +30,7 @@ const (
 )
 
 var atomicP2PAuditPolicyLogged uint32
+var atomicP2PAuditDeferredLogUnixNano int64
 
 type AtomicStateAuditContext interface {
 	Domain() domain.Domain
@@ -135,7 +137,7 @@ func (flow *atomicStateAuditFlow) runAudit() error {
 		return nil
 	}
 	if anchor == nil {
-		if flow.isFirstPeer(activePeers) {
+		if flow.isFirstPeer(activePeers) && shouldLogAtomicP2PAuditDeferred() {
 			log.Infof("[atomic-bootstrap:p2p] healthy-state audit deferred: %s", reason)
 		}
 		return nil
@@ -272,6 +274,20 @@ func (flow *atomicStateAuditFlow) currentAnchor() (*atomicAuditAnchor, string, e
 	}
 
 	return nil, "could not resolve a retained selected-chain block at the configured DAA lag", nil
+}
+
+func shouldLogAtomicP2PAuditDeferred() bool {
+	now := time.Now()
+	nowUnixNano := now.UnixNano()
+	for {
+		lastUnixNano := atomic.LoadInt64(&atomicP2PAuditDeferredLogUnixNano)
+		if lastUnixNano != 0 && now.Sub(time.Unix(0, lastUnixNano)) < atomicP2PAuditDeferredLog {
+			return false
+		}
+		if atomic.CompareAndSwapInt64(&atomicP2PAuditDeferredLogUnixNano, lastUnixNano, nowUnixNano) {
+			return true
+		}
+	}
 }
 
 func (flow *atomicStateAuditFlow) requestAtomicTokenStateHash(anchor *atomicAuditAnchor) (*appmessage.MsgAtomicTokenStateHash, error) {

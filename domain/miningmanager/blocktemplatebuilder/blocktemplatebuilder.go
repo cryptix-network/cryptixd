@@ -1,6 +1,9 @@
 package blocktemplatebuilder
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/coinbasemanager"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
@@ -19,6 +22,8 @@ import (
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/pkg/errors"
 )
+
+const maxBlockTemplateInvalidTransactionRetries = 4
 
 type candidateTx struct {
 	*consensusexternalapi.DomainTransaction
@@ -124,6 +129,41 @@ func New(consensusReference consensusreference.ConsensusReference, mempool minin
 
 func (btb *blockTemplateBuilder) BuildBlockTemplate(
 	coinbaseData *consensusexternalapi.DomainCoinbaseData) (*consensusexternalapi.DomainBlockTemplate, error) {
+	var lastInvalidTxsErr ruleerrors.ErrInvalidTransactionsInNewBlock
+	for attempt := 0; attempt <= maxBlockTemplateInvalidTransactionRetries; attempt++ {
+		blockTemplate, invalidTxsErr, err := btb.buildBlockTemplateOnce(coinbaseData)
+		if err == nil {
+			return blockTemplate, nil
+		}
+		if invalidTxsErr == nil {
+			return nil, err
+		}
+
+		lastInvalidTxsErr = *invalidTxsErr
+		log.Warnf(
+			"Block template discarded stale/invalid mempool transaction candidates: attempt=%d/%d invalid_txs=%s; removing from mempool and rebuilding",
+			attempt+1,
+			maxBlockTemplateInvalidTransactionRetries+1,
+			formatInvalidTransactionsForLog(invalidTxsErr),
+		)
+		if removeErr := btb.mempool.RemoveInvalidTransactions(invalidTxsErr); removeErr != nil {
+			log.Warnf("Failed removing stale/invalid block-template transactions from mempool: %+v", removeErr)
+			return nil, removeErr
+		}
+	}
+
+	return nil, errors.Errorf(
+		"failed to build block template after removing stale/invalid mempool candidates: invalid_txs=%s",
+		formatInvalidTransactionsForLog(&lastInvalidTxsErr),
+	)
+}
+
+func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
+	coinbaseData *consensusexternalapi.DomainCoinbaseData) (
+	*consensusexternalapi.DomainBlockTemplate,
+	*ruleerrors.ErrInvalidTransactionsInNewBlock,
+	error,
+) {
 
 	mempoolTransactions := btb.mempool.BlockCandidateTransactions()
 	candidateTxs := make([]*candidateTx, 0, len(mempoolTransactions))
@@ -169,26 +209,32 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 
 	invalidTxsErr := ruleerrors.ErrInvalidTransactionsInNewBlock{}
 	if errors.As(err, &invalidTxsErr) {
-		log.Criticalf("consensusReference.Consensus().BuildBlock returned invalid txs in BuildBlockTemplate")
-		err = btb.mempool.RemoveInvalidTransactions(&invalidTxsErr)
-		if err != nil {
-			// mempool.RemoveInvalidTransactions might return errors in situations that are perfectly fine in this context.
-			// TODO: Once the mempool invariants are clear, this should be converted back `return nil, err`:
-			// https://github.com/cryptix-network/cryptixd/issues/1553
-			log.Criticalf("Error from mempool.RemoveInvalidTransactions: %+v", err)
-		}
-		// We can call this recursively without worry because this should almost never happen
-		return btb.BuildBlockTemplate(coinbaseData)
+		return nil, &invalidTxsErr, err
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	log.Debugf("Created new block template (%d transactions, %d in fees, %d mass, target difficulty %064x)",
 		len(blockTemplate.Block.Transactions), blockTxs.totalFees, blockTxs.totalMass, difficulty.CompactToBig(blockTemplate.Block.Header.Bits()))
 
-	return blockTemplate, nil
+	return blockTemplate, nil, nil
+}
+
+func formatInvalidTransactionsForLog(err *ruleerrors.ErrInvalidTransactionsInNewBlock) string {
+	if err == nil || len(err.InvalidTransactions) == 0 {
+		return "[]"
+	}
+	parts := make([]string, 0, len(err.InvalidTransactions))
+	for _, invalid := range err.InvalidTransactions {
+		txID := "<nil>"
+		if invalid.Transaction != nil {
+			txID = consensushashing.TransactionID(invalid.Transaction).String()
+		}
+		parts = append(parts, fmt.Sprintf("%s:%s", txID, invalid.Error))
+	}
+	return fmt.Sprintf("[%s]", strings.Join(parts, ", "))
 }
 
 func countPayloadTransactions(txs []*consensusexternalapi.DomainTransaction) int {

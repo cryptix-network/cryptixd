@@ -51,12 +51,24 @@ func (m *fakeMiningManager) HandleNewBlockTransactions([]*externalapi.DomainTran
 	panic("not implemented")
 }
 
+func (m *fakeMiningManager) HandleAcceptedTransactions([]*externalapi.DomainTransaction) ([]*externalapi.DomainTransaction, error) {
+	panic("not implemented")
+}
+
 func (m *fakeMiningManager) ValidateAndInsertTransaction(*externalapi.DomainTransaction, bool, bool) ([]*externalapi.DomainTransaction, error) {
 	panic("not implemented")
 }
 
 func (m *fakeMiningManager) RevalidateHighPriorityTransactions() ([]*externalapi.DomainTransaction, error) {
 	panic("not implemented")
+}
+
+func (m *fakeMiningManager) RevalidateOrphanTransactions() ([]*externalapi.DomainTransaction, error) {
+	return nil, nil
+}
+
+func (m *fakeMiningManager) ExpireLowPriorityTransactions() (int, int, error) {
+	return 0, 0, nil
 }
 
 type testDomain struct {
@@ -110,5 +122,75 @@ func TestOnTransactionAddedToMempoolClearsTemplateAndCallsHandler(t *testing.T) 
 	}
 	if handlerCalls != 1 {
 		t.Fatalf("expected transaction-added handler to be called once, got %d", handlerCalls)
+	}
+}
+
+func TestExpandTransactionIDsWithMempoolParentsOrdersParentsBeforeChildren(t *testing.T) {
+	parentID := testTransactionID(1)
+	childID := testTransactionID(2)
+	grandChildID := testTransactionID(3)
+
+	transactions := map[externalapi.DomainTransactionID]*externalapi.DomainTransaction{
+		*parentID: {
+			Inputs: []*externalapi.DomainTransactionInput{},
+		},
+		*childID: {
+			Inputs: []*externalapi.DomainTransactionInput{{
+				PreviousOutpoint: externalapi.DomainOutpoint{TransactionID: *parentID, Index: 0},
+			}},
+		},
+		*grandChildID: {
+			Inputs: []*externalapi.DomainTransactionInput{{
+				PreviousOutpoint: externalapi.DomainOutpoint{TransactionID: *childID, Index: 0},
+			}},
+		},
+	}
+
+	expanded := expandTransactionIDsWithMempoolParents(
+		[]*externalapi.DomainTransactionID{grandChildID},
+		func(transactionID *externalapi.DomainTransactionID) (*externalapi.DomainTransaction, bool) {
+			transaction, ok := transactions[*transactionID]
+			return transaction, ok
+		})
+
+	assertTransactionIDOrder(t, expanded, []*externalapi.DomainTransactionID{parentID, childID, grandChildID})
+}
+
+func TestExpandTransactionIDsWithMempoolParentsSkipsUnknownParents(t *testing.T) {
+	missingParentID := testTransactionID(1)
+	childID := testTransactionID(2)
+	transactions := map[externalapi.DomainTransactionID]*externalapi.DomainTransaction{
+		*childID: {
+			Inputs: []*externalapi.DomainTransactionInput{{
+				PreviousOutpoint: externalapi.DomainOutpoint{TransactionID: *missingParentID, Index: 0},
+			}},
+		},
+	}
+
+	expanded := expandTransactionIDsWithMempoolParents(
+		[]*externalapi.DomainTransactionID{childID},
+		func(transactionID *externalapi.DomainTransactionID) (*externalapi.DomainTransaction, bool) {
+			transaction, ok := transactions[*transactionID]
+			return transaction, ok
+		})
+
+	assertTransactionIDOrder(t, expanded, []*externalapi.DomainTransactionID{childID})
+}
+
+func testTransactionID(tag byte) *externalapi.DomainTransactionID {
+	var bytes [externalapi.DomainHashSize]byte
+	bytes[externalapi.DomainHashSize-1] = tag
+	return externalapi.NewDomainTransactionIDFromByteArray(&bytes)
+}
+
+func assertTransactionIDOrder(t *testing.T, actual []*externalapi.DomainTransactionID, expected []*externalapi.DomainTransactionID) {
+	t.Helper()
+	if len(actual) != len(expected) {
+		t.Fatalf("expected %d transaction IDs, got %d", len(expected), len(actual))
+	}
+	for i := range expected {
+		if !actual[i].Equal(expected[i]) {
+			t.Fatalf("expected transaction ID %s at index %d, got %s", expected[i], i, actual[i])
+		}
 	}
 }

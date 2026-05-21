@@ -148,7 +148,27 @@ func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 
 	invalidTransactions := make([]ruleerrors.InvalidTransaction, 0)
 	atomicGrowth := &atomicstate.BlockStateGrowth{}
+	seenTxIDs := make(map[externalapi.DomainTransactionID]struct{})
+	spentOutpoints := make(map[externalapi.DomainOutpoint]struct{})
 	for _, transaction := range transactions {
+		transactionID := consensushashing.TransactionID(transaction)
+		if _, ok := seenTxIDs[*transactionID]; ok {
+			ruleError := ruleerrors.ErrDuplicateTx
+			invalidTransactions = append(invalidTransactions,
+				ruleerrors.InvalidTransaction{Transaction: transaction, Error: &ruleError})
+			log.Warnf("Block template rejected duplicate transaction before Atomic validation: tx=%s reason=duplicate_txid_in_template_candidate_set",
+				transactionID)
+			continue
+		}
+		if conflictingOutpoint, ok := firstConflictingSpentOutpoint(transaction, spentOutpoints); ok {
+			ruleError := ruleerrors.ErrDoubleSpendInSameBlock
+			invalidTransactions = append(invalidTransactions,
+				ruleerrors.InvalidTransaction{Transaction: transaction, Error: &ruleError})
+			log.Warnf("Block template rejected UTXO-conflicting transaction before Atomic validation: tx=%s previous_outpoint=%s reason=input_already_spent_in_template_candidate_set",
+				transactionID, conflictingOutpoint)
+			continue
+		}
+
 		transactionAtomicState := virtualAtomicState.Clone()
 		err := bb.validateTransaction(stagingArea, transaction, transactionAtomicState, newBlockDAAScore, atomicGrowth)
 		if err != nil {
@@ -161,6 +181,8 @@ func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
 			continue
 		}
 		virtualAtomicState = transactionAtomicState
+		seenTxIDs[*transactionID] = struct{}{}
+		rememberSpentOutpoints(transaction, spentOutpoints)
 	}
 
 	if len(invalidTransactions) > 0 {
@@ -218,6 +240,23 @@ func (bb *blockBuilder) validateTransaction(
 		return errors.Wrapf(ruleerrors.ErrInvalidPayload, "atomic validation failed: %s", err)
 	}
 	return nil
+}
+
+func firstConflictingSpentOutpoint(transaction *externalapi.DomainTransaction,
+	spentOutpoints map[externalapi.DomainOutpoint]struct{}) (externalapi.DomainOutpoint, bool) {
+
+	for _, input := range transaction.Inputs {
+		if _, ok := spentOutpoints[input.PreviousOutpoint]; ok {
+			return input.PreviousOutpoint, true
+		}
+	}
+	return externalapi.DomainOutpoint{}, false
+}
+
+func rememberSpentOutpoints(transaction *externalapi.DomainTransaction, spentOutpoints map[externalapi.DomainOutpoint]struct{}) {
+	for _, input := range transaction.Inputs {
+		spentOutpoints[input.PreviousOutpoint] = struct{}{}
+	}
 }
 
 func (bb *blockBuilder) newBlockCoinbaseTransaction(stagingArea *model.StagingArea,

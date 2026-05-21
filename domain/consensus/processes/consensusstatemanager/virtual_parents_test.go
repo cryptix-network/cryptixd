@@ -10,6 +10,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 )
 
 func TestConsensusStateManager_pickVirtualParents(t *testing.T) {
@@ -107,6 +108,84 @@ func TestConsensusStateManager_pickVirtualParents(t *testing.T) {
 		virtualParents = getSortedVirtualParents(tc)
 		if !externalapi.HashesEqual(virtualParents, parents) {
 			t.Fatalf("Expected VirtualParents and parents to be equal, instead: %s != %s", virtualParents, parents)
+		}
+	})
+}
+
+func TestConsensusStateManager_pickVirtualParentsSkipsDisqualifiedTips(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		stagingArea := model.NewStagingArea()
+		consensusConfig.BlockCoinbaseMaturity = 0
+
+		tc, teardown, err := consensus.NewFactory().NewTestConsensus(consensusConfig, "TestConsensusStateManager_pickVirtualParentsSkipsDisqualifiedTips")
+		if err != nil {
+			t.Fatalf("Error setting up tc: %+v", err)
+		}
+		defer teardown(false)
+
+		firstBlockHash, _, err := tc.AddBlock([]*externalapi.DomainHash{consensusConfig.GenesisHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed adding first block: %+v", err)
+		}
+		fundingBlockHash, _, err := tc.AddBlock([]*externalapi.DomainHash{firstBlockHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed adding funding block: %+v", err)
+		}
+		fundingBlock, _, err := tc.GetBlock(fundingBlockHash)
+		if err != nil {
+			t.Fatalf("Failed getting funding block: %+v", err)
+		}
+		spendingTransaction, err := testutils.CreateTransaction(fundingBlock.Transactions[transactionhelper.CoinbaseTransactionIndex], 1)
+		if err != nil {
+			t.Fatalf("Failed creating spending transaction: %+v", err)
+		}
+		goodBlockHash, _, err := tc.AddBlock([]*externalapi.DomainHash{fundingBlockHash}, nil, []*externalapi.DomainTransaction{spendingTransaction})
+		if err != nil {
+			t.Fatalf("Failed adding good block: %+v", err)
+		}
+
+		disqualifiedTip, _, err := tc.AddBlock([]*externalapi.DomainHash{goodBlockHash}, nil, []*externalapi.DomainTransaction{spendingTransaction})
+		if err != nil {
+			t.Fatalf("Failed adding disqualified candidate block body: %+v", err)
+		}
+		disqualifiedStatus, err := tc.BlockStatusStore().Get(tc.DatabaseContext(), stagingArea, disqualifiedTip)
+		if err != nil {
+			t.Fatalf("Failed getting disqualified candidate status: %+v", err)
+		}
+		if disqualifiedStatus != externalapi.StatusDisqualifiedFromChain {
+			t.Fatalf("Expected disqualified candidate status %s, got %s", externalapi.StatusDisqualifiedFromChain, disqualifiedStatus)
+		}
+
+		validTip, _, err := tc.AddBlock([]*externalapi.DomainHash{goodBlockHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed adding valid sibling tip: %+v", err)
+		}
+		validStatus, err := tc.BlockStatusStore().Get(tc.DatabaseContext(), stagingArea, validTip)
+		if err != nil {
+			t.Fatalf("Failed getting valid tip status: %+v", err)
+		}
+		if validStatus != externalapi.StatusUTXOValid {
+			t.Fatalf("Expected valid tip status %s, got %s", externalapi.StatusUTXOValid, validStatus)
+		}
+
+		tips, err := tc.ConsensusStateStore().Tips(stagingArea, tc.DatabaseContext())
+		if err != nil {
+			t.Fatalf("Failed getting consensus tips: %+v", err)
+		}
+		for _, tip := range tips {
+			if tip.Equal(disqualifiedTip) {
+				t.Fatalf("Disqualified tip %s must be pruned from consensus tips; tips: %s", disqualifiedTip, tips)
+			}
+		}
+
+		virtualRelations, err := tc.BlockRelationStore().BlockRelation(tc.DatabaseContext(), stagingArea, model.VirtualBlockHash)
+		if err != nil {
+			t.Fatalf("Failed getting virtual parents: %+v", err)
+		}
+		for _, parent := range virtualRelations.Parents {
+			if parent.Equal(disqualifiedTip) {
+				t.Fatalf("Disqualified tip %s must not be a virtual parent; virtual parents: %s", disqualifiedTip, virtualRelations.Parents)
+			}
 		}
 	})
 }

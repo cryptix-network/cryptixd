@@ -745,6 +745,64 @@ func TestOrphanTransactions(t *testing.T) {
 	})
 }
 
+func TestRevalidateOrphanTransactionsAfterConsensusUTXOUpdate(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestRevalidateOrphanTransactionsAfterConsensusUTXOUpdate",
+			nil,
+		)
+
+		parentTransaction, childTransaction, err := createParentAndChildrenTransactions(tc)
+		if err != nil {
+			t.Fatalf("createParentAndChildrenTransactions: %v", err)
+		}
+		for _, input := range childTransaction.Inputs {
+			input.UTXOEntry = nil
+		}
+
+		accepted, err := miningManager.ValidateAndInsertTransaction(childTransaction, false, true)
+		if err != nil {
+			t.Fatalf("ValidateAndInsertTransaction child orphan: %v", err)
+		}
+		if len(accepted) != 0 {
+			t.Fatalf("expected child to be stored as orphan, accepted %d transaction(s)", len(accepted))
+		}
+		if count := miningManager.TransactionCount(false, true); count != 1 {
+			t.Fatalf("expected one orphan transaction, got %d", count)
+		}
+
+		tips, err := tc.Tips()
+		if err != nil {
+			t.Fatalf("Tips: %v", err)
+		}
+		_, _, err = tc.AddBlock(tips, nil, []*externalapi.DomainTransaction{parentTransaction})
+		if err != nil {
+			t.Fatalf("AddBlock parent transaction: %v", err)
+		}
+
+		accepted, err = miningManager.RevalidateOrphanTransactions()
+		if err != nil {
+			t.Fatalf("RevalidateOrphanTransactions: %v", err)
+		}
+		if len(accepted) != 1 || !contains(childTransaction, accepted) {
+			t.Fatalf("expected child to be accepted after UTXO revalidation, got %s",
+				consensushashing.TransactionIDs(accepted))
+		}
+		if count := miningManager.TransactionCount(false, true); count != 0 {
+			t.Fatalf("expected orphan pool to be empty, got %d", count)
+		}
+
+		transactionsMempool, _ := miningManager.AllTransactions(true, false)
+		if !contains(childTransaction, transactionsMempool) {
+			t.Fatalf("expected child transaction in mempool after orphan revalidation")
+		}
+	})
+}
+
 func TestHighPriorityTransactions(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		consensusConfig.BlockCoinbaseMaturity = 0

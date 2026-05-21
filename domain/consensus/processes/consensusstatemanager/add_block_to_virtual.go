@@ -139,6 +139,30 @@ func (csm *consensusStateManager) calculateNewTips(
 	log.Debugf("The number of tips is: %d", len(currentTips))
 	log.Tracef("The current tips are: %s", currentTips)
 
+	newTipStatus, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, newTipHash)
+	if err != nil {
+		return nil, err
+	}
+
+	filteredCurrentTips := currentTips[:0]
+	for _, currentTip := range currentTips {
+		currentTipStatus, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, currentTip)
+		if err != nil {
+			return nil, err
+		}
+		if currentTipStatus == externalapi.StatusDisqualifiedFromChain {
+			log.Debugf("Pruning disqualified DAG tip %s from consensus tips", currentTip)
+			continue
+		}
+		filteredCurrentTips = append(filteredCurrentTips, currentTip)
+	}
+	currentTips = filteredCurrentTips
+
+	if newTipStatus == externalapi.StatusDisqualifiedFromChain {
+		log.Debugf("Not adding disqualified block %s to consensus tips", newTipHash)
+		return externalapi.CloneHashes(currentTips), nil
+	}
+
 	newTipParents, err := csm.dagTopologyManager.Parents(stagingArea, newTipHash)
 	if err != nil {
 		return nil, err

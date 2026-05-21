@@ -6,6 +6,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
 	"github.com/pkg/errors"
 
 	"github.com/cryptix-network/cryptixd/domain/consensusreference"
@@ -142,6 +143,15 @@ func (mp *mempool) HandleNewBlockTransactions(transactions []*externalapi.Domain
 	return mp.handleNewBlockTransactions(transactions)
 }
 
+func (mp *mempool) HandleAcceptedTransactions(transactions []*externalapi.DomainTransaction) (
+	acceptedOrphans []*externalapi.DomainTransaction, err error) {
+
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+
+	return mp.handleAcceptedTransactions(transactions)
+}
+
 func (mp *mempool) BlockCandidateTransactions() []*externalapi.DomainTransaction {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
@@ -151,6 +161,11 @@ func (mp *mempool) BlockCandidateTransactions() []*externalapi.DomainTransaction
 	var spamTx *externalapi.DomainTransaction
 	var spamTxNewestUTXODaaScore uint64
 	for _, tx := range readyTxs {
+		if subnetworks.IsPayload(tx.SubnetworkID) && len(tx.Payload) > 0 {
+			candidateTxs = append(candidateTxs, tx)
+			continue
+		}
+
 		if len(tx.Outputs) > len(tx.Inputs) {
 			hasCoinbaseInput := false
 			for _, input := range tx.Inputs {
@@ -204,6 +219,40 @@ func (mp *mempool) RevalidateHighPriorityTransactions() (validTransactions []*ex
 	defer mp.mtx.Unlock()
 
 	return mp.revalidateHighPriorityTransactions()
+}
+
+func (mp *mempool) RevalidateOrphanTransactions() (acceptedTransactions []*externalapi.DomainTransaction, err error) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+
+	return mp.orphansPool.revalidateOrphanTransactions()
+}
+
+func (mp *mempool) ExpireLowPriorityTransactions() (expiredTransactions int, expiredOrphans int, err error) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+
+	transactionsBefore := mp.transactionsPool.transactionCount()
+	orphansBefore := mp.orphansPool.orphanTransactionCount()
+
+	err = mp.orphansPool.expireOrphanTransactions()
+	if err != nil {
+		return 0, 0, err
+	}
+	err = mp.transactionsPool.expireOldTransactions()
+	if err != nil {
+		return 0, 0, err
+	}
+
+	transactionsAfter := mp.transactionsPool.transactionCount()
+	orphansAfter := mp.orphansPool.orphanTransactionCount()
+	if transactionsBefore > transactionsAfter {
+		expiredTransactions = transactionsBefore - transactionsAfter
+	}
+	if orphansBefore > orphansAfter {
+		expiredOrphans = orphansBefore - orphansAfter
+	}
+	return expiredTransactions, expiredOrphans, nil
 }
 
 func (mp *mempool) RemoveInvalidTransactions(err *ruleerrors.ErrInvalidTransactionsInNewBlock) error {

@@ -25,6 +25,8 @@ type IBDContext interface {
 	OnNewBlock(block *externalapi.DomainBlock) error
 	OnNewBlockTemplate() error
 	OnPruningPointUTXOSetOverride() error
+	RevalidateMempoolOrphans(reason string) error
+	RunMempoolMaintenance(reason string) error
 	IsIBDRunning() bool
 	TrySetIBDRunning(ibdPeer *peerpkg.Peer) bool
 	UnsetIBDRunning()
@@ -35,6 +37,16 @@ type handleIBDFlow struct {
 	IBDContext
 	incomingRoute, outgoingRoute *router.Route
 	peer                         *peerpkg.Peer
+}
+
+type atomicConsensusStatusLogger interface {
+	LogAtomicConsensusState(reason string) error
+}
+
+type localVirtualRecoveryTarget struct {
+	hash   *externalapi.DomainHash
+	daa    uint64
+	status externalapi.BlockStatus
 }
 
 const (
@@ -82,6 +94,11 @@ func (flow *handleIBDFlow) start() error {
 			err := flow.recoverLocalVirtualIfNeeded()
 			if err != nil {
 				return err
+			}
+			if atomicLogger, ok := flow.Domain().Consensus().(atomicConsensusStatusLogger); ok {
+				if err := atomicLogger.LogAtomicConsensusState("periodic"); err != nil {
+					log.Warnf("Atomic consensus periodic status log failed: %s", err)
+				}
 			}
 		}
 	}
@@ -833,7 +850,12 @@ func (flow *handleIBDFlow) banIfBlockIsHeaderOnly(block *externalapi.DomainBlock
 }
 
 func (flow *handleIBDFlow) resolveVirtual(estimatedVirtualDAAScoreTarget uint64) error {
-	err := flow.Domain().Consensus().ResolveVirtual(func(virtualDAAScoreStart uint64, virtualDAAScore uint64) {
+	virtualInfoBefore, err := flow.Domain().Consensus().GetVirtualInfo()
+	if err != nil {
+		return err
+	}
+
+	err = flow.Domain().Consensus().ResolveVirtual(func(virtualDAAScoreStart uint64, virtualDAAScore uint64) {
 		var percents int
 		if estimatedVirtualDAAScoreTarget <= virtualDAAScoreStart {
 			percents = 100
@@ -851,8 +873,72 @@ func (flow *handleIBDFlow) resolveVirtual(estimatedVirtualDAAScoreTarget uint64)
 		return err
 	}
 
-	log.Infof("Resolved virtual")
-	return nil
+	virtualInfoAfter, err := flow.Domain().Consensus().GetVirtualInfo()
+	if err != nil {
+		return err
+	}
+	advancedBy := uint64(0)
+	if virtualInfoAfter.DAAScore > virtualInfoBefore.DAAScore {
+		advancedBy = virtualInfoAfter.DAAScore - virtualInfoBefore.DAAScore
+	}
+	stillBehindTarget := virtualInfoAfter.DAAScore < estimatedVirtualDAAScoreTarget
+	log.Infof("Resolved virtual: before_daa=%d after_daa=%d target_daa=%d advanced_by=%d still_behind_target=%t virtual_parents=%d tx_pool=%d orphan_pool=%d",
+		virtualInfoBefore.DAAScore,
+		virtualInfoAfter.DAAScore,
+		estimatedVirtualDAAScoreTarget,
+		advancedBy,
+		stillBehindTarget,
+		len(virtualInfoAfter.ParentHashes),
+		flow.Domain().MiningManager().TransactionCount(true, false),
+		flow.Domain().MiningManager().TransactionCount(false, true))
+
+	if stillBehindTarget {
+		flow.logVirtualStillBehindTarget(estimatedVirtualDAAScoreTarget, virtualInfoAfter.DAAScore)
+	}
+
+	err = flow.RevalidateMempoolOrphans("virtual_resolve")
+	if err != nil {
+		return err
+	}
+	return flow.RunMempoolMaintenance("virtual_resolve")
+}
+
+func (flow *handleIBDFlow) logVirtualStillBehindTarget(targetDAAScore uint64, virtualDAAScore uint64) {
+	headerSelectedTip, err := flow.Domain().Consensus().GetHeadersSelectedTip()
+	if err != nil {
+		log.Warnf("Virtual remains behind target after resolve: virtual_daa=%d target_daa=%d; failed to inspect headers selected tip: %s",
+			virtualDAAScore, targetDAAScore, err)
+		return
+	}
+
+	headerSelectedTipHeader, err := flow.Domain().Consensus().GetBlockHeader(headerSelectedTip)
+	if err != nil {
+		log.Warnf("Virtual remains behind target after resolve: virtual_daa=%d target_daa=%d header_selected_tip=%s; failed to inspect tip header: %s",
+			virtualDAAScore, targetDAAScore, headerSelectedTip, err)
+		return
+	}
+
+	blockInfo, err := flow.Domain().Consensus().GetBlockInfo(headerSelectedTip)
+	if err != nil {
+		log.Warnf("Virtual remains behind target after resolve: virtual_daa=%d target_daa=%d header_selected_tip=%s header_tip_daa=%d; failed to inspect tip status: %s",
+			virtualDAAScore, targetDAAScore, headerSelectedTip, headerSelectedTipHeader.DAAScore(), err)
+		return
+	}
+
+	missingBodyCount := -1
+	missingBodies, err := flow.Domain().Consensus().GetMissingBlockBodyHashes(headerSelectedTip)
+	if err == nil {
+		missingBodyCount = len(missingBodies)
+	}
+
+	log.Warnf("Virtual remains behind headers after resolve: virtual_daa=%d target_daa=%d header_selected_tip=%s header_tip_daa=%d tip_exists=%t tip_status=%s missing_bodies_to_tip=%d. If this repeats, the node has headers/block bodies ahead of its UTXO-validated virtual state; mining/templates can lag until the missing or invalid body/status path is resolved.",
+		virtualDAAScore,
+		targetDAAScore,
+		headerSelectedTip,
+		headerSelectedTipHeader.DAAScore(),
+		blockInfo.Exists,
+		blockInfo.BlockStatus,
+		missingBodyCount)
 }
 
 func (flow *handleIBDFlow) shouldResolveVirtualToward(targetHash *externalapi.DomainHash) (bool, uint64, uint64, error) {
@@ -870,6 +956,49 @@ func (flow *handleIBDFlow) shouldResolveVirtualToward(targetHash *externalapi.Do
 	return targetDAAScore > virtualInfo.DAAScore, virtualInfo.DAAScore, targetDAAScore, nil
 }
 
+func (flow *handleIBDFlow) bestLocalVirtualRecoveryTarget(virtualDAAScore uint64) (*localVirtualRecoveryTarget, error) {
+	tips, err := flow.Domain().Consensus().Tips()
+	if err != nil {
+		return nil, err
+	}
+
+	var best *localVirtualRecoveryTarget
+	for _, tip := range tips {
+		blockInfo, err := flow.Domain().Consensus().GetBlockInfo(tip)
+		if err != nil {
+			return nil, err
+		}
+		if !blockInfo.Exists ||
+			blockInfo.BlockStatus == externalapi.StatusDisqualifiedFromChain ||
+			blockInfo.BlockStatus == externalapi.StatusInvalid ||
+			blockInfo.BlockStatus == externalapi.StatusHeaderOnly {
+			continue
+		}
+
+		block, exists, err := flow.Domain().Consensus().GetBlock(tip)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			continue
+		}
+
+		tipDAA := block.Header.DAAScore()
+		if tipDAA <= virtualDAAScore {
+			continue
+		}
+		if best == nil || tipDAA > best.daa {
+			best = &localVirtualRecoveryTarget{
+				hash:   consensushashing.BlockHash(block),
+				daa:    tipDAA,
+				status: blockInfo.BlockStatus,
+			}
+		}
+	}
+
+	return best, nil
+}
+
 func (flow *handleIBDFlow) recoverLocalVirtualIfNeeded() error {
 	if flow.IsIBDRunning() {
 		return nil
@@ -880,22 +1009,29 @@ func (flow *handleIBDFlow) recoverLocalVirtualIfNeeded() error {
 		return err
 	}
 
-	shouldResolve, virtualDAAScore, targetDAAScore, err := flow.shouldResolveVirtualToward(headerSelectedTip)
+	shouldResolve, virtualDAAScore, headerTipDAAScore, err := flow.shouldResolveVirtualToward(headerSelectedTip)
 	if err != nil {
 		return err
 	}
 	if !shouldResolve {
-		log.Infof("IBD recovery check: idle; local virtual is caught up to headers tip (virtual_daa=%d, header_tip_daa=%d)", virtualDAAScore, targetDAAScore)
+		log.Infof("IBD recovery check: idle; local virtual is caught up to headers tip (virtual_daa=%d, header_tip_daa=%d)", virtualDAAScore, headerTipDAAScore)
 		return nil
 	}
 
-	headerTipBlock, exists, err := flow.Domain().Consensus().GetBlock(headerSelectedTip)
+	target, err := flow.bestLocalVirtualRecoveryTarget(virtualDAAScore)
 	if err != nil {
 		return err
 	}
-	if !exists {
-		log.Infof("IBD recovery check: headers are ahead of virtual but header tip body is missing (virtual_daa=%d, header_tip_daa=%d, header_tip=%s); waiting for peer IBD",
-			virtualDAAScore, targetDAAScore, headerSelectedTip)
+	if target == nil {
+		blockInfo, infoErr := flow.Domain().Consensus().GetBlockInfo(headerSelectedTip)
+		status := "<unknown>"
+		exists := false
+		if infoErr == nil {
+			status = blockInfo.BlockStatus.String()
+			exists = blockInfo.Exists
+		}
+		log.Warnf("IBD recovery check: headers are ahead of virtual but no non-disqualified local body tip can advance virtual (virtual_daa=%d, header_tip_daa=%d, header_selected_tip=%s, tip_exists=%t, tip_status=%s); waiting for a valid branch/body",
+			virtualDAAScore, headerTipDAAScore, headerSelectedTip, exists, status)
 		return nil
 	}
 
@@ -904,10 +1040,9 @@ func (flow *handleIBDFlow) recoverLocalVirtualIfNeeded() error {
 	}
 	defer flow.UnsetIBDRunning()
 
-	headerTipHash := consensushashing.BlockHash(headerTipBlock)
-	log.Infof("IBD recovery: local block bodies are ahead of virtual (virtual_daa=%d, header_tip_daa=%d, header_tip=%s); resolving virtual now",
-		virtualDAAScore, targetDAAScore, headerTipHash)
-	err = flow.resolveVirtual(targetDAAScore)
+	log.Infof("IBD recovery: local non-disqualified block bodies are ahead of virtual (virtual_daa=%d, target_daa=%d, target_tip=%s, target_status=%s, header_tip_daa=%d, header_selected_tip=%s); resolving virtual now",
+		virtualDAAScore, target.daa, target.hash, target.status, headerTipDAAScore, headerSelectedTip)
+	err = flow.resolveVirtual(target.daa)
 	if err != nil {
 		if errors.Is(err, database.ErrNotFound) {
 			log.Warnf("IBD recovery could not resolve virtual because local UTXO diff data is incomplete: %s", err)

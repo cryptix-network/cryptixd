@@ -2,6 +2,8 @@ package mempool
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -29,13 +31,33 @@ func (mp *mempool) validateAndInsertTransaction(transaction *externalapi.DomainT
 	}
 
 	if len(missingOutpoints) > 0 {
+		if isCATTransaction(transaction) {
+			log.Infof("CAT transaction deferred by mempool as orphan: tx=%s missing_outpoints=%d first_missing=%s allow_orphan=%t tx_pool=%d orphan_pool=%d",
+				consensushashing.TransactionID(transaction),
+				len(missingOutpoints),
+				summarizeMissingOutpoints(missingOutpoints, 3),
+				allowOrphan,
+				mp.transactionsPool.transactionCount(),
+				mp.orphansPool.orphanTransactionCount(),
+			)
+		}
 		if !allowOrphan {
 			str := fmt.Sprintf("Transaction %s is an orphan, where allowOrphan = false",
 				consensushashing.TransactionID(transaction))
 			return nil, transactionRuleError(RejectBadOrphan, str)
 		}
 
-		return nil, mp.orphansPool.maybeAddOrphan(transaction, isHighPriority)
+		err := mp.orphansPool.maybeAddOrphan(transaction, isHighPriority)
+		if err != nil {
+			return nil, err
+		}
+		if isCATTransaction(transaction) {
+			log.Infof("CAT transaction stored in orphan pool: tx=%s orphan_pool=%d",
+				consensushashing.TransactionID(transaction),
+				mp.orphansPool.orphanTransactionCount(),
+			)
+		}
+		return nil, nil
 	}
 
 	err = mp.validateTransactionInContext(transaction)
@@ -66,4 +88,21 @@ func (mp *mempool) validateAndInsertTransaction(transaction *externalapi.DomainT
 	acceptedTransactions = append([]*externalapi.DomainTransaction{transaction.Clone()}, acceptedOrphans...) //these pointer leave the mempool, hence we clone.
 
 	return acceptedTransactions, nil
+}
+
+func summarizeMissingOutpoints(outpoints []*externalapi.DomainOutpoint, limit int) string {
+	if len(outpoints) == 0 {
+		return "[]"
+	}
+	if limit <= 0 || limit > len(outpoints) {
+		limit = len(outpoints)
+	}
+	parts := make([]string, 0, limit+1)
+	for _, outpoint := range outpoints[:limit] {
+		parts = append(parts, outpoint.String())
+	}
+	if len(outpoints) > limit {
+		parts = append(parts, fmt.Sprintf("...+%d", len(outpoints)-limit))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }

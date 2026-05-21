@@ -11,8 +11,7 @@ import (
 )
 
 const (
-	atomicConsensusStatusLogInterval      = 30 * time.Second
-	atomicConsensusActiveStateLogInterval = 5 * time.Second
+	atomicConsensusStatusLogInterval = 60 * time.Second
 )
 
 type atomicConsensusStateSummary struct {
@@ -103,6 +102,20 @@ func (csm *consensusStateManager) logAtomicVirtualState(
 	csm.logAtomicStateSummary(stagingArea, reason, force, daaScore, atomicState, virtualUTXODiff)
 }
 
+func (csm *consensusStateManager) LogAtomicVirtualState(stagingArea *model.StagingArea, reason string) error {
+	daaScore, err := csm.daaBlocksStore.DAAScore(csm.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+	atomicState, err := csm.atomicStateStore.Get(csm.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+	force := !csm.hasAtomicConsensusLogState
+	csm.logAtomicStateSummary(stagingArea, reason, force, daaScore, atomicState, nil)
+	return nil
+}
+
 func (csm *consensusStateManager) logAtomicStateSummary(
 	stagingArea *model.StagingArea,
 	reason string,
@@ -113,13 +126,8 @@ func (csm *consensusStateManager) logAtomicStateSummary(
 ) {
 	summary := summarizeAtomicConsensusState(atomicState)
 	now := time.Now()
-	interval := atomicConsensusStatusLogInterval
-	if summary.hasTokenState() && summary.root != csm.lastAtomicConsensusLogState.root {
-		interval = atomicConsensusActiveStateLogInterval
-	}
-	countsChanged := !csm.hasAtomicConsensusLogState || summary.countsChanged(csm.lastAtomicConsensusLogState)
-	intervalElapsed := csm.lastAtomicConsensusLogTime.IsZero() || now.Sub(csm.lastAtomicConsensusLogTime) >= interval
-	if !force && !countsChanged && !intervalElapsed {
+	intervalElapsed := csm.lastAtomicConsensusLogTime.IsZero() || now.Sub(csm.lastAtomicConsensusLogTime) >= atomicConsensusStatusLogInterval
+	if !force && !intervalElapsed {
 		return
 	}
 

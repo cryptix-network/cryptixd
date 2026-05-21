@@ -9,6 +9,7 @@ import (
 // are intended to be mined into new blocks
 type Mempool interface {
 	HandleNewBlockTransactions(txs []*externalapi.DomainTransaction) ([]*externalapi.DomainTransaction, error)
+	HandleAcceptedTransactions(txs []*externalapi.DomainTransaction) ([]*externalapi.DomainTransaction, error)
 	BlockCandidateTransactions() []*externalapi.DomainTransaction
 	ValidateAndInsertTransaction(transaction *externalapi.DomainTransaction, isHighPriority bool, allowOrphan bool) (
 		acceptedTransactions []*externalapi.DomainTransaction, err error)
@@ -38,6 +39,8 @@ type Mempool interface {
 	TransactionCount(
 		includeTransactionPool bool,
 		includeOrphanPool bool) int
+	RevalidateOrphanTransactions() (acceptedTransactions []*externalapi.DomainTransaction, err error)
 	RevalidateHighPriorityTransactions() (validTransactions []*externalapi.DomainTransaction, err error)
+	ExpireLowPriorityTransactions() (expiredTransactions int, expiredOrphans int, err error)
 	IsTransactionOutputDust(output *externalapi.DomainTransactionOutput) bool
 }

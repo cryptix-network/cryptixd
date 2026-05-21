@@ -349,6 +349,9 @@ func atomicAnchorStateFromUTXOIterator(iterator externalapi.ReadOnlyUTXOSetItera
 		if err != nil {
 			return nil, err
 		}
+		if utxoEntry.IsCoinbase() {
+			continue
+		}
 		ownerID, ok := atomicstate.OwnerIDFromScript(utxoEntry.ScriptPublicKey())
 		if !ok {
 			continue

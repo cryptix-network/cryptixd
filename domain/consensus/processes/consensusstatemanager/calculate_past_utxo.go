@@ -196,6 +196,8 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 	accumulatedUTXODiff := selectedParentPastUTXODiff.CloneMutable()
 	accumulatedAtomicState := selectedParentAtomicState.Clone()
 	accumulatedMass := uint64(0)
+	acceptedTxIDs := make(map[externalapi.DomainTransactionID]struct{})
+	acceptedSpentOutpoints := make(map[externalapi.DomainOutpoint]struct{})
 
 	for i, mergeSetBlock := range mergeSetBlocks {
 		mergeSetBlockHash := consensushashing.BlockHash(mergeSetBlock)
@@ -223,17 +225,36 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 			log.Tracef("Attempting to accept transaction %s in block %s",
 				transactionID, mergeSetBlockHash)
 
-			isAccepted, accumulatedMass, err = csm.maybeAcceptTransaction(stagingArea, transaction, blockHash,
-				isSelectedParent, accumulatedUTXODiff, accumulatedAtomicState, accumulatedMass, selectedParentMedianTime,
-				daaScore, atomicCreationContext, atomicGrowth)
-			if err != nil {
-				return nil, nil, nil, err
+			if !transactionhelper.IsCoinBase(transaction) {
+				if _, ok := acceptedTxIDs[*transactionID]; ok {
+					log.Warnf("Consensus skipped duplicate accepted transaction before Atomic replay: tx=%s source_block=%s tx_index=%d reason=duplicate_txid_already_accepted_in_virtual_mergeset",
+						transactionID, mergeSetBlockHash, j)
+				} else if conflictingOutpoint, ok := firstConflictingSpentOutpoint(transaction, acceptedSpentOutpoints); ok {
+					log.Warnf("Consensus skipped UTXO-conflicting accepted transaction before Atomic replay: tx=%s source_block=%s tx_index=%d previous_outpoint=%s reason=input_already_spent_in_virtual_mergeset",
+						transactionID, mergeSetBlockHash, j, conflictingOutpoint)
+				} else {
+					isAccepted, accumulatedMass, err = csm.maybeAcceptTransaction(stagingArea, transaction, blockHash,
+						isSelectedParent, accumulatedUTXODiff, accumulatedAtomicState, accumulatedMass, selectedParentMedianTime,
+						daaScore, atomicCreationContext, atomicGrowth)
+					if err != nil {
+						return nil, nil, nil, err
+					}
+				}
+			} else {
+				isAccepted, accumulatedMass, err = csm.maybeAcceptTransaction(stagingArea, transaction, blockHash,
+					isSelectedParent, accumulatedUTXODiff, accumulatedAtomicState, accumulatedMass, selectedParentMedianTime,
+					daaScore, atomicCreationContext, atomicGrowth)
+				if err != nil {
+					return nil, nil, nil, err
+				}
 			}
 			log.Tracef("Transaction %s in block %s isAccepted: %t, fee: %d",
 				transactionID, mergeSetBlockHash, isAccepted, transaction.Fee)
 
 			var transactionInputUTXOEntries []externalapi.UTXOEntry
 			if isAccepted {
+				acceptedTxIDs[*transactionID] = struct{}{}
+				rememberSpentOutpoints(transaction, acceptedSpentOutpoints)
 				transactionInputUTXOEntries = make([]externalapi.UTXOEntry, len(transaction.Inputs))
 				for k, input := range transaction.Inputs {
 					transactionInputUTXOEntries[k] = input.UTXOEntry
@@ -251,6 +272,23 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 	}
 
 	return multiblockAcceptanceData, accumulatedUTXODiff, accumulatedAtomicState, nil
+}
+
+func firstConflictingSpentOutpoint(transaction *externalapi.DomainTransaction,
+	spentOutpoints map[externalapi.DomainOutpoint]struct{}) (externalapi.DomainOutpoint, bool) {
+
+	for _, input := range transaction.Inputs {
+		if _, ok := spentOutpoints[input.PreviousOutpoint]; ok {
+			return input.PreviousOutpoint, true
+		}
+	}
+	return externalapi.DomainOutpoint{}, false
+}
+
+func rememberSpentOutpoints(transaction *externalapi.DomainTransaction, spentOutpoints map[externalapi.DomainOutpoint]struct{}) {
+	for _, input := range transaction.Inputs {
+		spentOutpoints[input.PreviousOutpoint] = struct{}{}
+	}
 }
 
 func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.StagingArea,
@@ -282,11 +320,7 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 				"As such, it is not accepted", transactionID, blockHash)
 			return false, accumulatedMassBefore, nil
 		}
-		log.Tracef("Transaction %s is the coinbase of block %s", transactionID, blockHash)
-		err = atomicstate.ApplyAnchorDeltasForTransaction(transaction, accumulatedAtomicState)
-		if err != nil {
-			return false, 0, err
-		}
+		log.Tracef("Transaction %s is the coinbase of block %s; skipping Atomic anchor deltas", transactionID, blockHash)
 	} else {
 		log.Tracef("Validating transaction %s in block %s", transactionID, blockHash)
 		err = csm.transactionValidator.ValidateTransactionInContextAndPopulateFee(

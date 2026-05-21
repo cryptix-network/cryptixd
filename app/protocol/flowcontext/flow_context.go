@@ -60,6 +60,9 @@ type FlowContext struct {
 	orphans      map[externalapi.DomainHash]*externalapi.DomainBlock
 	orphansMutex sync.RWMutex
 
+	mempoolVirtualSink      *externalapi.DomainHash
+	mempoolVirtualSinkMutex sync.Mutex
+
 	transactionIDsToPropagate        []*externalapi.DomainTransactionID
 	lastTransactionIDPropagationTime time.Time
 	transactionIDPropagationLock     sync.Mutex

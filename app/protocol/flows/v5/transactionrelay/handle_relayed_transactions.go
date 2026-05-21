@@ -221,6 +221,32 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 			return protocolerrors.Errorf(true, "rejected transaction %s: %s", txID, ruleErr)
 		}
 		if len(acceptedTransactions) == 0 {
+			if isCAT {
+				_, isOrphan, found := flow.Domain().MiningManager().GetTransaction(txID, true, true)
+				switch {
+				case found && isOrphan:
+					log.Infof("Relayed CAT transaction deferred in orphan pool: tx=%s %s tx_pool=%d orphan_pool=%d",
+						txID,
+						catSummary,
+						flow.Domain().MiningManager().TransactionCount(true, false),
+						flow.Domain().MiningManager().TransactionCount(false, true),
+					)
+				case found:
+					log.Infof("Relayed CAT transaction already known in mempool: tx=%s %s tx_pool=%d orphan_pool=%d",
+						txID,
+						catSummary,
+						flow.Domain().MiningManager().TransactionCount(true, false),
+						flow.Domain().MiningManager().TransactionCount(false, true),
+					)
+				default:
+					log.Warnf("Relayed CAT transaction produced no accepted transaction and was not retained: tx=%s %s tx_pool=%d orphan_pool=%d",
+						txID,
+						catSummary,
+						flow.Domain().MiningManager().TransactionCount(true, false),
+						flow.Domain().MiningManager().TransactionCount(false, true),
+					)
+				}
+			}
 			continue
 		}
 		if isCAT {

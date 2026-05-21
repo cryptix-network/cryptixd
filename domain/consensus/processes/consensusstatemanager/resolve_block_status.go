@@ -55,6 +55,7 @@ func (csm *consensusStateManager) resolveBlockStatus(stagingArea *model.StagingA
 	previousBlockUTXOSet := selectedParentUTXOSet
 	var oneBeforeLastResolvedBlockUTXOSet externalapi.UTXODiff
 	var oneBeforeLastResolvedBlockHash *externalapi.DomainHash
+	loggedDisqualifiedParentPropagation := false
 
 	for i := len(unverifiedBlocks) - 1; i >= 0; i-- {
 		unverifiedBlockHash := unverifiedBlocks[i]
@@ -67,6 +68,11 @@ func (csm *consensusStateManager) resolveBlockStatus(stagingArea *model.StagingA
 		}
 
 		if selectedParentStatus == externalapi.StatusDisqualifiedFromChain {
+			if !loggedDisqualifiedParentPropagation {
+				log.Warnf("Disqualifying selected-chain block(s) because selected parent is already disqualified: first_child=%s disqualified_parent=%s remaining_unverified=%d/%d",
+					unverifiedBlockHash, previousBlockHash, i+1, len(unverifiedBlocks))
+				loggedDisqualifiedParentPropagation = true
+			}
 			blockStatus = externalapi.StatusDisqualifiedFromChain
 		} else {
 			oneBeforeLastResolvedBlockUTXOSet = previousBlockUTXOSet
@@ -292,8 +298,18 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 	log.Tracef("verifying the UTXO of block %s", blockHash)
 	err = csm.verifyUTXO(stagingArea, block, blockHash, pastUTXOSet, acceptanceData, multiset, atomicState)
 	if err != nil {
-		if errors.As(err, &ruleerrors.RuleError{}) {
-			log.Debugf("UTXO verification for block %s failed: %s", blockHash, err)
+		var ruleErr ruleerrors.RuleError
+		if errors.As(err, &ruleErr) {
+			log.Warnf("Disqualifying block after UTXO/Atomic verification failed: block=%s selected_parent=%s daa=%d blue_score=%d txs=%d non_coinbase_txs=%d payload_txs=%d utxo_commitment=%s reason=%s",
+				blockHash,
+				selectedParentHash,
+				block.Header.DAAScore(),
+				block.Header.BlueScore(),
+				len(block.Transactions),
+				nonCoinbaseTransactionCount(block),
+				payloadTransactionCount(block),
+				block.Header.UTXOCommitment(),
+				err)
 			return externalapi.StatusDisqualifiedFromChain, nil, nil
 		}
 		return 0, nil, err
@@ -364,6 +380,26 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 	}
 
 	return externalapi.StatusUTXOValid, pastUTXOSet, nil
+}
+
+func nonCoinbaseTransactionCount(block *externalapi.DomainBlock) int {
+	if block == nil || len(block.Transactions) == 0 {
+		return 0
+	}
+	return len(block.Transactions) - 1
+}
+
+func payloadTransactionCount(block *externalapi.DomainBlock) int {
+	if block == nil {
+		return 0
+	}
+	payloadTransactions := 0
+	for _, transaction := range block.Transactions {
+		if len(transaction.Payload) > 0 {
+			payloadTransactions++
+		}
+	}
+	return payloadTransactions
 }
 
 func (csm *consensusStateManager) isNewSelectedTip(stagingArea *model.StagingArea,

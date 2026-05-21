@@ -5,6 +5,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -360,6 +361,108 @@ func TestResolveVirtualBackAndForthReorgs(t *testing.T) {
 
 		printUtxoDiffChildren(t, tc, hashes, blocks)
 		verifyUtxoDiffPaths(t, tc, hashes)
+	})
+}
+
+func TestResolveVirtualSkipsDisqualifiedPendingTip(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+
+		tc, teardown, err := consensus.NewFactory().NewTestConsensus(consensusConfig, "TestResolveVirtualSkipsDisqualifiedPendingTip")
+		if err != nil {
+			t.Fatalf("Error setting up consensus: %+v", err)
+		}
+		defer teardown(false)
+
+		firstBlockHash, _, err := tc.AddBlock([]*externalapi.DomainHash{consensusConfig.GenesisHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed adding first block: %+v", err)
+		}
+		fundingBlockHash, _, err := tc.AddBlock([]*externalapi.DomainHash{firstBlockHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Failed adding funding block: %+v", err)
+		}
+		fundingBlock, _, err := tc.GetBlock(fundingBlockHash)
+		if err != nil {
+			t.Fatalf("Failed getting funding block: %+v", err)
+		}
+		spendingTransaction, err := testutils.CreateTransaction(fundingBlock.Transactions[transactionhelper.CoinbaseTransactionIndex], 1)
+		if err != nil {
+			t.Fatalf("Failed creating spending transaction: %+v", err)
+		}
+		validSpendHash, _, err := tc.AddBlock([]*externalapi.DomainHash{fundingBlockHash}, nil, []*externalapi.DomainTransaction{spendingTransaction})
+		if err != nil {
+			t.Fatalf("Failed adding valid spend block: %+v", err)
+		}
+
+		disqualifiedBlock, _, err := tc.BuildBlockWithParents(
+			[]*externalapi.DomainHash{validSpendHash}, nil, []*externalapi.DomainTransaction{spendingTransaction})
+		if err != nil {
+			t.Fatalf("Failed building disqualified pending block: %+v", err)
+		}
+		disqualifiedHash := consensushashing.BlockHash(disqualifiedBlock)
+		err = tc.ValidateAndInsertBlock(disqualifiedBlock, false)
+		if err != nil {
+			t.Fatalf("Failed inserting pending block without virtual update: %+v", err)
+		}
+
+		stagingArea := model.NewStagingArea()
+		status, err := tc.BlockStatusStore().Get(tc.DatabaseContext(), stagingArea, disqualifiedHash)
+		if err != nil {
+			t.Fatalf("Failed getting pending block status: %+v", err)
+		}
+		if status != externalapi.StatusUTXOPendingVerification {
+			t.Fatalf("Expected pending block status %s before resolve, got %s", externalapi.StatusUTXOPendingVerification, status)
+		}
+
+		_, isCompletelyResolved, err := tc.ResolveVirtualWithMaxParam(0)
+		if err != nil {
+			t.Fatalf("ResolveVirtual must not select a disqualified processing point: %+v", err)
+		}
+		if !isCompletelyResolved {
+			t.Fatalf("ResolveVirtual should finish after resolving an actual disqualified pending tip")
+		}
+
+		status, err = tc.BlockStatusStore().Get(tc.DatabaseContext(), stagingArea, disqualifiedHash)
+		if err != nil {
+			t.Fatalf("Failed getting disqualified block status: %+v", err)
+		}
+		if status != externalapi.StatusDisqualifiedFromChain {
+			t.Fatalf("Expected disqualified block status %s after resolve, got %s", externalapi.StatusDisqualifiedFromChain, status)
+		}
+
+		tips, err := tc.ConsensusStateStore().Tips(stagingArea, tc.DatabaseContext())
+		if err != nil {
+			t.Fatalf("Failed getting consensus tips: %+v", err)
+		}
+		for _, tip := range tips {
+			if tip.Equal(disqualifiedHash) {
+				t.Fatalf("Disqualified pending tip %s must be pruned from consensus tips; tips: %s", disqualifiedHash, tips)
+			}
+		}
+
+		virtualRelations, err := tc.BlockRelationStore().BlockRelation(tc.DatabaseContext(), stagingArea, model.VirtualBlockHash)
+		if err != nil {
+			t.Fatalf("Failed getting virtual parents: %+v", err)
+		}
+		for _, parent := range virtualRelations.Parents {
+			if parent.Equal(disqualifiedHash) {
+				t.Fatalf("Disqualified pending tip %s must not become a virtual parent; virtual parents: %s",
+					disqualifiedHash, virtualRelations.Parents)
+			}
+		}
+
+		validExtensionHash, _, err := tc.AddBlock([]*externalapi.DomainHash{validSpendHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Valid sibling extension must still be accepted after disqualified pending tip resolve: %+v", err)
+		}
+		validStatus, err := tc.BlockStatusStore().Get(tc.DatabaseContext(), stagingArea, validExtensionHash)
+		if err != nil {
+			t.Fatalf("Failed getting valid extension status: %+v", err)
+		}
+		if validStatus != externalapi.StatusUTXOValid {
+			t.Fatalf("Expected valid extension status %s, got %s", externalapi.StatusUTXOValid, validStatus)
+		}
 	})
 }
 

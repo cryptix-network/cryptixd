@@ -1,6 +1,8 @@
 package mempool
 
 import (
+	"github.com/pkg/errors"
+
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool/model"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
@@ -14,7 +16,7 @@ func (mp *mempool) revalidateHighPriorityTransactions() ([]*externalapi.DomainTr
 		visited           bool
 	}
 
-	onEnd := logger.LogAndMeasureExecutionTime(log, "revalidateHighPriorityTransactions")
+	onEnd := logger.LogAndMeasureExecutionTime(log, "revalidateHighPriorityAndCATTransactions")
 	defer onEnd()
 
 	// We revalidate transactions in topological order in case there are dependencies between them
@@ -22,6 +24,29 @@ func (mp *mempool) revalidateHighPriorityTransactions() ([]*externalapi.DomainTr
 	// Naturally transactions point to their dependencies, but since we want to start processing the dependencies
 	// first, we build the opposite DAG. We initially fill `queue` with transactions with no dependencies.
 	txDAG := make(map[externalapi.DomainTransactionID]*txNode)
+	candidateTransactions := model.IDToTransactionMap{}
+	highPriorityTransactions := model.IDToTransactionMap{}
+	for id, transaction := range mp.transactionsPool.highPriorityTransactions {
+		candidateTransactions[id] = transaction
+		highPriorityTransactions[id] = transaction
+	}
+	lowPriorityCATCount := 0
+	for id, transaction := range mp.transactionsPool.allTransactions {
+		if _, ok := candidateTransactions[id]; ok {
+			continue
+		}
+		if isCATTransaction(transaction.Transaction()) {
+			candidateTransactions[id] = transaction
+			lowPriorityCATCount++
+		}
+	}
+	if len(candidateTransactions) == 0 {
+		return nil, nil
+	}
+	if lowPriorityCATCount > 0 {
+		log.Infof("Revalidating high-priority plus low-priority CAT transactions: high_priority=%d low_priority_cat=%d",
+			len(highPriorityTransactions), lowPriorityCATCount)
+	}
 
 	maybeAddNode := func(txID externalapi.DomainTransactionID) *txNode {
 		if node, ok := txDAG[txID]; ok {
@@ -31,19 +56,19 @@ func (mp *mempool) revalidateHighPriorityTransactions() ([]*externalapi.DomainTr
 		node := &txNode{
 			children:          make(map[externalapi.DomainTransactionID]struct{}),
 			nonVisitedParents: 0,
-			tx:                mp.transactionsPool.highPriorityTransactions[txID],
+			tx:                candidateTransactions[txID],
 		}
 		txDAG[txID] = node
 		return node
 	}
 
-	queue := make([]*txNode, 0, len(mp.transactionsPool.highPriorityTransactions))
-	for id, transaction := range mp.transactionsPool.highPriorityTransactions {
+	queue := make([]*txNode, 0, len(candidateTransactions))
+	for id, transaction := range candidateTransactions {
 		node := maybeAddNode(id)
 
 		parents := make(map[externalapi.DomainTransactionID]struct{})
 		for _, input := range transaction.Transaction().Inputs {
-			if _, ok := mp.transactionsPool.highPriorityTransactions[input.PreviousOutpoint.TransactionID]; !ok {
+			if _, ok := candidateTransactions[input.PreviousOutpoint.TransactionID]; !ok {
 				continue
 			}
 
@@ -84,6 +109,9 @@ func (mp *mempool) revalidateHighPriorityTransactions() ([]*externalapi.DomainTr
 		}
 
 		if isValid {
+			if _, shouldRebroadcast := highPriorityTransactions[*transaction.TransactionID()]; !shouldRebroadcast {
+				continue
+			}
 			validTransactions = append(validTransactions, transaction.Transaction().Clone())
 		}
 	}
@@ -107,11 +135,34 @@ func (mp *mempool) revalidateTransaction(transaction *model.MempoolTransaction) 
 		return false, nil
 	}
 
+	err = mp.validateTransactionInContext(transaction.Transaction())
+	if err != nil {
+		if errors.As(err, &RuleError{}) {
+			if isCATTransaction(transaction.Transaction()) {
+				log.Infof("Removing CAT transaction %s, it failed full mempool revalidation: %s",
+					transaction.TransactionID(), err)
+			} else {
+				log.Debugf("Removing transaction %s, it failed full mempool revalidation: %s",
+					transaction.TransactionID(), err)
+			}
+			err := mp.removeTransaction(transaction.TransactionID(), true)
+			if err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+		return false, err
+	}
+
 	return true, nil
 }
 
 func clearInputs(transaction *model.MempoolTransaction) {
-	for _, input := range transaction.Transaction().Inputs {
+	clearTransactionInputs(transaction.Transaction())
+}
+
+func clearTransactionInputs(transaction *externalapi.DomainTransaction) {
+	for _, input := range transaction.Inputs {
 		input.UTXOEntry = nil
 	}
 }

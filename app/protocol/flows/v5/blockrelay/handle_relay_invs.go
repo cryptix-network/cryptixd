@@ -288,7 +288,7 @@ func (flow *handleRelayInvsFlow) start() error {
 			}
 		}
 
-		log.Infof("Accepted block %s via relay", inv.Hash)
+		log.Infof("Inserted block %s via relay (virtual validity pending)", inv.Hash)
 		err = flow.OnNewBlock(block)
 		if err != nil {
 			return err
@@ -394,6 +394,17 @@ func (flow *handleRelayInvsFlow) processBlock(block *externalapi.DomainBlock) ([
 		}
 		return nil, protocolerrors.Wrapf(true, err, "got invalid block %s from relay", blockHash)
 	}
+
+	blockInfo, err := flow.Domain().Consensus().GetBlockInfo(blockHash)
+	if err != nil {
+		return nil, err
+	}
+	if blockInfo.BlockStatus == externalapi.StatusDisqualifiedFromChain || blockInfo.BlockStatus == externalapi.StatusInvalid {
+		log.Warnf("Received relayed block that consensus stored but did not mark UTXO-valid: block=%s peer=%s status=%s; not treating it as accepted",
+			blockHash, flow.peer, blockInfo.BlockStatus)
+		return nil, protocolerrors.Errorf(false, "relayed block %s is not UTXO-valid after insertion: status=%s", blockHash, blockInfo.BlockStatus)
+	}
+
 	return nil, nil
 }
 

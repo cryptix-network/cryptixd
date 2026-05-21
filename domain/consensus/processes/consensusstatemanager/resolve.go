@@ -177,16 +177,22 @@ func (csm *consensusStateManager) ResolveVirtual(maxBlocksToResolve uint64) (*ex
 				return nil, false, err
 			}
 		}
+	} else if processingPointStatus == externalapi.StatusDisqualifiedFromChain {
+		err = staging.CommitAllChanges(csm.databaseContext, resolveStagingArea)
+		if err != nil {
+			return nil, false, err
+		}
 	}
 
 	isActualTip := processingPoint.Equal(pendingTip)
-	isCompletelyResolved := isActualTip && processingPointStatus == externalapi.StatusUTXOValid
+	isCompletelyResolved := isActualTip &&
+		(processingPointStatus == externalapi.StatusUTXOValid || processingPointStatus == externalapi.StatusDisqualifiedFromChain)
 
 	updateVirtualStagingArea := model.NewStagingArea()
 
 	virtualParents := []*externalapi.DomainHash{processingPoint}
 	// If `isCompletelyResolved`, set virtual correctly with all tips which have less blue work than pending
-	if isCompletelyResolved {
+	if isCompletelyResolved && processingPointStatus == externalapi.StatusUTXOValid {
 		lowerTips, err := csm.getGHOSTDAGLowerTips(readStagingArea, pendingTip)
 		if err != nil {
 			return nil, false, err
@@ -198,6 +204,34 @@ func (csm *consensusStateManager) ResolveVirtual(maxBlocksToResolve uint64) (*ex
 			return nil, false, err
 		}
 		log.Debugf("Picked virtual parents: %s", virtualParents)
+	} else if processingPointStatus == externalapi.StatusDisqualifiedFromChain {
+		sanitizedTips, err := csm.sanitizeDisqualifiedTips(updateVirtualStagingArea)
+		if err != nil {
+			return nil, false, err
+		}
+		if len(sanitizedTips) == 0 {
+			previousVirtualSelectedParentStatus, err := csm.blockStatusStore.Get(
+				csm.databaseContext, updateVirtualStagingArea, previousVirtualSelectedParent)
+			if err != nil {
+				return nil, false, err
+			}
+			if previousVirtualSelectedParentStatus == externalapi.StatusUTXOValid {
+				log.Warnf("All DAG tips were disqualified during virtual resolve; restoring previous virtual selected "+
+					"parent %s as the only valid tip so the node can keep its last valid chain view", previousVirtualSelectedParent)
+				sanitizedTips = []*externalapi.DomainHash{previousVirtualSelectedParent}
+			}
+		}
+		if len(sanitizedTips) == 0 {
+			return nil, false, errors.Errorf("virtual has no valid parent candidates after pruning disqualified tips; "+
+				"previous virtual selected parent %s could not be restored", previousVirtualSelectedParent)
+		}
+		csm.consensusStateStore.StageTips(updateVirtualStagingArea, sanitizedTips)
+		log.Debugf("Picking virtual parents after pruning disqualified tips len: %d", len(sanitizedTips))
+		virtualParents, err = csm.pickVirtualParents(updateVirtualStagingArea, sanitizedTips)
+		if err != nil {
+			return nil, false, err
+		}
+		log.Debugf("Picked virtual parents after disqualification: %s", virtualParents)
 	}
 	virtualUTXODiff, err := csm.updateVirtualWithParents(updateVirtualStagingArea, virtualParents)
 	if err != nil {
@@ -209,8 +243,15 @@ func (csm *consensusStateManager) ResolveVirtual(maxBlocksToResolve uint64) (*ex
 		return nil, false, err
 	}
 
+	virtualGHOSTDAGData, err := csm.ghostdagDataStore.Get(
+		csm.databaseContext, updateVirtualStagingArea, model.VirtualBlockHash, false)
+	if err != nil {
+		return nil, false, err
+	}
+	newVirtualSelectedParent := virtualGHOSTDAGData.SelectedParent()
+
 	selectedParentChainChanges, err := csm.dagTraversalManager.
-		CalculateChainPath(updateVirtualStagingArea, previousVirtualSelectedParent, processingPoint)
+		CalculateChainPath(updateVirtualStagingArea, previousVirtualSelectedParent, newVirtualSelectedParent)
 	if err != nil {
 		return nil, false, err
 	}

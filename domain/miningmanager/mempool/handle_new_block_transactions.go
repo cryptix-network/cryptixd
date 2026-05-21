@@ -10,10 +10,16 @@ func (mp *mempool) handleNewBlockTransactions(blockTransactions []*externalapi.D
 	[]*externalapi.DomainTransaction, error) {
 
 	// Skip the coinbase transaction
-	blockTransactions = blockTransactions[transactionhelper.CoinbaseTransactionIndex+1:]
+	if len(blockTransactions) <= transactionhelper.CoinbaseTransactionIndex+1 {
+		return nil, nil
+	}
+	return mp.handleAcceptedTransactions(blockTransactions[transactionhelper.CoinbaseTransactionIndex+1:])
+}
 
+func (mp *mempool) handleAcceptedTransactions(acceptedTransactions []*externalapi.DomainTransaction) (
+	[]*externalapi.DomainTransaction, error) {
 	acceptedOrphans := []*externalapi.DomainTransaction{}
-	for _, transaction := range blockTransactions {
+	for _, transaction := range acceptedTransactions {
 		transactionID := consensushashing.TransactionID(transaction)
 		err := mp.removeTransaction(transactionID, false)
 		if err != nil {

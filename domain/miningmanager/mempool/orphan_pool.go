@@ -160,7 +160,7 @@ func (op *orphansPool) processOrphansAfterAcceptedTransaction(acceptedTransactio
 				}
 			}
 			if countUnfilledInputs(orphan) == 0 {
-				err := op.unorphanTransaction(orphan)
+				promotedTransaction, err := op.unorphanTransaction(orphan)
 				if err != nil {
 					if errors.As(err, &RuleError{}) {
 						log.Infof("Failed to unorphan transaction %s due to rule error: %s",
@@ -169,12 +169,83 @@ func (op *orphansPool) processOrphansAfterAcceptedTransaction(acceptedTransactio
 					}
 					return nil, err
 				}
-				acceptedOrphans = append(acceptedOrphans, orphan.Transaction().Clone()) //these pointers leave the mempool, hence the clone
+				acceptedOrphans = append(acceptedOrphans, promotedTransaction.Clone()) //these pointers leave the mempool, hence the clone
+				queue = append(queue, promotedTransaction)
 			}
 		}
 	}
 
 	return acceptedOrphans, nil
+}
+
+func (op *orphansPool) revalidateOrphanTransactions() ([]*externalapi.DomainTransaction, error) {
+	if len(op.allOrphans) == 0 {
+		return nil, nil
+	}
+
+	acceptedTransactions := []*externalapi.DomainTransaction{}
+	orphanIDs := make([]externalapi.DomainTransactionID, 0, len(op.allOrphans))
+	for orphanID := range op.allOrphans {
+		orphanIDs = append(orphanIDs, orphanID)
+	}
+
+	for _, orphanID := range orphanIDs {
+		orphan, ok := op.allOrphans[orphanID]
+		if !ok {
+			continue
+		}
+
+		clearTransactionInputs(orphan.Transaction())
+		_, missingOutpoints, err := op.mempool.fillInputsAndGetMissingParents(orphan.Transaction())
+		if err != nil {
+			if errors.As(err, &RuleError{}) {
+				if isCATTransaction(orphan.Transaction()) {
+					log.Infof("Removing CAT orphan after UTXO revalidation rule failure: tx=%s err=%s",
+						orphan.TransactionID(), err)
+				}
+				err := op.removeOrphan(orphan.TransactionID(), true)
+				if err != nil {
+					return nil, err
+				}
+				continue
+			}
+			return nil, err
+		}
+		if len(missingOutpoints) > 0 {
+			continue
+		}
+
+		if isCATTransaction(orphan.Transaction()) {
+			log.Infof("CAT orphan is ready after UTXO revalidation; promoting to mempool: tx=%s orphan_pool=%d",
+				orphan.TransactionID(), op.orphanTransactionCount())
+		}
+
+		promotedTransaction, err := op.unorphanTransaction(orphan)
+		if err != nil {
+			if errors.As(err, &RuleError{}) {
+				if isCATTransaction(orphan.Transaction()) {
+					log.Infof("Keeping ready CAT orphan after mempool rule failure: tx=%s err=%s",
+						orphan.TransactionID(), err)
+				}
+				continue
+			}
+			return nil, err
+		}
+
+		acceptedTransactions = append(acceptedTransactions, promotedTransaction.Clone())
+
+		acceptedOrphans, err := op.processOrphansAfterAcceptedTransaction(promotedTransaction)
+		if err != nil {
+			return nil, err
+		}
+		acceptedTransactions = append(acceptedTransactions, acceptedOrphans...)
+	}
+
+	if len(acceptedTransactions) > 0 {
+		log.Infof("Revalidated orphan transactions after UTXO/virtual update: promoted=%d orphan_pool=%d tx_pool=%d",
+			len(acceptedTransactions), op.orphanTransactionCount(), op.mempool.transactionsPool.transactionCount())
+	}
+	return acceptedTransactions, nil
 }
 
 func countUnfilledInputs(orphan *model.OrphanTransaction) int {
@@ -187,44 +258,60 @@ func countUnfilledInputs(orphan *model.OrphanTransaction) int {
 	return unfilledInputs
 }
 
-func (op *orphansPool) unorphanTransaction(transaction *model.OrphanTransaction) error {
-	err := op.removeOrphan(transaction.TransactionID(), false)
-	if err != nil {
-		return err
-	}
-
-	err = op.mempool.consensusReference.Consensus().ValidateTransactionAndPopulateWithConsensusData(transaction.Transaction())
+func (op *orphansPool) unorphanTransaction(transaction *model.OrphanTransaction) (*externalapi.DomainTransaction, error) {
+	promotedTransaction := transaction.Transaction().Clone()
+	err := op.mempool.consensusReference.Consensus().ValidateTransactionAndPopulateWithConsensusData(promotedTransaction)
 	if err != nil {
 		if errors.Is(err, ruleerrors.ErrImmatureSpend) {
-			return transactionRuleError(RejectImmatureSpend, "one of the transaction inputs spends an immature UTXO")
+			return nil, transactionRuleError(RejectImmatureSpend, "one of the transaction inputs spends an immature UTXO")
 		}
 		if errors.As(err, &ruleerrors.RuleError{}) {
-			return newRuleError(err)
+			return nil, newRuleError(err)
 		}
-		return err
+		return nil, err
 	}
+	*transaction.Transaction() = *promotedTransaction.Clone()
 
-	err = op.mempool.validateTransactionInContext(transaction.Transaction())
+	err = op.mempool.validateTransactionInContext(promotedTransaction)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	virtualDAAScore, err := op.mempool.consensusReference.Consensus().GetVirtualDAAScore()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	mempoolTransaction := model.NewMempoolTransaction(
-		transaction.Transaction(),
-		op.mempool.transactionsPool.getParentTransactionsInPool(transaction.Transaction()),
-		false,
+		promotedTransaction,
+		op.mempool.transactionsPool.getParentTransactionsInPool(promotedTransaction),
+		transaction.IsHighPriority(),
 		virtualDAAScore,
 	)
 	err = op.mempool.transactionsPool.addMempoolTransaction(mempoolTransaction)
 	if err != nil {
-		return err
+		return nil, err
+	}
+	err = op.mempool.transactionsPool.limitTransactionCount(mempoolTransaction)
+	if err != nil {
+		removeErr := op.mempool.removeTransaction(mempoolTransaction.TransactionID(), true)
+		if removeErr != nil {
+			log.Warnf("Failed to remove rejected unorphaned transaction %s after mempool limit failure: %s",
+				mempoolTransaction.TransactionID(), removeErr)
+		}
+		return nil, err
 	}
 
-	return nil
+	err = op.removeOrphan(transaction.TransactionID(), false)
+	if err != nil {
+		removeErr := op.mempool.removeTransaction(mempoolTransaction.TransactionID(), true)
+		if removeErr != nil {
+			log.Warnf("Failed to roll back promoted transaction %s after orphan removal failure: %s",
+				mempoolTransaction.TransactionID(), removeErr)
+		}
+		return nil, err
+	}
+
+	return promotedTransaction, nil
 }
 
 func (op *orphansPool) removeOrphan(orphanTransactionID *externalapi.DomainTransactionID, removeRedeemers bool) error {

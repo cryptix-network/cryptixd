@@ -156,6 +156,77 @@ func TestDoubleSpends(t *testing.T) {
 	})
 }
 
+func TestDuplicateTransactionInParallelBlocksAcceptedOnce(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		stagingArea := model.NewStagingArea()
+		consensusConfig.BlockCoinbaseMaturity = 0
+
+		factory := consensus.NewFactory()
+		testConsensus, teardown, err := factory.NewTestConsensus(consensusConfig, "TestDuplicateTransactionInParallelBlocksAcceptedOnce")
+		if err != nil {
+			t.Fatalf("Error setting up testConsensus: %+v", err)
+		}
+		defer teardown(false)
+
+		firstBlockHash, _, err := testConsensus.AddBlock([]*externalapi.DomainHash{consensusConfig.GenesisHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Error creating firstBlock: %+v", err)
+		}
+		fundingBlockHash, _, err := testConsensus.AddBlock([]*externalapi.DomainHash{firstBlockHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Error creating fundingBlock: %+v", err)
+		}
+		fundingBlock, _, err := testConsensus.GetBlock(fundingBlockHash)
+		if err != nil {
+			t.Fatalf("Error getting fundingBlock: %+v", err)
+		}
+
+		duplicateTransaction, err := testutils.CreateTransaction(
+			fundingBlock.Transactions[transactionhelper.CoinbaseTransactionIndex], 1)
+		if err != nil {
+			t.Fatalf("Error creating duplicateTransaction: %+v", err)
+		}
+		duplicateTransactionID := consensushashing.TransactionID(duplicateTransaction)
+
+		parallelBlockAHash, _, err := testConsensus.AddBlock(
+			[]*externalapi.DomainHash{fundingBlockHash}, nil, []*externalapi.DomainTransaction{duplicateTransaction.Clone()})
+		if err != nil {
+			t.Fatalf("Error creating parallelBlockA: %+v", err)
+		}
+		parallelBlockBHash, _, err := testConsensus.AddBlock(
+			[]*externalapi.DomainHash{fundingBlockHash}, nil, []*externalapi.DomainTransaction{duplicateTransaction.Clone()})
+		if err != nil {
+			t.Fatalf("Error creating parallelBlockB: %+v", err)
+		}
+
+		mergeBlockHash, _, err := testConsensus.AddBlock(
+			[]*externalapi.DomainHash{parallelBlockAHash, parallelBlockBHash}, nil, nil)
+		if err != nil {
+			t.Fatalf("Error creating mergeBlock: %+v", err)
+		}
+
+		acceptanceData, err := testConsensus.AcceptanceDataStore().
+			Get(testConsensus.DatabaseContext(), stagingArea, mergeBlockHash)
+		if err != nil {
+			t.Fatalf("Error getting mergeBlock acceptance data: %+v", err)
+		}
+
+		acceptedCount := 0
+		for _, blockAcceptanceData := range acceptanceData {
+			for _, transactionAcceptanceData := range blockAcceptanceData.TransactionAcceptanceData {
+				if consensushashing.TransactionID(transactionAcceptanceData.Transaction).Equal(duplicateTransactionID) &&
+					transactionAcceptanceData.IsAccepted {
+					acceptedCount++
+				}
+			}
+		}
+		if acceptedCount != 1 {
+			t.Fatalf("Expected duplicate transaction %s to be accepted exactly once across parallel merge set, got %d",
+				duplicateTransactionID, acceptedCount)
+		}
+	})
+}
+
 // TestTransactionAcceptance checks that block transactions are accepted correctly when the merge set is sorted topologically.
 // DAG diagram:
 // genesis <- blockA <- blockB <- blockC   <- ..(chain of k-blocks).. lastBlockInChain <- blockD <- blockE <- blockF <- blockG

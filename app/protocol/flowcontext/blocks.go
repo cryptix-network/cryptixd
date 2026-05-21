@@ -8,6 +8,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
 	"github.com/pkg/errors"
 
 	"github.com/cryptix-network/cryptixd/app/appmessage"
@@ -36,17 +37,83 @@ func (f *FlowContext) OnNewBlock(block *externalapi.DomainBlock) error {
 	newBlocks := []*externalapi.DomainBlock{block}
 	newBlocks = append(newBlocks, unorphanedBlocks...)
 
-	allAcceptedTransactions := make([]*externalapi.DomainTransaction, 0)
-	for _, newBlock := range newBlocks {
-		log.Debugf("OnNewBlock: passing block %s transactions to mining manager", hash)
-		acceptedTransactions, err := f.Domain().MiningManager().HandleNewBlockTransactions(newBlock.Transactions)
-		if err != nil {
-			return err
-		}
-		allAcceptedTransactions = append(allAcceptedTransactions, acceptedTransactions...)
+	allAcceptedTransactions, err := f.processMempoolVirtualAcceptance()
+	if err != nil {
+		return err
 	}
 
 	return f.broadcastTransactionsAfterBlockAdded(newBlocks, allAcceptedTransactions)
+}
+
+func (f *FlowContext) processMempoolVirtualAcceptance() ([]*externalapi.DomainTransaction, error) {
+	f.mempoolVirtualSinkMutex.Lock()
+	defer f.mempoolVirtualSinkMutex.Unlock()
+
+	sink, err := f.Domain().Consensus().GetVirtualSelectedParent()
+	if err != nil {
+		return nil, err
+	}
+	if f.mempoolVirtualSink == nil {
+		f.mempoolVirtualSink = sink
+		return nil, nil
+	}
+	previousSink := f.mempoolVirtualSink
+	if previousSink.Equal(sink) {
+		return nil, nil
+	}
+
+	chainPath, err := f.Domain().Consensus().GetVirtualSelectedParentChainFromBlock(previousSink)
+	if err != nil {
+		log.Warnf("Skipping mempool virtual acceptance update: failed reading virtual chain path from %s to %s: %s",
+			previousSink, sink, err)
+		return nil, nil
+	}
+	if len(chainPath.Added) == 0 {
+		f.mempoolVirtualSink = sink
+		return nil, nil
+	}
+
+	blocksAcceptanceData, err := f.Domain().Consensus().GetBlocksAcceptanceData(chainPath.Added)
+	if err != nil {
+		log.Warnf("Skipping mempool virtual acceptance update: failed reading acceptance data for %d selected-chain block(s): %s",
+			len(chainPath.Added), err)
+		return nil, nil
+	}
+
+	allAcceptedTransactions := make([]*externalapi.DomainTransaction, 0)
+	acceptedNonCoinbase := 0
+	for _, acceptanceData := range blocksAcceptanceData {
+		acceptedTransactions := make([]*externalapi.DomainTransaction, 0)
+		for _, blockAcceptanceData := range acceptanceData {
+			if blockAcceptanceData == nil {
+				continue
+			}
+			for _, transactionAcceptanceData := range blockAcceptanceData.TransactionAcceptanceData {
+				if transactionAcceptanceData == nil || !transactionAcceptanceData.IsAccepted || transactionAcceptanceData.Transaction == nil {
+					continue
+				}
+				if transactionhelper.IsCoinBase(transactionAcceptanceData.Transaction) {
+					continue
+				}
+				acceptedTransactions = append(acceptedTransactions, transactionAcceptanceData.Transaction)
+			}
+		}
+
+		if len(acceptedTransactions) == 0 {
+			continue
+		}
+		acceptedNonCoinbase += len(acceptedTransactions)
+		acceptedOrphans, err := f.Domain().MiningManager().HandleAcceptedTransactions(acceptedTransactions)
+		if err != nil {
+			return nil, err
+		}
+		allAcceptedTransactions = append(allAcceptedTransactions, acceptedOrphans...)
+	}
+
+	log.Debugf("Mempool virtual acceptance update: previous_sink=%s sink=%s selected_added=%d accepted_non_coinbase_txs=%d promoted_orphans=%d",
+		previousSink, sink, len(chainPath.Added), acceptedNonCoinbase, len(allAcceptedTransactions))
+	f.mempoolVirtualSink = sink
+	return allAcceptedTransactions, nil
 }
 
 // OnNewBlockTemplate calls the handler function whenever a new block template is available for miners.
@@ -111,13 +178,26 @@ func (f *FlowContext) AddBlock(block *externalapi.DomainBlock) error {
 		return protocolerrors.Errorf(false, "cannot add header only block")
 	}
 
+	blockHash := consensushashing.BlockHash(block)
 	err := f.Domain().Consensus().ValidateAndInsertBlock(block, true)
 	if err != nil {
 		if errors.As(err, &ruleerrors.RuleError{}) {
-			log.Warnf("Validation failed for block %s: %s", consensushashing.BlockHash(block), err)
+			log.Warnf("Validation failed for block %s: %s", blockHash, err)
 		}
 		return err
 	}
+
+	blockInfo, err := f.Domain().Consensus().GetBlockInfo(blockHash)
+	if err != nil {
+		return err
+	}
+	if blockInfo.BlockStatus == externalapi.StatusDisqualifiedFromChain || blockInfo.BlockStatus == externalapi.StatusInvalid {
+		f.Domain().MiningManager().ClearBlockTemplate()
+		log.Warnf("Rejecting locally submitted block after consensus insertion because it is not UTXO-valid: block=%s status=%s; not broadcasting and not treating it as accepted",
+			blockHash, blockInfo.BlockStatus)
+		return protocolerrors.Errorf(false, "submitted block %s is not UTXO-valid after insertion: status=%s", blockHash, blockInfo.BlockStatus)
+	}
+
 	err = f.OnNewBlockTemplate()
 	if err != nil {
 		return err
@@ -126,8 +206,8 @@ func (f *FlowContext) AddBlock(block *externalapi.DomainBlock) error {
 	if err != nil {
 		return err
 	}
-	f.BroadcastLocalBlockProducerClaim(consensushashing.BlockHash(block))
-	return f.Broadcast(appmessage.NewMsgInvBlock(consensushashing.BlockHash(block)))
+	f.BroadcastLocalBlockProducerClaim(blockHash)
+	return f.Broadcast(appmessage.NewMsgInvBlock(blockHash))
 }
 
 // IsIBDRunning returns true if IBD is currently marked as running

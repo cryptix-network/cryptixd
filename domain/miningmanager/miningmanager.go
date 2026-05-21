@@ -31,9 +31,12 @@ type MiningManager interface {
 		orphanPoolTransactions []*externalapi.DomainTransaction)
 	TransactionCount(includeTransactionPool bool, includeOrphanPool bool) int
 	HandleNewBlockTransactions(txs []*externalapi.DomainTransaction) ([]*externalapi.DomainTransaction, error)
+	HandleAcceptedTransactions(txs []*externalapi.DomainTransaction) ([]*externalapi.DomainTransaction, error)
 	ValidateAndInsertTransaction(transaction *externalapi.DomainTransaction, isHighPriority bool, allowOrphan bool) (
 		acceptedTransactions []*externalapi.DomainTransaction, err error)
+	RevalidateOrphanTransactions() (acceptedTransactions []*externalapi.DomainTransaction, err error)
 	RevalidateHighPriorityTransactions() (validTransactions []*externalapi.DomainTransaction, err error)
+	ExpireLowPriorityTransactions() (expiredTransactions int, expiredOrphans int, err error)
 }
 
 type miningManager struct {
@@ -130,6 +133,10 @@ func (mm *miningManager) HandleNewBlockTransactions(txs []*externalapi.DomainTra
 	return mm.mempool.HandleNewBlockTransactions(txs)
 }
 
+func (mm *miningManager) HandleAcceptedTransactions(txs []*externalapi.DomainTransaction) ([]*externalapi.DomainTransaction, error) {
+	return mm.mempool.HandleAcceptedTransactions(txs)
+}
+
 // ValidateAndInsertTransaction validates the given transaction, and
 // adds it to the set of known transactions that have not yet been
 // added to any block
@@ -137,6 +144,12 @@ func (mm *miningManager) ValidateAndInsertTransaction(transaction *externalapi.D
 	isHighPriority bool, allowOrphan bool) (acceptedTransactions []*externalapi.DomainTransaction, err error) {
 
 	return mm.mempool.ValidateAndInsertTransaction(transaction, isHighPriority, allowOrphan)
+}
+
+func (mm *miningManager) RevalidateOrphanTransactions() (
+	acceptedTransactions []*externalapi.DomainTransaction, err error) {
+
+	return mm.mempool.RevalidateOrphanTransactions()
 }
 
 func (mm *miningManager) GetTransaction(
@@ -175,4 +188,10 @@ func (mm *miningManager) RevalidateHighPriorityTransactions() (
 	validTransactions []*externalapi.DomainTransaction, err error) {
 
 	return mm.mempool.RevalidateHighPriorityTransactions()
+}
+
+func (mm *miningManager) ExpireLowPriorityTransactions() (
+	expiredTransactions int, expiredOrphans int, err error) {
+
+	return mm.mempool.ExpireLowPriorityTransactions()
 }
