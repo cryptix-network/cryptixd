@@ -241,6 +241,57 @@ func TestLiquidityPoolNonceMismatchDoesNotAdvanceAssetNonce(t *testing.T) {
 	}
 }
 
+func TestLiquidityVaultOutpointMismatchDoesNotMutateState(t *testing.T) {
+	ownerScript := testOwnerScript(0xA8)
+	ownerID := mustOwnerIDFromScript(t, ownerScript)
+	assetID := bytes32(0x18)
+	otherAssetID := bytes32(0x19)
+	expectedVaultTxID := externalapi.NewDomainTransactionIDFromByteArray(&[externalapi.DomainHashSize]byte{0xA1})
+	otherVaultTxID := externalapi.NewDomainTransactionIDFromByteArray(&[externalapi.DomainHashSize]byte{0xA2})
+	expectedVault := *externalapi.NewDomainOutpoint(expectedVaultTxID, 0)
+	otherVault := *externalapi.NewDomainOutpoint(otherVaultTxID, 0)
+
+	state := NewState()
+	state.AnchorCounts[ownerID] = 1
+	state.Assets[assetID] = AssetState{
+		AssetClass:  AssetClassLiquidity,
+		TotalSupply: Uint128FromUint64(1_000),
+		Liquidity: &LiquidityPoolState{
+			PoolNonce:             1,
+			RealCPayReservesSompi: 1_000,
+			RealTokenReserves:     Uint128FromUint64(1_000),
+			VirtualCPayReserves:   1_000,
+			VirtualTokenReserves:  Uint128FromUint64(1_000),
+			FeeBPS:                30,
+			VaultOutpoint:         expectedVault,
+			VaultValueSompi:       1_000,
+			Unlocked:              true,
+		},
+	}
+	state.Assets[otherAssetID] = AssetState{
+		AssetClass: AssetClassLiquidity,
+		Liquidity: &LiquidityPoolState{
+			PoolNonce:       1,
+			VaultOutpoint:   otherVault,
+			VaultValueSompi: 2_000,
+		},
+	}
+	state.RebuildLiquidityVaultOutpointIndex()
+
+	tx := testLiquidityBuyTxWithVaultInput(ownerScript, 0x09, assetID, otherVault, 2_000, 2_005)
+	err := ValidateAndApplyTransaction(tx, 1, 0, state)
+	if err == nil || !strings.Contains(err.Error(), "liquidity vault outpoint mismatch") {
+		t.Fatalf("vault mismatch got error %v, want liquidity vault outpoint mismatch", err)
+	}
+	if _, ok := state.NextNonces[AssetNonceKey(ownerID, assetID)]; ok {
+		t.Fatalf("asset nonce advanced after rejected vault mismatch")
+	}
+	pool := state.Assets[assetID].Liquidity
+	if pool.PoolNonce != 1 || !pool.VaultOutpoint.Equal(&expectedVault) || pool.VaultValueSompi != 1_000 {
+		t.Fatalf("pool mutated after rejected vault mismatch: nonce=%d vault=%s value=%d", pool.PoolNonce, pool.VaultOutpoint, pool.VaultValueSompi)
+	}
+}
+
 func testTransferState(ownerID [externalapi.DomainHashSize]byte, assetID [externalapi.DomainHashSize]byte, balance uint64) *State {
 	state := NewState()
 	state.AnchorCounts[ownerID] = 1
@@ -316,6 +367,43 @@ func testBuyPayload(nonce uint64, assetID [externalapi.DomainHashSize]byte, expe
 	minTokenOutBytes := minTokenOut.ToLE()
 	payload = append(payload, minTokenOutBytes[:]...)
 	return payload
+}
+
+func testLiquidityBuyTxWithVaultInput(
+	ownerScript *externalapi.ScriptPublicKey,
+	previousOutpointTag byte,
+	assetID [externalapi.DomainHashSize]byte,
+	vaultOutpoint externalapi.DomainOutpoint,
+	vaultInputValue uint64,
+	vaultOutputValue uint64,
+) *externalapi.DomainTransaction {
+	ownerPreviousID := bytes32(previousOutpointTag)
+	return &externalapi.DomainTransaction{
+		Version: 1,
+		Inputs: []*externalapi.DomainTransactionInput{
+			{
+				PreviousOutpoint: *externalapi.NewDomainOutpoint(externalapi.NewDomainTransactionIDFromByteArray(&ownerPreviousID), 0),
+				UTXOEntry:        utxo.NewUTXOEntry(10, ownerScript, false, 0),
+			},
+			{
+				PreviousOutpoint: vaultOutpoint,
+				UTXOEntry:        utxo.NewUTXOEntry(vaultInputValue, testLiquidityVaultScript(), false, 0),
+			},
+		},
+		Outputs: []*externalapi.DomainTransactionOutput{
+			{Value: 1, ScriptPublicKey: ownerScript},
+			{Value: vaultOutputValue, ScriptPublicKey: testLiquidityVaultScript()},
+		},
+		SubnetworkID: subnetworks.SubnetworkIDPayload,
+		Payload:      testBuyPayload(1, assetID, 1, vaultOutputValue-vaultInputValue, Uint128FromUint64(1)),
+	}
+}
+
+func testLiquidityVaultScript() *externalapi.ScriptPublicKey {
+	return &externalapi.ScriptPublicKey{
+		Script:  []byte{txscript.OpData4, 'C', 'L', 'V', '1', txscript.OpDrop, txscript.OpTrue},
+		Version: constants.MaxScriptPublicKeyVersion,
+	}
 }
 
 func testPayloadHeader(opcode byte, nonce uint64) []byte {

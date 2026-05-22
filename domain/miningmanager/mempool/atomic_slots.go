@@ -97,6 +97,49 @@ func isCATTransaction(transaction *externalapi.DomainTransaction) bool {
 		string(transaction.Payload[:3]) == "CAT"
 }
 
+func atomicMempoolDebugSummary(transaction *externalapi.DomainTransaction) string {
+	if !isCATTransaction(transaction) {
+		return "cat=false"
+	}
+
+	if len(transaction.Payload) <= len("CAT")+1 {
+		return "cat=true op=truncated"
+	}
+
+	var opLabel string
+	switch transaction.Payload[len("CAT")+1] {
+	case 0:
+		opLabel = "create_asset"
+	case 1:
+		opLabel = "transfer"
+	case 2:
+		opLabel = "mint"
+	case 3:
+		opLabel = "burn"
+	case 4:
+		opLabel = "create_asset_with_mint"
+	case 5:
+		opLabel = "create_liquidity_asset"
+	case 6:
+		opLabel = "buy_liquidity_exact_in"
+	case 7:
+		opLabel = "sell_liquidity_exact_in"
+	case 8:
+		opLabel = "claim_liquidity_fees"
+	default:
+		return fmt.Sprintf("cat=true op=unsupported(%d)", transaction.Payload[len("CAT")+1])
+	}
+
+	slot, ok, err := atomicMempoolLiquidityPoolSlot(transaction)
+	liquiditySlot := "none"
+	if err != nil {
+		liquiditySlot = fmt.Sprintf("parse_error=%s", err)
+	} else if ok {
+		liquiditySlot = slot.String()
+	}
+	return fmt.Sprintf("cat=true op=%s liquidity_slot=%s", opLabel, liquiditySlot)
+}
+
 func atomicMempoolLiquidityPoolSlot(transaction *externalapi.DomainTransaction) (atomicMempoolSlot, bool, error) {
 	if transaction == nil || !subnetworks.IsPayload(transaction.SubnetworkID) {
 		return atomicMempoolSlot{}, false, nil

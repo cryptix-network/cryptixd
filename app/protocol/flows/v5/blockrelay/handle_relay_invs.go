@@ -288,7 +288,7 @@ func (flow *handleRelayInvsFlow) start() error {
 			}
 		}
 
-		log.Infof("Inserted block %s via relay (virtual validity pending)", inv.Hash)
+		log.Infof("Submit block %s via RELAY", inv.Hash)
 		err = flow.OnNewBlock(block)
 		if err != nil {
 			return err

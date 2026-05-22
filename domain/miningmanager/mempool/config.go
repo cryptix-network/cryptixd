@@ -14,7 +14,7 @@ const (
 	defaultMaximumTransactionCount = 1_000_000
 
 	defaultTransactionExpireIntervalSeconds     uint64 = 60
-	defaultAtomicTransactionExpireIntervalDAA   uint64 = 60
+	defaultAtomicTransactionExpireIntervalDAA   uint64 = 600
 	defaultTransactionExpireScanIntervalSeconds uint64 = 10
 	defaultOrphanExpireIntervalSeconds          uint64 = 60
 	defaultOrphanExpireScanIntervalSeconds      uint64 = 10

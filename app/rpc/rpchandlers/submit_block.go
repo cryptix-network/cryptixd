@@ -76,7 +76,7 @@ func HandleSubmitBlock(context *rpccontext.Context, _ *router.Router, request ap
 		}, nil
 	}
 
-	log.Infof("Inserted block %s via submitBlock (virtual validity pending)", consensushashing.BlockHash(domainBlock))
+	log.Infof("Submit block %s via LOCAL", consensushashing.BlockHash(domainBlock))
 
 	response := appmessage.NewSubmitBlockResponseMessage()
 	return response, nil

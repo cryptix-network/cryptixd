@@ -66,9 +66,10 @@ func (bl *BlockLogger) LogBlock(block *externalapi.DomainBlock) {
 		headerStr = "header"
 	}
 
+	lastBlockTime := mstime.UnixMilliseconds(block.Header.TimeInMilliseconds()).ToNativeTime().UTC().Format("01/02/2006 15:04:05.000 UTC")
 	log.Infof("Processed %d %s and %d %s in the last %s (%d %s, %s)",
 		bl.receivedLogBlocks, blockStr, bl.receivedLogHeaders, headerStr, truncatedDuration, bl.receivedLogTransactions,
-		txStr, mstime.UnixMilliseconds(block.Header.TimeInMilliseconds()))
+		txStr, lastBlockTime)
 
 	bl.receivedLogBlocks = 0
 	bl.receivedLogHeaders = 0
