@@ -1,6 +1,9 @@
 package rpchandlers
 
 import (
+	"sync"
+	"time"
+
 	"github.com/cryptix-network/cryptixd/app/appmessage"
 	"github.com/cryptix-network/cryptixd/app/rpc/rpccontext"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -10,6 +13,25 @@ import (
 	"github.com/cryptix-network/cryptixd/util"
 	"github.com/cryptix-network/cryptixd/version"
 )
+
+const getBlockTemplateUnsyncedLogInterval = time.Minute
+
+var (
+	getBlockTemplateUnsyncedLogLock sync.Mutex
+	getBlockTemplateUnsyncedLastLog time.Time
+)
+
+func shouldLogGetBlockTemplateUnsynced() bool {
+	now := time.Now()
+	getBlockTemplateUnsyncedLogLock.Lock()
+	defer getBlockTemplateUnsyncedLogLock.Unlock()
+
+	if getBlockTemplateUnsyncedLastLog.IsZero() || now.Sub(getBlockTemplateUnsyncedLastLog) >= getBlockTemplateUnsyncedLogInterval {
+		getBlockTemplateUnsyncedLastLog = now
+		return true
+	}
+	return false
+}
 
 // HandleGetBlockTemplate handles the respectively named RPC command
 func HandleGetBlockTemplate(context *rpccontext.Context, _ *router.Router, request appmessage.Message) (appmessage.Message, error) {
@@ -41,8 +63,10 @@ func HandleGetBlockTemplate(context *rpccontext.Context, _ *router.Router, reque
 		}
 	}
 	if virtualDAAScore >= context.Config.NetParams().PayloadHfActivationDAAScore && !isSynced {
-		log.Warnf("Rejecting getBlockTemplate while node is not nearly synced after payload HF: virtualDAAScore=%d activationDAA=%d allowSubmitBlockWhenNotSynced=%t; mining from a partial Atomic/UTXO view can create blocks with invalid state commitments",
-			virtualDAAScore, context.Config.NetParams().PayloadHfActivationDAAScore, context.Config.AllowSubmitBlockWhenNotSynced)
+		if shouldLogGetBlockTemplateUnsynced() {
+			log.Warnf("Rejecting getBlockTemplate while node is not nearly synced after payload HF: virtualDAAScore=%d activationDAA=%d allowSubmitBlockWhenNotSynced=%t; mining from a partial Atomic/UTXO view can create blocks with invalid state commitments (warning throttled to once per 60s)",
+				virtualDAAScore, context.Config.NetParams().PayloadHfActivationDAAScore, context.Config.AllowSubmitBlockWhenNotSynced)
+		}
 		errorMessage := &appmessage.GetBlockTemplateResponseMessage{}
 		errorMessage.Error = appmessage.RPCErrorf("mining template unavailable: node is not nearly synced after payload hardfork; wait for sync/Atomic catch-up before mining")
 		return errorMessage, nil

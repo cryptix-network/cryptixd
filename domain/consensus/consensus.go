@@ -187,6 +187,11 @@ func (s *consensus) BuildBlockTemplate(coinbaseData *externalapi.DomainCoinbaseD
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
+	err := s.ensureVirtualParentsTemplateSafeNoLock("BuildBlockTemplate")
+	if err != nil {
+		return nil, err
+	}
+
 	block, hasRedReward, err := s.blockBuilder.BuildBlock(coinbaseData, transactions)
 	if err != nil {
 		return nil, err
@@ -203,6 +208,48 @@ func (s *consensus) BuildBlockTemplate(coinbaseData *externalapi.DomainCoinbaseD
 		CoinbaseHasRedReward: hasRedReward,
 		IsNearlySynced:       isNearlySynced,
 	}, nil
+}
+
+func (s *consensus) ensureVirtualParentsTemplateSafeNoLock(caller string) error {
+	stagingArea := model.NewStagingArea()
+	virtualGHOSTDAGData, err := s.ghostdagDataStores[0].Get(s.databaseContext, stagingArea, model.VirtualBlockHash, false)
+	if err != nil {
+		return err
+	}
+
+	virtualSelectedParent := virtualGHOSTDAGData.SelectedParent()
+	if virtualSelectedParent != nil {
+		status, err := s.blockStatusStore.Get(s.databaseContext, stagingArea, virtualSelectedParent)
+		if err != nil {
+			return err
+		}
+		if status != externalapi.StatusUTXOValid {
+			return errors.Errorf("%s refused while virtual selected parent %s has non-UTXO-valid status %s",
+				caller, virtualSelectedParent, status)
+		}
+	}
+
+	virtualParents, err := s.dagTopologyManagers[0].Parents(stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+
+	for _, parent := range virtualParents {
+		if virtualSelectedParent != nil && parent.Equal(virtualSelectedParent) {
+			continue
+		}
+		status, err := s.blockStatusStore.Get(s.databaseContext, stagingArea, parent)
+		if err != nil {
+			return err
+		}
+		if status == externalapi.StatusInvalid ||
+			status == externalapi.StatusDisqualifiedFromChain ||
+			status == externalapi.StatusHeaderOnly {
+			return errors.Errorf("%s refused while virtual merge parent %s has unsafe status %s", caller, parent, status)
+		}
+	}
+
+	return nil
 }
 
 // ValidateAndInsertBlock validates the given block and, if valid, applies it

@@ -29,6 +29,16 @@ func HandleRelayBlockRequests(context RelayBlockRequestsContext, incomingRoute *
 		getRelayBlocksMessage := message.(*appmessage.MsgRequestRelayBlocks)
 		log.Debugf("Got request for relay blocks with hashes %s", getRelayBlocksMessage.Hashes)
 		for _, hash := range getRelayBlocksMessage.Hashes {
+			blockInfo, err := context.Domain().Consensus().GetBlockInfo(hash)
+			if err != nil {
+				return errors.Wrapf(err, "unable to fetch requested block status for hash %s", hash)
+			}
+			if blockInfo.BlockStatus == externalapi.StatusDisqualifiedFromChain || blockInfo.BlockStatus == externalapi.StatusInvalid {
+				log.Warnf("Not serving relay block %s to peer %s because it is not UTXO/Atomic-valid: status=%s",
+					hash, peer, blockInfo.BlockStatus)
+				continue
+			}
+
 			// Fetch the block from the database.
 			block, found, err := context.Domain().Consensus().GetBlock(hash)
 			if err != nil {

@@ -410,6 +410,15 @@ func (flow *handleRelayInvsFlow) processBlock(block *externalapi.DomainBlock) ([
 
 func (flow *handleRelayInvsFlow) relayBlock(block *externalapi.DomainBlock) error {
 	blockHash := consensushashing.BlockHash(block)
+	blockInfo, err := flow.Domain().Consensus().GetBlockInfo(blockHash)
+	if err != nil {
+		return err
+	}
+	if blockInfo.BlockStatus == externalapi.StatusDisqualifiedFromChain || blockInfo.BlockStatus == externalapi.StatusInvalid {
+		log.Warnf("Not relaying block %s because it is not UTXO/Atomic-valid: status=%s", blockHash, blockInfo.BlockStatus)
+		return nil
+	}
+
 	if err := flow.BroadcastBlockProducerClaimsForBlock(blockHash); err != nil {
 		return err
 	}
