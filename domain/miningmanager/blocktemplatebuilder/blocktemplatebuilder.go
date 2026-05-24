@@ -2,24 +2,22 @@ package blocktemplatebuilder
 
 import (
 	"fmt"
-	"strings"
-
-	"github.com/cryptix-network/cryptixd/domain/consensus/processes/coinbasemanager"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
-	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
-	"github.com/cryptix-network/cryptixd/domain/consensusreference"
-	"github.com/cryptix-network/cryptixd/util/mstime"
 	"math"
 	"sort"
-
-	"github.com/cryptix-network/cryptixd/util/difficulty"
+	"strings"
 
 	consensusexternalapi "github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/processes/coinbasemanager"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/transactionhelper"
+	"github.com/cryptix-network/cryptixd/domain/consensusreference"
 	miningmanagerapi "github.com/cryptix-network/cryptixd/domain/miningmanager/model"
 	"github.com/cryptix-network/cryptixd/util"
+	"github.com/cryptix-network/cryptixd/util/difficulty"
+	"github.com/cryptix-network/cryptixd/util/mstime"
 	"github.com/pkg/errors"
 )
 
@@ -130,8 +128,9 @@ func New(consensusReference consensusreference.ConsensusReference, mempool minin
 func (btb *blockTemplateBuilder) BuildBlockTemplate(
 	coinbaseData *consensusexternalapi.DomainCoinbaseData) (*consensusexternalapi.DomainBlockTemplate, error) {
 	var lastInvalidTxsErr ruleerrors.ErrInvalidTransactionsInNewBlock
+	excludedMissingInputTxs := map[consensusexternalapi.DomainTransactionID]struct{}{}
 	for attempt := 0; attempt <= maxBlockTemplateInvalidTransactionRetries; attempt++ {
-		blockTemplate, invalidTxsErr, err := btb.buildBlockTemplateOnce(coinbaseData)
+		blockTemplate, invalidTxsErr, err := btb.buildBlockTemplateOnce(coinbaseData, excludedMissingInputTxs)
 		if err == nil {
 			return blockTemplate, nil
 		}
@@ -140,15 +139,27 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 		}
 
 		lastInvalidTxsErr = *invalidTxsErr
-		log.Warnf(
-			"Block template discarded stale/invalid mempool transaction candidates: attempt=%d/%d invalid_txs=%s; removing from mempool and rebuilding",
-			attempt+1,
-			maxBlockTemplateInvalidTransactionRetries+1,
-			formatInvalidTransactionsForLog(invalidTxsErr),
-		)
-		if removeErr := btb.mempool.RemoveInvalidTransactions(invalidTxsErr); removeErr != nil {
-			log.Warnf("Failed removing stale/invalid block-template transactions from mempool: %+v", removeErr)
-			return nil, removeErr
+		removableInvalidTxs, missingInputTxs := splitTemplateInvalidTransactions(invalidTxsErr, excludedMissingInputTxs)
+
+		if len(missingInputTxs) > 0 {
+			log.Debugf(
+				"Block template skipped missing-input mempool candidates for this template only: attempt=%d/%d txs=%v; keeping them in mempool for orphan/reorg/parallel-template resolution",
+				attempt+1,
+				maxBlockTemplateInvalidTransactionRetries+1,
+				missingInputTxs,
+			)
+		}
+		if len(removableInvalidTxs.InvalidTransactions) > 0 {
+			log.Warnf(
+				"Block template discarded invalid mempool transaction candidates: attempt=%d/%d invalid_txs=%s; removing from mempool and rebuilding",
+				attempt+1,
+				maxBlockTemplateInvalidTransactionRetries+1,
+				formatInvalidTransactionsForLog(removableInvalidTxs),
+			)
+			if removeErr := btb.mempool.RemoveInvalidTransactions(removableInvalidTxs); removeErr != nil {
+				log.Warnf("Failed removing invalid block-template transactions from mempool: %+v", removeErr)
+				return nil, removeErr
+			}
 		}
 	}
 
@@ -159,7 +170,9 @@ func (btb *blockTemplateBuilder) BuildBlockTemplate(
 }
 
 func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
-	coinbaseData *consensusexternalapi.DomainCoinbaseData) (
+	coinbaseData *consensusexternalapi.DomainCoinbaseData,
+	excludedTxIDs map[consensusexternalapi.DomainTransactionID]struct{},
+) (
 	*consensusexternalapi.DomainBlockTemplate,
 	*ruleerrors.ErrInvalidTransactionsInNewBlock,
 	error,
@@ -168,6 +181,9 @@ func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
 	mempoolTransactions := btb.mempool.BlockCandidateTransactions()
 	candidateTxs := make([]*candidateTx, 0, len(mempoolTransactions))
 	for _, tx := range mempoolTransactions {
+		if _, excluded := excludedTxIDs[*consensushashing.TransactionID(tx)]; excluded {
+			continue
+		}
 		// Calculate the tx value
 		gasLimit := uint64(0)
 		if !subnetworks.IsBuiltInOrNative(tx.SubnetworkID) && !subnetworks.IsPayload(tx.SubnetworkID) {
@@ -180,10 +196,10 @@ func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
 			gasLimit:          gasLimit,
 		})
 	}
-	candidatePayloadTxs := countPayloadTransactions(mempoolTransactions)
+	candidatePayloadTxs := countPayloadCandidateTransactions(candidateTxs)
 	if candidatePayloadTxs > 0 {
-		log.Infof("Block template sees payload/CAT candidates: total_candidates=%d payload_candidates=%d",
-			len(mempoolTransactions), candidatePayloadTxs)
+		log.Debugf("Block template sees payload/CAT candidates: total_candidates=%d payload_candidates=%d",
+			len(candidateTxs), candidatePayloadTxs)
 	}
 
 	// Sort the candidate txs by subnetworkID.
@@ -199,9 +215,9 @@ func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
 	if candidatePayloadTxs > 0 {
 		if selectedPayloadTxs == 0 {
 			log.Warnf("Block template did not select any payload/CAT candidates: total_candidates=%d payload_candidates=%d total_selected=%d",
-				len(mempoolTransactions), candidatePayloadTxs, len(blockTxs.selectedTxs))
+				len(candidateTxs), candidatePayloadTxs, len(blockTxs.selectedTxs))
 		} else {
-			log.Infof("Block template selected payload/CAT transactions: payload_selected=%d total_selected=%d txs=%v",
+			log.Debugf("Block template selected payload/CAT transactions: payload_selected=%d total_selected=%d txs=%v",
 				selectedPayloadTxs, len(blockTxs.selectedTxs), payloadTransactionIDs(blockTxs.selectedTxs))
 		}
 	}
@@ -222,6 +238,38 @@ func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
 	return blockTemplate, nil, nil
 }
 
+func splitTemplateInvalidTransactions(
+	invalidTxsErr *ruleerrors.ErrInvalidTransactionsInNewBlock,
+	excludedMissingInputTxs map[consensusexternalapi.DomainTransactionID]struct{},
+) (*ruleerrors.ErrInvalidTransactionsInNewBlock, []string) {
+	removableInvalidTxs := &ruleerrors.ErrInvalidTransactionsInNewBlock{}
+	missingInputTxs := make([]string, 0)
+	if invalidTxsErr == nil {
+		return removableInvalidTxs, missingInputTxs
+	}
+
+	for _, invalidTx := range invalidTxsErr.InvalidTransactions {
+		if invalidTx.Transaction == nil {
+			removableInvalidTxs.InvalidTransactions = append(removableInvalidTxs.InvalidTransactions, invalidTx)
+			continue
+		}
+
+		txID := consensushashing.TransactionID(invalidTx.Transaction)
+		var missingTxOut ruleerrors.ErrMissingTxOut
+		if errors.As(invalidTx.Error, &missingTxOut) {
+			if excludedMissingInputTxs != nil {
+				excludedMissingInputTxs[*txID] = struct{}{}
+			}
+			missingInputTxs = append(missingInputTxs, txID.String())
+			continue
+		}
+
+		removableInvalidTxs.InvalidTransactions = append(removableInvalidTxs.InvalidTransactions, invalidTx)
+	}
+
+	return removableInvalidTxs, missingInputTxs
+}
+
 func formatInvalidTransactionsForLog(err *ruleerrors.ErrInvalidTransactionsInNewBlock) string {
 	if err == nil || len(err.InvalidTransactions) == 0 {
 		return "[]"
@@ -238,6 +286,16 @@ func formatInvalidTransactionsForLog(err *ruleerrors.ErrInvalidTransactionsInNew
 }
 
 func countPayloadTransactions(txs []*consensusexternalapi.DomainTransaction) int {
+	count := 0
+	for _, tx := range txs {
+		if subnetworks.IsPayload(tx.SubnetworkID) && len(tx.Payload) > 0 {
+			count++
+		}
+	}
+	return count
+}
+
+func countPayloadCandidateTransactions(txs []*candidateTx) int {
 	count := 0
 	for _, tx := range txs {
 		if subnetworks.IsPayload(tx.SubnetworkID) && len(tx.Payload) > 0 {

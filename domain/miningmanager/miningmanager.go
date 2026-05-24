@@ -82,7 +82,7 @@ func (mm *miningManager) GetBlockTemplate(coinbaseData *externalapi.DomainCoinba
 	// Cache the built template
 	mm.setImmutableCachedTemplate(blockTemplate)
 	if payloadCount := countTemplatePayloadTransactions(blockTemplate.Block); payloadCount > 0 {
-		log.Infof("Built new block template with payload/CAT transactions: payload_txs=%d total_txs=%d is_nearly_synced=%t",
+		log.Debugf("Built new block template with payload/CAT transactions: payload_txs=%d total_txs=%d is_nearly_synced=%t",
 			payloadCount, len(blockTemplate.Block.Transactions), blockTemplate.IsNearlySynced)
 	}
 	return blockTemplate.Block, blockTemplate.IsNearlySynced, nil

@@ -416,6 +416,8 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 		}
 		supplyMode := payloadSupplyModeToState(op.SupplyMode)
 		totalSupply := Uint128{}
+		var initialMintKey *BalanceKey
+		var initialMintBalance Uint128
 		if !op.InitialMintAmount.IsZero() {
 			if supplyMode == SupplyModeCapped && op.InitialMintAmount.Compare(op.MaxSupply) > 0 {
 				return fmt.Errorf("initial mint exceeds cap for asset `%x`", assetID)
@@ -425,10 +427,11 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 			if !ok {
 				return fmt.Errorf("balance overflow while create-and-mint asset `%x`", assetID)
 			}
-			state.Balances[key] = receiverAfter
+			initialMintKey = &key
+			initialMintBalance = receiverAfter
 			totalSupply = op.InitialMintAmount
 		}
-		return insertAssetState(state, assetID, AssetState{
+		if err := insertAssetState(state, assetID, AssetState{
 			CreatorOwnerID:       ownerID,
 			AssetClass:           AssetClassStandard,
 			TokenVersion:         op.TokenVersion,
@@ -445,7 +448,13 @@ func applyOp(tx *externalapi.DomainTransaction, txIDBytes [externalapi.DomainHas
 			CreatedDAAScore:      creationContext.createdDAAScore(),
 			CreatedAt:            creationContext.createdAt(),
 			Liquidity:            nil,
-		})
+		}); err != nil {
+			return err
+		}
+		if initialMintKey != nil {
+			state.Balances[*initialMintKey] = initialMintBalance
+		}
+		return nil
 
 	case CreateLiquidityAssetOp:
 		return applyCreateLiquidityAsset(tx, txIDBytes, ownerID, op, creationContext, state)
@@ -605,6 +614,8 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	}
 	unclaimedFeeTotalSompi := uint64(0)
 	totalSupply := Uint128{}
+	var launchReceiverKey *BalanceKey
+	var launchReceiverBalance Uint128
 	if op.LaunchBuySompi > 0 {
 		feeTrade, err := calculateTradeFee(op.LaunchBuySompi, op.FeeBPS)
 		if err != nil {
@@ -648,7 +659,8 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 		if !ok {
 			return fmt.Errorf("balance overflow while launch-buy minting liquidity asset `%x`", assetID)
 		}
-		state.Balances[receiverKey] = receiverAfter
+		launchReceiverKey = &receiverKey
+		launchReceiverBalance = receiverAfter
 	}
 
 	txID := consensushashing.TransactionID(tx)
@@ -694,7 +706,13 @@ func applyCreateLiquidityAsset(tx *externalapi.DomainTransaction, assetID, owner
 	if err := validateLiquidityInvariants(assetID, asset); err != nil {
 		return err
 	}
-	return insertAssetState(state, assetID, asset)
+	if err := insertAssetState(state, assetID, asset); err != nil {
+		return err
+	}
+	if launchReceiverKey != nil {
+		state.Balances[*launchReceiverKey] = launchReceiverBalance
+	}
+	return nil
 }
 
 func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [externalapi.DomainHashSize]byte, op BuyLiquidityExactInOp, state *State) error {
@@ -771,7 +789,6 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 	if !ok {
 		return fmt.Errorf("receiver balance overflow while buying liquidity asset `%x`", op.AssetID)
 	}
-	state.Balances[receiverKey] = receiverAfter
 	totalSupply, ok := asset.TotalSupply.Add(tokenOut)
 	if !ok {
 		return fmt.Errorf("total_supply overflow while buying liquidity asset `%x`", op.AssetID)
@@ -781,7 +798,11 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 	if err := validateLiquidityInvariants(op.AssetID, asset); err != nil {
 		return err
 	}
-	return insertAssetState(state, op.AssetID, asset)
+	if err := insertAssetState(state, op.AssetID, asset); err != nil {
+		return err
+	}
+	state.Balances[receiverKey] = receiverAfter
+	return nil
 }
 
 func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [externalapi.DomainHashSize]byte, op SellLiquidityExactInOp, state *State) error {
@@ -861,17 +882,20 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 	}
 	pool.PoolNonce++
 
-	if senderAfter.IsZero() {
-		delete(state.Balances, senderKey)
-	} else {
-		state.Balances[senderKey] = senderAfter
-	}
 	asset.TotalSupply = supplyAfter
 	asset.Liquidity = &pool
 	if err := validateLiquidityInvariants(op.AssetID, asset); err != nil {
 		return err
 	}
-	return insertAssetState(state, op.AssetID, asset)
+	if err := insertAssetState(state, op.AssetID, asset); err != nil {
+		return err
+	}
+	if senderAfter.IsZero() {
+		delete(state.Balances, senderKey)
+	} else {
+		state.Balances[senderKey] = senderAfter
+	}
+	return nil
 }
 
 func applyClaimLiquidityFees(tx *externalapi.DomainTransaction, ownerID [externalapi.DomainHashSize]byte, op ClaimLiquidityFeesOp, state *State) error {

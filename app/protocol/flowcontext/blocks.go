@@ -198,11 +198,11 @@ func (f *FlowContext) AddBlock(block *externalapi.DomainBlock) error {
 		return protocolerrors.Errorf(false, "submitted block %s is not UTXO-valid after insertion: status=%s", blockHash, blockInfo.BlockStatus)
 	}
 
-	err = f.OnNewBlockTemplate()
+	err = f.OnNewBlock(block)
 	if err != nil {
 		return err
 	}
-	err = f.OnNewBlock(block)
+	err = f.OnNewBlockTemplate()
 	if err != nil {
 		return err
 	}

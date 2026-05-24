@@ -280,18 +280,18 @@ func (flow *handleRelayInvsFlow) start() error {
 			}
 		}
 
+		log.Infof("Submit block %s via RELAY", inv.Hash)
+		err = flow.OnNewBlock(block)
+		if err != nil {
+			return err
+		}
+
 		if virtualHasNewParents {
 			log.Debugf("Virtual %d has new parents, raising new block template event", newVirtualInfo.DAAScore)
 			err = flow.OnNewBlockTemplate()
 			if err != nil {
 				return err
 			}
-		}
-
-		log.Infof("Submit block %s via RELAY", inv.Hash)
-		err = flow.OnNewBlock(block)
-		if err != nil {
-			return err
 		}
 	}
 }

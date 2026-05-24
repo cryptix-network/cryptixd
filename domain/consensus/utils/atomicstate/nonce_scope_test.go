@@ -292,6 +292,99 @@ func TestLiquidityVaultOutpointMismatchDoesNotMutateState(t *testing.T) {
 	}
 }
 
+func TestRejectedLiquidityBuyDoesNotPartiallyMintBalance(t *testing.T) {
+	ownerScript := testOwnerScript(0xAA)
+	ownerID := mustOwnerIDFromScript(t, ownerScript)
+	assetID := bytes32(0x1A)
+	vaultTxID := externalapi.NewDomainTransactionIDFromByteArray(&[externalapi.DomainHashSize]byte{0xAB})
+	vaultOutpoint := *externalapi.NewDomainOutpoint(vaultTxID, 0)
+	maxUint128 := Uint128{Lo: math.MaxUint64, Hi: math.MaxUint64}
+	realTokenReserves := Uint128FromUint64(1_000_000)
+	virtualCPayReserves := uint64(1_000_000)
+	virtualTokenReserves := Uint128FromUint64(1_000_000)
+	feeBPS := uint16(0)
+	quoteGrossIn := uint64(10_000)
+	tokenOut, _, _, _, err := cpmmBuy(realTokenReserves, virtualCPayReserves, virtualTokenReserves, quoteGrossIn)
+	if err != nil {
+		t.Fatalf("cpmmBuy: %v", err)
+	}
+	if tokenOut.IsZero() {
+		t.Fatalf("test setup expected non-zero tokenOut")
+	}
+	canonicalIn, err := minGrossInputForTokenOut(realTokenReserves, virtualCPayReserves, virtualTokenReserves, tokenOut, feeBPS)
+	if err != nil {
+		t.Fatalf("minGrossInputForTokenOut: %v", err)
+	}
+
+	state := NewState()
+	state.AnchorCounts[ownerID] = 1
+	state.Assets[assetID] = AssetState{
+		AssetClass:  AssetClassLiquidity,
+		TotalSupply: maxUint128,
+		MaxSupply:   maxUint128,
+		Liquidity: &LiquidityPoolState{
+			PoolNonce:             1,
+			RealCPayReservesSompi: 1_000,
+			RealTokenReserves:     realTokenReserves,
+			VirtualCPayReserves:   virtualCPayReserves,
+			VirtualTokenReserves:  virtualTokenReserves,
+			FeeBPS:                feeBPS,
+			VaultOutpoint:         vaultOutpoint,
+			VaultValueSompi:       1_000,
+			Unlocked:              true,
+		},
+	}
+	state.RebuildLiquidityVaultOutpointIndex()
+
+	tx := testLiquidityBuyTxWithVaultInput(ownerScript, 0x0A, assetID, vaultOutpoint, 1_000, 1_000+canonicalIn)
+	err = ValidateAndApplyTransaction(tx, 1, 0, state)
+	if err == nil || !strings.Contains(err.Error(), "total_supply overflow") {
+		t.Fatalf("overflowing buy got error %v, want total_supply overflow", err)
+	}
+	if balance := state.Balances[BalanceKey{AssetID: assetID, OwnerID: ownerID}]; !balance.IsZero() {
+		t.Fatalf("rejected buy partially minted balance %s", balance.Big())
+	}
+	pool := state.Assets[assetID].Liquidity
+	if pool.PoolNonce != 1 || !pool.VaultOutpoint.Equal(&vaultOutpoint) || pool.VaultValueSompi != 1_000 {
+		t.Fatalf("rejected buy mutated pool: nonce=%d vault=%s value=%d", pool.PoolNonce, pool.VaultOutpoint, pool.VaultValueSompi)
+	}
+}
+
+func TestRejectedCreateAssetWithMintDoesNotLeavePartialAsset(t *testing.T) {
+	ownerScript := testOwnerScript(0xAC)
+	ownerID := mustOwnerIDFromScript(t, ownerScript)
+	receiverID := bytes32(0xAD)
+	state := NewState()
+	state.AnchorCounts[ownerID] = 1
+
+	payload := testCreateAssetWithMintPayload(
+		1,
+		8,
+		PayloadSupplyModeCapped,
+		Uint128FromUint64(100),
+		ownerID,
+		[]byte("Cap"),
+		[]byte("CAP"),
+		nil,
+		nil,
+		Uint128FromUint64(101),
+		receiverID,
+	)
+	tx := testTransferTx(ownerScript, 0x0B, payload)
+	err := ValidateAndApplyTransaction(tx, 1, 0, state)
+	if err == nil || !strings.Contains(err.Error(), "initial mint exceeds cap") {
+		t.Fatalf("create-mint over cap got error %v, want cap rejection", err)
+	}
+
+	assetID := *consensushashing.TransactionID(tx).ByteArray()
+	if _, ok := state.Assets[assetID]; ok {
+		t.Fatalf("rejected create-mint created partial asset")
+	}
+	if balance := state.Balances[BalanceKey{AssetID: assetID, OwnerID: receiverID}]; !balance.IsZero() {
+		t.Fatalf("rejected create-mint partially minted balance %s", balance.Big())
+	}
+}
+
 func testTransferState(ownerID [externalapi.DomainHashSize]byte, assetID [externalapi.DomainHashSize]byte, balance uint64) *State {
 	state := NewState()
 	state.AnchorCounts[ownerID] = 1
@@ -349,6 +442,32 @@ func testCreateAssetPayload(nonce uint64, decimals byte, supplyMode PayloadSuppl
 	payload = append(payload, name...)
 	payload = append(payload, symbol...)
 	payload = append(payload, metadata...)
+	if platformTag != nil {
+		payload = append(payload, byte(len(platformTag)))
+		payload = append(payload, platformTag...)
+	}
+	return payload
+}
+
+func testCreateAssetWithMintPayload(nonce uint64, decimals byte, supplyMode PayloadSupplyMode, maxSupply Uint128,
+	mintAuthorityOwnerID [externalapi.DomainHashSize]byte, name, symbol, metadata, platformTag []byte,
+	initialMintAmount Uint128, initialMintToOwnerID [externalapi.DomainHashSize]byte) []byte {
+
+	payload := testPayloadHeader(4, nonce)
+	payload = append(payload, currentTokenVersion, decimals, byte(supplyMode))
+	maxSupplyBytes := maxSupply.ToLE()
+	payload = append(payload, maxSupplyBytes[:]...)
+	payload = append(payload, mintAuthorityOwnerID[:]...)
+	payload = append(payload, byte(len(name)), byte(len(symbol)))
+	var metadataLen [2]byte
+	binary.LittleEndian.PutUint16(metadataLen[:], uint16(len(metadata)))
+	payload = append(payload, metadataLen[:]...)
+	payload = append(payload, name...)
+	payload = append(payload, symbol...)
+	payload = append(payload, metadata...)
+	initialMintBytes := initialMintAmount.ToLE()
+	payload = append(payload, initialMintBytes[:]...)
+	payload = append(payload, initialMintToOwnerID[:]...)
 	if platformTag != nil {
 		payload = append(payload, byte(len(platformTag)))
 		payload = append(payload, platformTag...)

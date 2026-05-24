@@ -95,7 +95,7 @@ func (flow *handleRelayedTransactionsFlow) requestInvTransactions(
 		return idsToRequest, nil
 	}
 
-	log.Infof("Requesting relayed transactions: requested=%d inv_count=%d", len(idsToRequest), len(inv.TxIDs))
+	log.Debugf("Requesting relayed transactions: requested=%d inv_count=%d", len(idsToRequest), len(inv.TxIDs))
 	msgGetTransactions := appmessage.NewMsgRequestTransactions(idsToRequest)
 	err = flow.outgoingRoute.Enqueue(msgGetTransactions)
 	if err != nil {
@@ -190,7 +190,7 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 		}
 		catSummary, isCAT := describeCATTransaction(tx)
 		if isCAT {
-			log.Infof("Received relayed CAT transaction: tx=%s %s inputs=%d outputs=%d",
+			log.Debugf("Received relayed CAT transaction: tx=%s %s inputs=%d outputs=%d",
 				txID, catSummary, len(tx.Inputs), len(tx.Outputs))
 		}
 
@@ -225,14 +225,14 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 				_, isOrphan, found := flow.Domain().MiningManager().GetTransaction(txID, true, true)
 				switch {
 				case found && isOrphan:
-					log.Infof("Relayed CAT transaction deferred in orphan pool: tx=%s %s tx_pool=%d orphan_pool=%d",
+					log.Debugf("Relayed CAT transaction deferred in orphan pool: tx=%s %s tx_pool=%d orphan_pool=%d",
 						txID,
 						catSummary,
 						flow.Domain().MiningManager().TransactionCount(true, false),
 						flow.Domain().MiningManager().TransactionCount(false, true),
 					)
 				case found:
-					log.Infof("Relayed CAT transaction already known in mempool: tx=%s %s tx_pool=%d orphan_pool=%d",
+					log.Debugf("Relayed CAT transaction already known in mempool: tx=%s %s tx_pool=%d orphan_pool=%d",
 						txID,
 						catSummary,
 						flow.Domain().MiningManager().TransactionCount(true, false),
@@ -250,7 +250,7 @@ func (flow *handleRelayedTransactionsFlow) receiveTransactions(requestedTransact
 			continue
 		}
 		if isCAT {
-			log.Infof("Accepted relayed CAT transaction into mempool: tx=%s %s accepted_total=%d",
+			log.Debugf("Accepted relayed CAT transaction into mempool: tx=%s %s accepted_total=%d",
 				txID, catSummary, len(acceptedTransactions))
 		} else {
 			log.Debugf("Accepted relayed transaction %s into mempool (%d total accepted including unorphaned)",

@@ -24,7 +24,7 @@ func (f *FlowContext) AddTransaction(tx *externalapi.DomainTransaction, allowOrp
 
 	if len(acceptedTransactions) > 0 {
 		if catSummary, isCAT := describeCATTransaction(tx); isCAT {
-			log.Infof("Accepted local CAT transaction into mempool: tx=%s %s accepted_total=%d",
+			log.Debugf("Accepted local CAT transaction into mempool: tx=%s %s accepted_total=%d",
 				consensushashing.TransactionID(tx), catSummary, len(acceptedTransactions))
 		}
 		f.OnTransactionAddedToMempool()
@@ -49,7 +49,7 @@ func (f *FlowContext) SharedRequestedTransactions() *SharedRequestedTransactions
 // has been added to the mempool
 func (f *FlowContext) OnTransactionAddedToMempool() {
 	f.Domain().MiningManager().ClearBlockTemplate()
-	log.Infof("Mempool changed: cleared cached block template (tx_pool=%d orphan_pool=%d)",
+	log.Debugf("Mempool changed: cleared cached block template (tx_pool=%d orphan_pool=%d)",
 		f.Domain().MiningManager().TransactionCount(true, false),
 		f.Domain().MiningManager().TransactionCount(false, true))
 	if f.onTransactionAddedToMempoolHandler != nil {

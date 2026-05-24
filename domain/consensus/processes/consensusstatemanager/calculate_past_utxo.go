@@ -357,7 +357,7 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 			if parseErr == nil && parsedPayload != nil {
 				stateRoot := accumulatedAtomicState.CanonicalHash()
 				growthUsed := atomicGrowth.Used()
-				atomicLog.Infof("Atomic transaction accepted: tx=%s block=%s daa=%d op=%T root=%x "+
+				atomicLog.Debugf("Atomic transaction accepted: tx=%s block=%s daa=%d op=%T root=%x "+
 					"block_growth_assets=%d block_growth_balances=%d block_growth_nonces=%d block_growth_pools=%d block_growth_anchor_owners=%d",
 					transactionID,
 					blockHash,
