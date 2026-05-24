@@ -30,6 +30,7 @@ type Consensus interface {
 	GetAtomicStateHash(blockHash *DomainHash) ([DomainHashSize]byte, bool, error)
 	GetAtomicTokenStateHash(blockHash *DomainHash) ([DomainHashSize]byte, bool, error)
 	GetAtomicTokenStateHashAvailability(blockHash *DomainHash) (bool, string, error)
+	IsStoredBlockUTXOCommitmentValid(blockHash *DomainHash) (bool, string, error)
 	GetVirtualUTXOs(expectedVirtualParents []*DomainHash, fromOutpoint *DomainOutpoint, limit int) ([]*OutpointAndUTXOEntryPair, error)
 	PruningPoint() (*DomainHash, error)
 	PruningPointHeaders() ([]BlockHeader, error)

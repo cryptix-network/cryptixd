@@ -502,8 +502,9 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		lock:            &sync.Mutex{},
 		databaseContext: dbManager,
 
-		genesisBlock: config.GenesisBlock,
-		genesisHash:  config.GenesisHash,
+		genesisBlock:                config.GenesisBlock,
+		genesisHash:                 config.GenesisHash,
+		payloadHfActivationDAAScore: config.PayloadHfActivationDAAScore,
 
 		expectedDAAWindowDurationInMilliseconds: config.TargetTimePerBlock.Milliseconds() *
 			int64(config.DifficultyAdjustmentWindowSize),

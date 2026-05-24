@@ -194,9 +194,18 @@ func (flow *handleIBDFlow) runIBDIfNotRunning(block *externalapi.DomainBlock) er
 	// Note: this operation can be slightly optimized to avoid the full chain search since relay block
 	// is in syncer virtual mergeset which has bounded size.
 	if relayBlockInfo.BlockStatus == externalapi.StatusHeaderOnly {
-		err = flow.syncMissingBlockBodies(relayBlockHash)
+		isRelayBlockOnSyncerSelectedChain, err := flow.Domain().Consensus().IsInSelectedParentChainOf(relayBlockHash, syncerHeaderSelectedTipHash)
 		if err != nil {
 			return err
+		}
+		if isRelayBlockOnSyncerSelectedChain {
+			err = flow.syncMissingBlockBodies(relayBlockHash)
+			if err != nil {
+				return err
+			}
+		} else {
+			log.Infof("Skipping IBD relay-block body sync for %s because it is outside the source-safe selected chain tip %s",
+				relayBlockHash, syncerHeaderSelectedTipHash)
 		}
 	}
 
@@ -242,8 +251,13 @@ func (flow *handleIBDFlow) negotiateMissingSyncerChainSegment() (*externalapi.Do
 				return nil, nil, err
 			}
 			if info.Exists {
-				if info.BlockStatus == externalapi.StatusInvalid {
-					return nil, nil, protocolerrors.Errorf(true, "Sent invalid chain block %s", syncerChainHash)
+				unsafe, reason, err := isUnsafeIBDBlock(flow.Domain().Consensus(), syncerChainHash, info)
+				if err != nil {
+					return nil, nil, err
+				}
+				if unsafe {
+					return nil, nil, protocolerrors.Errorf(true, "Sent unsafe chain block %s: %s",
+						syncerChainHash, reason)
 				}
 
 				isPruningPointOnSyncerChain, err := flow.Domain().Consensus().IsInSelectedParentChainOf(pruningPoint, syncerChainHash)
@@ -516,6 +530,20 @@ func (flow *handleIBDFlow) syncMissingRelayPast(consensus externalapi.Consensus,
 	if !relayBlockInfo.Exists {
 		return protocolerrors.Errorf(true, "did not receive "+
 			"relayBlockHash block %s from peer %s during block download", relayBlockHash, flow.peer)
+	}
+	if isUnsafeIBDStatus(relayBlockInfo.BlockStatus) {
+		return protocolerrors.Errorf(true, "relayBlockHash block %s from peer %s is unsafe after block download: status=%s",
+			relayBlockHash, flow.peer, relayBlockInfo.BlockStatus)
+	}
+	if relayBlockInfo.HasBody() {
+		unsafe, reason, err := isUnsafeIBDBlock(consensus, relayBlockHash, relayBlockInfo)
+		if err != nil {
+			return err
+		}
+		if unsafe {
+			return protocolerrors.Errorf(true, "relayBlockHash block %s from peer %s is unsafe after block download: %s",
+				relayBlockHash, flow.peer, reason)
+		}
 	}
 	return nil
 }
@@ -791,6 +819,18 @@ func (flow *handleIBDFlow) syncMissingBlockBodies(highHash *externalapi.DomainHa
 			err = flow.Domain().Consensus().ValidateAndInsertBlock(block, updateVirtual)
 			if err != nil {
 				if errors.Is(err, ruleerrors.ErrDuplicateBlock) {
+					blockInfo, infoErr := flow.Domain().Consensus().GetBlockInfo(blockHash)
+					if infoErr != nil {
+						return infoErr
+					}
+					unsafe, reason, infoErr := isUnsafeIBDBlock(flow.Domain().Consensus(), blockHash, blockInfo)
+					if infoErr != nil {
+						return infoErr
+					}
+					if unsafe {
+						return protocolerrors.Errorf(true, "duplicate IBD block %s is unsafe locally: %s",
+							blockHash, reason)
+					}
 					log.Debugf("Skipping IBD Block %s as it has already been added to the DAG", blockHash)
 					continue
 				}
@@ -798,6 +838,18 @@ func (flow *handleIBDFlow) syncMissingBlockBodies(highHash *externalapi.DomainHa
 					return protocolerrors.Errorf(false, "IBD cannot validate block %s because local UTXO diff data is incomplete: %s", blockHash, err)
 				}
 				return protocolerrors.ConvertToBanningProtocolErrorIfRuleError(err, "invalid block %s", blockHash)
+			}
+			blockInfo, err := flow.Domain().Consensus().GetBlockInfo(blockHash)
+			if err != nil {
+				return err
+			}
+			unsafe, reason, err := isUnsafeIBDBlock(flow.Domain().Consensus(), blockHash, blockInfo)
+			if err != nil {
+				return err
+			}
+			if unsafe {
+				return protocolerrors.Errorf(true, "IBD block %s is unsafe after insertion: %s",
+					blockHash, reason)
 			}
 			err = flow.OnNewBlock(block)
 			if err != nil {

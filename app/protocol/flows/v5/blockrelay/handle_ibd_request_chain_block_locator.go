@@ -42,12 +42,19 @@ func (flow *handleRequestIBDChainBlockLocatorFlow) start() error {
 
 		var locator externalapi.BlockLocator
 		if highHash == nil || lowHash == nil {
-			locator, err = flow.Domain().Consensus().CreateFullHeadersSelectedChainBlockLocator()
+			locator, err = flow.createFullSafeIBDChainBlockLocator()
 		} else {
-			locator, err = flow.Domain().Consensus().CreateHeadersSelectedChainBlockLocator(lowHash, highHash)
-			if errors.Is(model.ErrBlockNotInSelectedParentChain, err) {
-				// The chain has been modified, signal it by sending an empty locator
+			if flow.isUnsafeLocatorBound(highHash) || flow.isUnsafeLocatorBound(lowHash) {
+				// The peer is zooming into a range which this node can no longer serve safely.
+				// An empty locator makes the syncee restart negotiation and request the full
+				// safe locator again, where we will advertise the last commitment-safe chain tip.
 				locator, err = externalapi.BlockLocator{}, nil
+			} else {
+				locator, err = flow.Domain().Consensus().CreateHeadersSelectedChainBlockLocator(lowHash, highHash)
+				if errors.Is(model.ErrBlockNotInSelectedParentChain, err) {
+					// The chain has been modified, signal it by sending an empty locator
+					locator, err = externalapi.BlockLocator{}, nil
+				}
 			}
 		}
 
@@ -62,6 +69,80 @@ func (flow *handleRequestIBDChainBlockLocatorFlow) start() error {
 			return err
 		}
 	}
+}
+
+func (flow *handleRequestIBDChainBlockLocatorFlow) createFullSafeIBDChainBlockLocator() (externalapi.BlockLocator, error) {
+	pruningPoint, err := flow.Domain().Consensus().PruningPoint()
+	if err != nil {
+		return nil, err
+	}
+
+	virtualSelectedParent, err := flow.Domain().Consensus().GetVirtualSelectedParent()
+	if err != nil {
+		return nil, err
+	}
+
+	safeTip, walkedBack, err := flow.highestSafeSelectedChainBlock(virtualSelectedParent, pruningPoint)
+	if err != nil {
+		return nil, err
+	}
+	if walkedBack > 0 {
+		log.Warnf("IBD chain locator recovered to last safe selected-chain block %s after walking back %d block(s) from virtual selected parent %s",
+			safeTip, walkedBack, virtualSelectedParent)
+	}
+
+	// For IBD we must advertise the chain that is UTXO/Atomic-valid locally. The headers
+	// selected tip can temporarily or historically point through a disqualified branch.
+	return flow.Domain().Consensus().CreateHeadersSelectedChainBlockLocator(pruningPoint, safeTip)
+}
+
+func (flow *handleRequestIBDChainBlockLocatorFlow) highestSafeSelectedChainBlock(
+	startHash *externalapi.DomainHash, floorHash *externalapi.DomainHash) (*externalapi.DomainHash, int, error) {
+	current := startHash
+	walkedBack := 0
+	for {
+		blockInfo, err := flow.Domain().Consensus().GetBlockInfo(current)
+		if err != nil {
+			return nil, 0, err
+		}
+		safe, reason, err := isSafeIBDSourceBlock(flow.Domain().Consensus(), current, blockInfo)
+		if err != nil {
+			return nil, 0, err
+		}
+		if safe {
+			return current, walkedBack, nil
+		}
+
+		log.Warnf("IBD chain locator skipping non-source-safe selected-chain block %s: %s", current, reason)
+		if current.Equal(floorHash) {
+			return nil, walkedBack, protocolerrors.Errorf(false, "IBD safe locator reached pruning point %s but it is not source-safe: %s",
+				current, reason)
+		}
+		if blockInfo.SelectedParent == nil || blockInfo.SelectedParent.Equal(current) {
+			return nil, walkedBack, protocolerrors.Errorf(false, "IBD safe locator cannot walk back from non-source-safe block %s: selected parent unavailable",
+				current)
+		}
+		current = blockInfo.SelectedParent
+		walkedBack++
+	}
+}
+
+func (flow *handleRequestIBDChainBlockLocatorFlow) isUnsafeLocatorBound(hash *externalapi.DomainHash) bool {
+	blockInfo, err := flow.Domain().Consensus().GetBlockInfo(hash)
+	if err != nil {
+		log.Warnf("IBD chain locator failed to inspect bound %s: %s", hash, err)
+		return true
+	}
+	safe, reason, err := isSafeIBDSourceBlock(flow.Domain().Consensus(), hash, blockInfo)
+	if err != nil {
+		log.Warnf("IBD chain locator failed to validate bound %s: %s", hash, err)
+		return true
+	}
+	if !safe {
+		log.Warnf("IBD chain locator refusing non-source-safe zoom bound %s: %s", hash, reason)
+		return true
+	}
+	return false
 }
 
 func (flow *handleRequestIBDChainBlockLocatorFlow) receiveRequestIBDChainBlockLocator() (

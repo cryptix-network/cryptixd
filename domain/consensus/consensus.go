@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -20,8 +21,9 @@ type consensus struct {
 	lock            *sync.Mutex
 	databaseContext model.DBManager
 
-	genesisBlock *externalapi.DomainBlock
-	genesisHash  *externalapi.DomainHash
+	genesisBlock                *externalapi.DomainBlock
+	genesisHash                 *externalapi.DomainHash
+	payloadHfActivationDAAScore uint64
 
 	expectedDAAWindowDurationInMilliseconds int64
 
@@ -703,6 +705,64 @@ func (s *consensus) GetAtomicStateHash(blockHash *externalapi.DomainHash) ([exte
 		return [externalapi.DomainHashSize]byte{}, false, err
 	}
 	return atomicState.CanonicalHash(), true, nil
+}
+
+func (s *consensus) IsStoredBlockUTXOCommitmentValid(blockHash *externalapi.DomainHash) (bool, string, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	stagingArea := model.NewStagingArea()
+	status, err := s.blockStatusStore.Get(s.databaseContext, stagingArea, blockHash)
+	if database.IsNotFoundError(err) {
+		return false, fmt.Sprintf("block %s does not exist", blockHash), nil
+	}
+	if err != nil {
+		return false, "", err
+	}
+	if status == externalapi.StatusInvalid ||
+		status == externalapi.StatusDisqualifiedFromChain ||
+		status == externalapi.StatusHeaderOnly {
+		return false, fmt.Sprintf("status=%s", status), nil
+	}
+	if blockHash.Equal(s.genesisHash) {
+		return true, "", nil
+	}
+
+	header, err := s.blockHeaderStore.BlockHeader(s.databaseContext, stagingArea, blockHash)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return false, "missing header", nil
+		}
+		return false, "", err
+	}
+	storedMultiset, err := s.multisetStore.Get(s.databaseContext, stagingArea, blockHash)
+	if err != nil {
+		if database.IsNotFoundError(err) {
+			return false, "missing stored UTXO multiset", nil
+		}
+		return false, "", err
+	}
+
+	payloadHFActive := header.DAAScore() >= s.payloadHfActivationDAAScore
+	var atomicStateHash [externalapi.DomainHashSize]byte
+	if payloadHFActive {
+		atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, blockHash)
+		if err != nil {
+			if database.IsNotFoundError(err) {
+				return false, "missing stored Atomic state", nil
+			}
+			return false, "", err
+		}
+		atomicStateHash = atomicState.CanonicalHash()
+	}
+
+	rawUTXOCommitment := storedMultiset.Hash()
+	expectedCommitment := atomicstate.HeaderCommitment(rawUTXOCommitment, atomicStateHash, payloadHFActive)
+	if !header.UTXOCommitment().Equal(expectedCommitment) {
+		return false, fmt.Sprintf("stored commitment mismatch: header=%s raw_utxo=%s expected=%s payload_hf_active=%t",
+			header.UTXOCommitment(), rawUTXOCommitment, expectedCommitment, payloadHFActive), nil
+	}
+	return true, "", nil
 }
 
 func (s *consensus) GetAtomicTokenStateHash(blockHash *externalapi.DomainHash) ([externalapi.DomainHashSize]byte, bool, error) {

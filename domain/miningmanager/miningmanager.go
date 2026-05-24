@@ -96,19 +96,18 @@ func (mm *miningManager) ClearBlockTemplate() {
 }
 
 func (mm *miningManager) getImmutableCachedTemplate() *externalapi.DomainBlockTemplate {
-	if time.Since(mm.cachingTime) > time.Second {
-		// No point in cache optimizations if queries are more than a second apart -- we prefer rechecking the mempool.
-		// Full explanation: On the one hand this is a sub-millisecond optimization, so there is no harm in doing the full block building
-		// every ~1 second. Additionally, we would like to refresh the mempool access even if virtual info was
-		// unmodified for a while. All in all, caching for max 1 second is a good compromise.
-		mm.cachedBlockTemplate = nil
-	}
-	return mm.cachedBlockTemplate
+	// Do not reuse block templates after the Atomic payload hardfork: the header
+	// commits to the current UTXO/Atomic state, while this cache has no consensus
+	// state key. Rebuilding is the safe path and prevents miners from receiving a
+	// template whose commitment was calculated for a stale virtual state.
+	mm.cachedBlockTemplate = nil
+	mm.cachingTime = time.Time{}
+	return nil
 }
 
 func (mm *miningManager) setImmutableCachedTemplate(blockTemplate *externalapi.DomainBlockTemplate) {
-	mm.cachingTime = time.Now()
-	mm.cachedBlockTemplate = blockTemplate
+	mm.cachingTime = time.Time{}
+	mm.cachedBlockTemplate = nil
 }
 
 func countTemplatePayloadTransactions(block *externalapi.DomainBlock) int {

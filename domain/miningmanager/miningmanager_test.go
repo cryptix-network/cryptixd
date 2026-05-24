@@ -133,6 +133,97 @@ func TestPayloadTransactionTemplateBuild(t *testing.T) {
 	})
 }
 
+func TestGetBlockTemplateMixedReadyMempoolBuildsFreshCommitment(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestGetBlockTemplateMixedReadyMempoolBuildsFreshCommitment",
+			nil,
+		)
+
+		readyTxs := make([]*externalapi.DomainTransaction, 0, 7)
+		for i := 0; i < 4; i++ {
+			tx, err := createReadyTransactionFromConsensusFunding(tc)
+			if err != nil {
+				t.Fatalf("create native transaction parent: %v", err)
+			}
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 0; i < 2; i++ {
+			tx, err := createReadyTransactionFromConsensusFunding(tc)
+			if err != nil {
+				t.Fatalf("create messenger transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = []byte("MSG:cross-parity")
+			readyTxs = append(readyTxs, tx)
+		}
+		tokenCreateTx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 10_000)
+		if err != nil {
+			t.Fatalf("create token transaction parent: %v", err)
+		}
+		tokenCreateTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		tokenCreateTx.Payload = createCATCreateAssetWithMintPayload(1)
+		readyTxs = append(readyTxs, tokenCreateTx)
+
+		for _, tx := range readyTxs {
+			if _, err := miningManager.ValidateAndInsertTransaction(tx, false, true); err != nil {
+				t.Fatalf("ValidateAndInsertTransaction %s: %v", consensushashing.TransactionID(tx), err)
+			}
+		}
+
+		coinbase1, err := generateNewCoinbase(consensusConfig.Params.Prefix, opTrue)
+		if err != nil {
+			t.Fatalf("Generate coinbase1: %v", err)
+		}
+		coinbase2, err := generateNewCoinbase(consensusConfig.Params.Prefix, opUsual)
+		if err != nil {
+			t.Fatalf("Generate coinbase2: %v", err)
+		}
+
+		block1, _, err := miningManager.GetBlockTemplate(coinbase1)
+		if err != nil {
+			t.Fatalf("GetBlockTemplate coinbase1: %v", err)
+		}
+		block2, _, err := miningManager.GetBlockTemplate(coinbase2)
+		if err != nil {
+			t.Fatalf("GetBlockTemplate coinbase2: %v", err)
+		}
+		if *consensushashing.TransactionID(block1.Transactions[0]) == *consensushashing.TransactionID(block2.Transactions[0]) {
+			t.Fatalf("coinbase transaction id did not change after miner data changed")
+		}
+		assertMixedTemplateShape(t, block2.Transactions, 4, 3)
+
+		expectedTemplate, err := tc.BuildBlockTemplate(coinbase2, block2.Transactions[1:])
+		if err != nil {
+			t.Fatalf("BuildBlockTemplate fresh reference: %v", err)
+		}
+		if !block2.Header.UTXOCommitment().Equal(expectedTemplate.Block.Header.UTXOCommitment()) {
+			t.Fatalf("GetBlockTemplate returned stale UTXO/Atomic commitment: got %s want %s",
+				block2.Header.UTXOCommitment(), expectedTemplate.Block.Header.UTXOCommitment())
+		}
+
+		submittedBlock := cloneBlockWithoutUTXOEntries(block2)
+		if err := tc.ValidateAndInsertBlock(submittedBlock, true); err != nil {
+			t.Fatalf("GetBlockTemplate returned a consensus-invalid mixed block: %v", err)
+		}
+	})
+}
+
+func cloneBlockWithoutUTXOEntries(block *externalapi.DomainBlock) *externalapi.DomainBlock {
+	clone := block.Clone()
+	for _, tx := range clone.Transactions {
+		for _, input := range tx.Inputs {
+			input.UTXOEntry = nil
+		}
+	}
+	return clone
+}
+
 func newTestMiningManager(t *testing.T, consensusConfig *consensus.Config, name string) miningmanager.MiningManager {
 	t.Helper()
 	miningManager, _ := newTestMiningManagerWithConfig(t, consensusConfig, name, nil)
@@ -1590,6 +1681,44 @@ func generateNewCoinbase(addressPrefix util.Bech32Prefix, op opType) (*externala
 	}, nil
 }
 
+func assertMixedTemplateShape(
+	t *testing.T,
+	transactions []*externalapi.DomainTransaction,
+	expectedNativeNonCoinbase int,
+	expectedPayload int,
+) {
+	t.Helper()
+	if len(transactions) != 1+expectedNativeNonCoinbase+expectedPayload {
+		t.Fatalf("mixed template transaction count: expected %d, got %d",
+			1+expectedNativeNonCoinbase+expectedPayload, len(transactions))
+	}
+	if len(transactions[0].Inputs) != 0 {
+		t.Fatalf("first template transaction must be coinbase")
+	}
+
+	nativeCount := 0
+	payloadCount := 0
+	seenPayload := false
+	for _, tx := range transactions[1:] {
+		switch tx.SubnetworkID {
+		case subnetworks.SubnetworkIDPayload:
+			seenPayload = true
+			payloadCount++
+		case subnetworks.SubnetworkIDNative:
+			if seenPayload {
+				t.Fatalf("native transaction appeared after payload/CAT transaction")
+			}
+			nativeCount++
+		default:
+			t.Fatalf("unexpected subnetwork %s in mixed template", tx.SubnetworkID)
+		}
+	}
+	if nativeCount != expectedNativeNonCoinbase || payloadCount != expectedPayload {
+		t.Fatalf("mixed template shape: native=%d payload=%d, expected native=%d payload=%d",
+			nativeCount, payloadCount, expectedNativeNonCoinbase, expectedPayload)
+	}
+}
+
 func createTransactionWithUTXOEntry(t *testing.T, i int, daaScore uint64) *externalapi.DomainTransaction {
 	prevOutTxID := externalapi.DomainTransactionID{}
 	prevOutPoint := externalapi.DomainOutpoint{TransactionID: prevOutTxID, Index: uint32(i)}
@@ -1654,6 +1783,23 @@ func createCATCreateAssetPayload(nonce uint64) []byte {
 	return payload
 }
 
+func createCATCreateAssetWithMintPayload(nonce uint64) []byte {
+	payload := createCATPayloadHeader(4, nonce)
+	payload = append(payload, 1, 0, 1)
+	payload = appendCATUint128(payload, 10_000)
+	var mintAuthorityOwnerID [externalapi.DomainHashSize]byte
+	mintAuthorityOwnerID[0] = 0x55
+	payload = append(payload, mintAuthorityOwnerID[:]...)
+	payload = append(payload, 1, 1)
+	payload = appendUint16LE(payload, 0)
+	payload = append(payload, 'M', 'M')
+	payload = appendCATUint128(payload, 1)
+	var initialMintToOwnerID [externalapi.DomainHashSize]byte
+	initialMintToOwnerID[0] = 0x66
+	payload = append(payload, initialMintToOwnerID[:]...)
+	return payload
+}
+
 func createCATBuyPayload(assetID [externalapi.DomainHashSize]byte, nonce uint64, expectedPoolNonce uint64) []byte {
 	payload := createCATPayloadHeader(6, nonce)
 	payload = append(payload, assetID[:]...)
@@ -1715,6 +1861,38 @@ func createParentAndChildrenTransactions(tc testapi.TestConsensus) (txParent *ex
 	}
 
 	return chain[0], chain[1], nil
+}
+
+func createReadyTransactionFromConsensusFunding(tc testapi.TestConsensus) (*externalapi.DomainTransaction, error) {
+	return createReadyTransactionFromConsensusFundingWithFee(tc, 1000)
+}
+
+func createReadyTransactionFromConsensusFundingWithFee(tc testapi.TestConsensus, fee uint64) (*externalapi.DomainTransaction, error) {
+	tips, err := tc.Tips()
+	if err != nil {
+		return nil, err
+	}
+
+	_, _, err = tc.AddBlock(tips, nil, nil)
+	if err != nil {
+		return nil, errors.Wrapf(err, "AddBlock: %v", err)
+	}
+
+	tips, err = tc.Tips()
+	if err != nil {
+		return nil, err
+	}
+
+	fundingBlockHash, _, err := tc.AddBlock(tips, nil, nil)
+	if err != nil {
+		return nil, errors.Wrap(err, "AddBlock: ")
+	}
+	fundingBlock, _, err := tc.GetBlock(fundingBlockHash)
+	if err != nil {
+		return nil, errors.Wrap(err, "GetBlock: ")
+	}
+	fundingTransaction := fundingBlock.Transactions[transactionhelper.CoinbaseTransactionIndex]
+	return testutils.CreateTransaction(fundingTransaction, fee)
 }
 
 func createTxChain(tc testapi.TestConsensus, numTxs int) ([]*externalapi.DomainTransaction, error) {
