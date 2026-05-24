@@ -146,24 +146,39 @@ func (tp *transactionsPool) expireOldTransactions() error {
 	}
 
 	for _, mempoolTransaction := range tp.allTransactions {
-		// Never expire high priority transactions
-		if mempoolTransaction.IsHighPriority() {
+		isCAT := isCATTransaction(mempoolTransaction.Transaction())
+
+		// Never expire high priority transactions, except CAT transactions. CAT slots can block
+		// token/pool progress, so their ready-frontier lifetime is bounded even for local RPC submits.
+		if mempoolTransaction.IsHighPriority() && !isCAT {
 			continue
 		}
 
-		// Remove all transactions whose addedAtDAAScore is older then TransactionExpireIntervalDAAScore
-		daaScoreSinceAdded := virtualDAAScore - mempoolTransaction.AddedAtDAAScore()
 		expireInterval := tp.mempool.config.TransactionExpireIntervalDAAScore
-		if isCATTransaction(mempoolTransaction.Transaction()) {
-			expireInterval = tp.mempool.config.AtomicTransactionExpireIntervalDAAScore
-		}
-		if daaScoreSinceAdded > expireInterval {
-			log.Debugf("Removing transaction %s, because it expired. DAAScore moved by %d, expire interval: %d",
-				mempoolTransaction.TransactionID(), daaScoreSinceAdded, expireInterval)
-			err = tp.mempool.removeTransaction(mempoolTransaction.TransactionID(), true)
-			if err != nil {
-				return err
+		if isCAT {
+			hasMempoolParents := len(mempoolTransaction.ParentTransactionsInPool()) > 0
+			totalExpired := virtualDAAScore > mempoolTransaction.AddedAtDAAScore()+tp.mempool.config.AtomicTransactionTotalExpireIntervalDAAScore
+			frontierExpired := !hasMempoolParents &&
+				virtualDAAScore > mempoolTransaction.ReadyAtDAAScore()+tp.mempool.config.AtomicTransactionExpireIntervalDAAScore
+			if !totalExpired && !frontierExpired {
+				continue
 			}
+			if frontierExpired {
+				expireInterval = tp.mempool.config.AtomicTransactionExpireIntervalDAAScore
+			} else {
+				expireInterval = tp.mempool.config.AtomicTransactionTotalExpireIntervalDAAScore
+			}
+		} else if mempoolTransaction.IsHighPriority() ||
+			virtualDAAScore <= mempoolTransaction.AddedAtDAAScore()+expireInterval {
+			continue
+		}
+
+		daaScoreSinceAdded := virtualDAAScore - mempoolTransaction.AddedAtDAAScore()
+		log.Debugf("Removing transaction %s, because it expired. DAAScore moved by %d, expire interval: %d",
+			mempoolTransaction.TransactionID(), daaScoreSinceAdded, expireInterval)
+		err = tp.mempool.removeTransaction(mempoolTransaction.TransactionID(), true)
+		if err != nil {
+			return err
 		}
 	}
 

@@ -445,6 +445,256 @@ func TestAtomicMempoolKeepsFutureSameAssetNonceAfterAcceptedPredecessor(t *testi
 	})
 }
 
+func TestAtomicLowPriorityExpiryRemovesRedeemerChain(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicLowPriorityExpiryRemovesRedeemerChain",
+			func(config *mempool.Config) {
+				config.AtomicTransactionExpireIntervalDAAScore = 5
+				config.TransactionExpireScanIntervalDAAScore = 0
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x39
+		parentTx := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		childTx, err := testutils.CreateTransaction(parentTx, 1000)
+		if err != nil {
+			t.Fatalf("CreateTransaction childTx: %v", err)
+		}
+		childTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		childTx.Payload = createCATTransferPayload(assetID, 2)
+
+		if _, err := miningManager.ValidateAndInsertTransaction(parentTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction parentTx: %v", err)
+		}
+		if _, err := miningManager.ValidateAndInsertTransaction(childTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction childTx: %v", err)
+		}
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 2 {
+			t.Fatalf("expected parent and child before expiry, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+
+		tips, err := tc.Tips()
+		if err != nil {
+			t.Fatalf("Tips: %v", err)
+		}
+		for i := 0; i < 6; i++ {
+			tip, _, err := tc.AddBlock(tips, nil, nil)
+			if err != nil {
+				t.Fatalf("AddBlock %d: %v", i, err)
+			}
+			tips = []*externalapi.DomainHash{tip}
+		}
+
+		expiredTransactions, _, err := miningManager.ExpireLowPriorityTransactions()
+		if err != nil {
+			t.Fatalf("ExpireLowPriorityTransactions: %v", err)
+		}
+		if expiredTransactions != 2 {
+			t.Fatalf("expected expired parent to remove its child redeemer as well, got %d expired transactions", expiredTransactions)
+		}
+		transactionsFromMempool, _ = miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 0 {
+			t.Fatalf("expected Atomic expiry to remove the full redeemer chain, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
+func TestAtomicLowPriorityExpiryTimerStartsWhenRedeemerBecomesReady(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicLowPriorityExpiryTimerStartsWhenRedeemerBecomesReady",
+			func(config *mempool.Config) {
+				config.AtomicTransactionExpireIntervalDAAScore = 5
+				config.TransactionExpireScanIntervalDAAScore = 0
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x3a
+		parentTx := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		childTx, err := testutils.CreateTransaction(parentTx, 1000)
+		if err != nil {
+			t.Fatalf("CreateTransaction childTx: %v", err)
+		}
+		childTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		childTx.Payload = createCATTransferPayload(assetID, 2)
+
+		if _, err := miningManager.ValidateAndInsertTransaction(parentTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction parentTx: %v", err)
+		}
+		if _, err := miningManager.ValidateAndInsertTransaction(childTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction childTx: %v", err)
+		}
+
+		tips, err := tc.Tips()
+		if err != nil {
+			t.Fatalf("Tips: %v", err)
+		}
+		for i := 0; i < 6; i++ {
+			tip, _, err := tc.AddBlock(tips, nil, nil)
+			if err != nil {
+				t.Fatalf("AddBlock %d: %v", i, err)
+			}
+			tips = []*externalapi.DomainHash{tip}
+		}
+
+		if _, err := miningManager.HandleNewBlockTransactions([]*externalapi.DomainTransaction{{}, parentTx}); err != nil {
+			t.Fatalf("HandleNewBlockTransactions: %v", err)
+		}
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 1 || !contains(childTx, transactionsFromMempool) {
+			t.Fatalf("expected child to remain when it just became ready, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+
+		for i := 0; i < 6; i++ {
+			tip, _, err := tc.AddBlock(tips, nil, nil)
+			if err != nil {
+				t.Fatalf("AddBlock second window %d: %v", i, err)
+			}
+			tips = []*externalapi.DomainHash{tip}
+		}
+		expiredTransactions, _, err := miningManager.ExpireLowPriorityTransactions()
+		if err != nil {
+			t.Fatalf("ExpireLowPriorityTransactions: %v", err)
+		}
+		if expiredTransactions != 1 {
+			t.Fatalf("expected child to expire after its own ready window elapsed, got %d expired transactions", expiredTransactions)
+		}
+		transactionsFromMempool, _ = miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 0 {
+			t.Fatalf("expected child to be expired, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
+func TestAtomicTotalExpiryRemovesNonReadyChainAfterLongCap(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicTotalExpiryRemovesNonReadyChainAfterLongCap",
+			func(config *mempool.Config) {
+				config.TransactionExpireIntervalDAAScore = 1000
+				config.AtomicTransactionExpireIntervalDAAScore = 5
+				config.AtomicTransactionTotalExpireIntervalDAAScore = 8
+				config.TransactionExpireScanIntervalDAAScore = 0
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x3c
+		parentTx := createTransactionWithUTXOEntry(t, 1, 0)
+		childTx, err := testutils.CreateTransaction(parentTx, 1000)
+		if err != nil {
+			t.Fatalf("CreateTransaction childTx: %v", err)
+		}
+		childTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		childTx.Payload = createCATTransferPayload(assetID, 2)
+
+		if _, err := miningManager.ValidateAndInsertTransaction(parentTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction parentTx: %v", err)
+		}
+		if _, err := miningManager.ValidateAndInsertTransaction(childTx, false, true); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction childTx: %v", err)
+		}
+
+		tips, err := tc.Tips()
+		if err != nil {
+			t.Fatalf("Tips: %v", err)
+		}
+		for i := 0; i < 9; i++ {
+			tip, _, err := tc.AddBlock(tips, nil, nil)
+			if err != nil {
+				t.Fatalf("AddBlock %d: %v", i, err)
+			}
+			tips = []*externalapi.DomainHash{tip}
+		}
+
+		expiredTransactions, _, err := miningManager.ExpireLowPriorityTransactions()
+		if err != nil {
+			t.Fatalf("ExpireLowPriorityTransactions: %v", err)
+		}
+		if expiredTransactions != 1 {
+			t.Fatalf("expected non-ready CAT child to expire at total lifetime cap, got %d expired transactions", expiredTransactions)
+		}
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if !contains(parentTx, transactionsFromMempool) {
+			t.Fatalf("expected non-CAT parent to keep the normal expiry window, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+		if contains(childTx, transactionsFromMempool) {
+			t.Fatalf("expected non-ready CAT child to expire at total lifetime cap, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
+func TestAtomicHighPriorityFrontierTransactionExpires(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestAtomicHighPriorityFrontierTransactionExpires",
+			func(config *mempool.Config) {
+				config.AtomicTransactionExpireIntervalDAAScore = 5
+				config.TransactionExpireScanIntervalDAAScore = 0
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		var assetID [externalapi.DomainHashSize]byte
+		assetID[0] = 0x3b
+		atomicTx := createCATTransactionWithUTXOEntry(t, 1, createCATTransferPayload(assetID, 1))
+		if _, err := miningManager.ValidateAndInsertTransaction(atomicTx, true, false); err != nil {
+			t.Fatalf("ValidateAndInsertTransaction atomicTx: %v", err)
+		}
+
+		tips, err := tc.Tips()
+		if err != nil {
+			t.Fatalf("Tips: %v", err)
+		}
+		for i := 0; i < 6; i++ {
+			tip, _, err := tc.AddBlock(tips, nil, nil)
+			if err != nil {
+				t.Fatalf("AddBlock %d: %v", i, err)
+			}
+			tips = []*externalapi.DomainHash{tip}
+		}
+
+		expiredTransactions, _, err := miningManager.ExpireLowPriorityTransactions()
+		if err != nil {
+			t.Fatalf("ExpireLowPriorityTransactions: %v", err)
+		}
+		if expiredTransactions != 1 {
+			t.Fatalf("expected high-priority frontier CAT to expire, got %d expired transactions", expiredTransactions)
+		}
+		transactionsFromMempool, _ := miningManager.AllTransactions(true, false)
+		if len(transactionsFromMempool) != 0 {
+			t.Fatalf("expected high-priority frontier CAT to be expired, got %s", consensushashing.TransactionIDs(transactionsFromMempool))
+		}
+	})
+}
+
 func TestImmatureSpend(t *testing.T) {
 	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
 		factory := consensus.NewFactory()

@@ -13,11 +13,12 @@ import (
 const (
 	defaultMaximumTransactionCount = 1_000_000
 
-	defaultTransactionExpireIntervalSeconds     uint64 = 60
-	defaultAtomicTransactionExpireIntervalDAA   uint64 = 600
-	defaultTransactionExpireScanIntervalSeconds uint64 = 10
-	defaultOrphanExpireIntervalSeconds          uint64 = 60
-	defaultOrphanExpireScanIntervalSeconds      uint64 = 10
+	defaultTransactionExpireIntervalSeconds        uint64 = 60
+	defaultAtomicTransactionExpireIntervalDAA      uint64 = 1200
+	defaultAtomicTransactionTotalExpireIntervalDAA uint64 = 86400
+	defaultTransactionExpireScanIntervalSeconds    uint64 = 10
+	defaultOrphanExpireIntervalSeconds             uint64 = 60
+	defaultOrphanExpireScanIntervalSeconds         uint64 = 10
 
 	defaultMaximumOrphanTransactionMass = 100000
 	// defaultMaximumOrphanTransactionCount should remain small as long as we have recursion in
@@ -38,21 +39,22 @@ const (
 
 // Config represents a mempool configuration
 type Config struct {
-	MaximumTransactionCount                 uint64
-	TransactionExpireIntervalDAAScore       uint64
-	AtomicTransactionExpireIntervalDAAScore uint64
-	TransactionExpireScanIntervalDAAScore   uint64
-	TransactionExpireScanIntervalSeconds    uint64
-	OrphanExpireIntervalDAAScore            uint64
-	OrphanExpireScanIntervalDAAScore        uint64
-	MaximumOrphanTransactionMass            uint64
-	MaximumOrphanTransactionCount           uint64
-	AcceptNonStandard                       bool
-	MaximumMassPerBlock                     uint64
-	MinimumRelayTransactionFee              util.Amount
-	MinimumStandardTransactionVersion       uint16
-	MaximumStandardTransactionVersion       uint16
-	MaxPayloadLengthStandard                uint64
+	MaximumTransactionCount                      uint64
+	TransactionExpireIntervalDAAScore            uint64
+	AtomicTransactionExpireIntervalDAAScore      uint64
+	AtomicTransactionTotalExpireIntervalDAAScore uint64
+	TransactionExpireScanIntervalDAAScore        uint64
+	TransactionExpireScanIntervalSeconds         uint64
+	OrphanExpireIntervalDAAScore                 uint64
+	OrphanExpireScanIntervalDAAScore             uint64
+	MaximumOrphanTransactionMass                 uint64
+	MaximumOrphanTransactionCount                uint64
+	AcceptNonStandard                            bool
+	MaximumMassPerBlock                          uint64
+	MinimumRelayTransactionFee                   util.Amount
+	MinimumStandardTransactionVersion            uint16
+	MaximumStandardTransactionVersion            uint16
+	MaxPayloadLengthStandard                     uint64
 }
 
 // DefaultConfig returns the default mempool configuration
@@ -60,20 +62,21 @@ func DefaultConfig(dagParams *dagconfig.Params) *Config {
 	targetBlocksPerSecond := time.Second.Seconds() / dagParams.TargetTimePerBlock.Seconds()
 
 	return &Config{
-		MaximumTransactionCount:                 defaultMaximumTransactionCount,
-		TransactionExpireIntervalDAAScore:       uint64(float64(defaultTransactionExpireIntervalSeconds) * targetBlocksPerSecond),
-		AtomicTransactionExpireIntervalDAAScore: defaultAtomicTransactionExpireIntervalDAA,
-		TransactionExpireScanIntervalDAAScore:   uint64(float64(defaultTransactionExpireScanIntervalSeconds) * targetBlocksPerSecond),
-		TransactionExpireScanIntervalSeconds:    defaultTransactionExpireScanIntervalSeconds,
-		OrphanExpireIntervalDAAScore:            uint64(float64(defaultOrphanExpireIntervalSeconds) * targetBlocksPerSecond),
-		OrphanExpireScanIntervalDAAScore:        uint64(float64(defaultOrphanExpireScanIntervalSeconds) * targetBlocksPerSecond),
-		MaximumOrphanTransactionMass:            defaultMaximumOrphanTransactionMass,
-		MaximumOrphanTransactionCount:           defaultMaximumOrphanTransactionCount,
-		AcceptNonStandard:                       dagParams.RelayNonStdTxs,
-		MaximumMassPerBlock:                     dagParams.MaxBlockMass,
-		MinimumRelayTransactionFee:              defaultMinimumRelayTransactionFee,
-		MinimumStandardTransactionVersion:       defaultMinimumStandardTransactionVersion,
-		MaximumStandardTransactionVersion:       defaultMaximumStandardTransactionVersion,
-		MaxPayloadLengthStandard:                dagParams.PayloadMaxLengthStandard,
+		MaximumTransactionCount:                      defaultMaximumTransactionCount,
+		TransactionExpireIntervalDAAScore:            uint64(float64(defaultTransactionExpireIntervalSeconds) * targetBlocksPerSecond),
+		AtomicTransactionExpireIntervalDAAScore:      defaultAtomicTransactionExpireIntervalDAA,
+		AtomicTransactionTotalExpireIntervalDAAScore: defaultAtomicTransactionTotalExpireIntervalDAA,
+		TransactionExpireScanIntervalDAAScore:        uint64(float64(defaultTransactionExpireScanIntervalSeconds) * targetBlocksPerSecond),
+		TransactionExpireScanIntervalSeconds:         defaultTransactionExpireScanIntervalSeconds,
+		OrphanExpireIntervalDAAScore:                 uint64(float64(defaultOrphanExpireIntervalSeconds) * targetBlocksPerSecond),
+		OrphanExpireScanIntervalDAAScore:             uint64(float64(defaultOrphanExpireScanIntervalSeconds) * targetBlocksPerSecond),
+		MaximumOrphanTransactionMass:                 defaultMaximumOrphanTransactionMass,
+		MaximumOrphanTransactionCount:                defaultMaximumOrphanTransactionCount,
+		AcceptNonStandard:                            dagParams.RelayNonStdTxs,
+		MaximumMassPerBlock:                          dagParams.MaxBlockMass,
+		MinimumRelayTransactionFee:                   defaultMinimumRelayTransactionFee,
+		MinimumStandardTransactionVersion:            defaultMinimumStandardTransactionVersion,
+		MaximumStandardTransactionVersion:            defaultMaximumStandardTransactionVersion,
+		MaxPayloadLengthStandard:                     dagParams.PayloadMaxLengthStandard,
 	}
 }

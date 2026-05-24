@@ -19,9 +19,13 @@ func (mp *mempool) handleNewBlockTransactions(blockTransactions []*externalapi.D
 func (mp *mempool) handleAcceptedTransactions(acceptedTransactions []*externalapi.DomainTransaction) (
 	[]*externalapi.DomainTransaction, error) {
 	acceptedOrphans := []*externalapi.DomainTransaction{}
+	unblockedAtDAA, err := mp.consensusReference.Consensus().GetVirtualDAAScore()
+	if err != nil {
+		return nil, err
+	}
 	for _, transaction := range acceptedTransactions {
 		transactionID := consensushashing.TransactionID(transaction)
-		err := mp.removeTransaction(transactionID, false)
+		err := mp.removeTransactionWithUnblockedDAA(transactionID, false, &unblockedAtDAA)
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +52,7 @@ func (mp *mempool) handleAcceptedTransactions(acceptedTransactions []*externalap
 
 		acceptedOrphans = append(acceptedOrphans, acceptedOrphansFromThisTransaction...)
 	}
-	err := mp.orphansPool.expireOrphanTransactions()
+	err = mp.orphansPool.expireOrphanTransactions()
 	if err != nil {
 		return nil, err
 	}

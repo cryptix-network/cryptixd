@@ -227,7 +227,7 @@ func (csm *consensusStateManager) applyMergeSetBlocks(stagingArea *model.Staging
 
 			if !transactionhelper.IsCoinBase(transaction) {
 				if _, ok := acceptedTxIDs[*transactionID]; ok {
-					log.Warnf("Consensus skipped duplicate accepted transaction before Atomic replay: tx=%s source_block=%s tx_index=%d reason=duplicate_txid_already_accepted_in_virtual_mergeset",
+					log.Debugf("Consensus skipped duplicate accepted transaction before Atomic replay: tx=%s source_block=%s tx_index=%d reason=duplicate_txid_already_accepted_in_virtual_mergeset",
 						transactionID, mergeSetBlockHash, j)
 				} else if conflictingOutpoint, ok := firstConflictingSpentOutpoint(transaction, acceptedSpentOutpoints); ok {
 					log.Warnf("Consensus skipped UTXO-conflicting accepted transaction before Atomic replay: tx=%s source_block=%s tx_index=%d previous_outpoint=%s reason=input_already_spent_in_virtual_mergeset",

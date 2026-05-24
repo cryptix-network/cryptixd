@@ -19,6 +19,14 @@ func TestDefaultConfigAtomicExpiryIsFixedDAA(t *testing.T) {
 		t.Fatalf("10 BPS atomic expiry DAA: got %d, want %d",
 			tenBPS.AtomicTransactionExpireIntervalDAAScore, defaultAtomicTransactionExpireIntervalDAA)
 	}
+	if oneBPS.AtomicTransactionTotalExpireIntervalDAAScore != defaultAtomicTransactionTotalExpireIntervalDAA {
+		t.Fatalf("1 BPS atomic total expiry DAA: got %d, want %d",
+			oneBPS.AtomicTransactionTotalExpireIntervalDAAScore, defaultAtomicTransactionTotalExpireIntervalDAA)
+	}
+	if tenBPS.AtomicTransactionTotalExpireIntervalDAAScore != defaultAtomicTransactionTotalExpireIntervalDAA {
+		t.Fatalf("10 BPS atomic total expiry DAA: got %d, want %d",
+			tenBPS.AtomicTransactionTotalExpireIntervalDAAScore, defaultAtomicTransactionTotalExpireIntervalDAA)
+	}
 	if tenBPS.TransactionExpireScanIntervalDAAScore != defaultTransactionExpireScanIntervalSeconds*10 {
 		t.Fatalf("10 BPS scan interval DAA: got %d, want %d",
 			tenBPS.TransactionExpireScanIntervalDAAScore, defaultTransactionExpireScanIntervalSeconds*10)

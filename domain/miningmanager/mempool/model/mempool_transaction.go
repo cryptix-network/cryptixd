@@ -11,6 +11,7 @@ type MempoolTransaction struct {
 	parentTransactionsInPool IDToTransactionMap
 	isHighPriority           bool
 	addedAtDAAScore          uint64
+	readyAtDAAScore          uint64
 }
 
 // NewMempoolTransaction constructs a new MempoolTransaction
@@ -25,6 +26,7 @@ func NewMempoolTransaction(
 		parentTransactionsInPool: parentTransactionsInPool,
 		isHighPriority:           isHighPriority,
 		addedAtDAAScore:          addedAtDAAScore,
+		readyAtDAAScore:          addedAtDAAScore,
 	}
 }
 
@@ -48,6 +50,11 @@ func (mt *MempoolTransaction) RemoveParentTransactionInPool(transactionID *exter
 	delete(mt.parentTransactionsInPool, *transactionID)
 }
 
+// SetReadyAtDAAScore resets the transaction's ready/frontier age anchor.
+func (mt *MempoolTransaction) SetReadyAtDAAScore(daaScore uint64) {
+	mt.readyAtDAAScore = daaScore
+}
+
 // IsHighPriority returns whether this MempoolTransaction is a high-priority one
 func (mt *MempoolTransaction) IsHighPriority() bool {
 	return mt.isHighPriority
@@ -56,4 +63,9 @@ func (mt *MempoolTransaction) IsHighPriority() bool {
 // AddedAtDAAScore returns the virtual DAA score at which this MempoolTransaction was added to the mempool
 func (mt *MempoolTransaction) AddedAtDAAScore() uint64 {
 	return mt.addedAtDAAScore
+}
+
+// ReadyAtDAAScore returns the virtual DAA score at which this transaction became ready for block templates.
+func (mt *MempoolTransaction) ReadyAtDAAScore() uint64 {
+	return mt.readyAtDAAScore
 }

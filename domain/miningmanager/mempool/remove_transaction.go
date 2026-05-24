@@ -6,6 +6,14 @@ import (
 )
 
 func (mp *mempool) removeTransaction(transactionID *externalapi.DomainTransactionID, removeRedeemers bool) error {
+	return mp.removeTransactionWithUnblockedDAA(transactionID, removeRedeemers, nil)
+}
+
+func (mp *mempool) removeTransactionWithUnblockedDAA(
+	transactionID *externalapi.DomainTransactionID,
+	removeRedeemers bool,
+	unblockedAtDAA *uint64,
+) error {
 	if _, ok := mp.orphansPool.allOrphans[*transactionID]; ok {
 		return mp.orphansPool.removeOrphan(transactionID, true)
 	}
@@ -22,6 +30,9 @@ func (mp *mempool) removeTransaction(transactionID *externalapi.DomainTransactio
 	} else {
 		for _, redeemer := range redeemers {
 			redeemer.RemoveParentTransactionInPool(transactionID)
+			if unblockedAtDAA != nil && len(redeemer.ParentTransactionsInPool()) == 0 {
+				redeemer.SetReadyAtDAAScore(*unblockedAtDAA)
+			}
 		}
 	}
 
