@@ -156,7 +156,7 @@ func (csm *consensusStateManager) restorePastUTXO(
 		if err != nil {
 			return nil, err
 		}
-		if nextBlockHash == nil {
+		if nextBlockHash == nil || nextBlockHash.Equal(model.VirtualBlockHash) {
 			log.Debugf("Block %s does not have a UTXO diff child, "+
 				"meaning we reached the virtual", nextBlockHash)
 			break

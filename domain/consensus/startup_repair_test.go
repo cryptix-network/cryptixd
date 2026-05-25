@@ -32,8 +32,30 @@ func TestLoadStartupRepairPlanDefaults(t *testing.T) {
 	if !plan.cleanupRemovedBlockData() {
 		t.Fatalf("expected removed block data cleanup to default to enabled")
 	}
+	if !plan.cleanupAtomicAboveTarget() {
+		t.Fatalf("expected Atomic state cleanup above target to default to enabled")
+	}
+	if plan.scanBodyDescendants() {
+		t.Fatalf("expected body descendant scan to default to disabled")
+	}
 	if plan.targetDAA() == nil || *plan.targetDAA() != 100000 {
 		t.Fatalf("unexpected target DAA: %v", plan.targetDAA())
+	}
+}
+
+func TestLoadStartupRepairPlanAllowsBodyDescendantScan(t *testing.T) {
+	path := writeStartupRepairPlan(t, `{
+		"schemaVersion": 1,
+		"targetDaa": 100000,
+		"scanBodyDescendants": true
+	}`)
+
+	plan, err := loadStartupRepairPlan(path)
+	if err != nil {
+		t.Fatalf("loadStartupRepairPlan: %v", err)
+	}
+	if !plan.scanBodyDescendants() {
+		t.Fatalf("expected body descendant scan to be enabled")
 	}
 }
 

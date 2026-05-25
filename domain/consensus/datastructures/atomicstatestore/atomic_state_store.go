@@ -1,6 +1,7 @@
 package atomicstatestore
 
 import (
+	"github.com/cryptix-network/cryptixd/domain/consensus/database"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
@@ -72,6 +73,51 @@ func (ass *atomicStateStore) Delete(stagingArea *model.StagingArea, blockHash *e
 		return
 	}
 	stagingShard.toDelete[*blockHash] = struct{}{}
+}
+
+func (ass *atomicStateStore) DeleteEntriesAboveDAA(
+	dbContext model.DBReader,
+	stagingArea *model.StagingArea,
+	blockHeaderStore model.BlockHeaderStore,
+	targetDAA uint64) (deletedAboveTarget int, deletedOrphans int, err error) {
+
+	cursor, err := dbContext.Cursor(ass.bucket)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer cursor.Close()
+
+	for ok := cursor.First(); ok; ok = cursor.Next() {
+		key, err := cursor.Key()
+		if err != nil {
+			return deletedAboveTarget, deletedOrphans, err
+		}
+
+		blockHash, err := externalapi.NewDomainHashFromByteSlice(key.Suffix())
+		if err != nil {
+			return deletedAboveTarget, deletedOrphans, err
+		}
+		if blockHash.Equal(model.VirtualBlockHash) {
+			continue
+		}
+
+		header, err := blockHeaderStore.BlockHeader(dbContext, stagingArea, blockHash)
+		if err != nil {
+			if database.IsNotFoundError(err) {
+				ass.Delete(stagingArea, blockHash)
+				deletedOrphans++
+				continue
+			}
+			return deletedAboveTarget, deletedOrphans, err
+		}
+
+		if header.DAAScore() > targetDAA {
+			ass.Delete(stagingArea, blockHash)
+			deletedAboveTarget++
+		}
+	}
+
+	return deletedAboveTarget, deletedOrphans, nil
 }
 
 func (ass *atomicStateStore) hashAsKey(hash *externalapi.DomainHash) model.DBKey {

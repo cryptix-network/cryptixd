@@ -12,4 +12,6 @@ type AtomicStateStore interface {
 	IsStaged(stagingArea *StagingArea) bool
 	Get(dbContext DBReader, stagingArea *StagingArea, blockHash *externalapi.DomainHash) (*atomicstate.State, error)
 	Delete(stagingArea *StagingArea, blockHash *externalapi.DomainHash)
+	DeleteEntriesAboveDAA(dbContext DBReader, stagingArea *StagingArea, blockHeaderStore BlockHeaderStore,
+		targetDAA uint64) (deletedAboveTarget int, deletedOrphans int, err error)
 }

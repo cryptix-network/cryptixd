@@ -14,17 +14,19 @@ import (
 )
 
 type startupRepairPlan struct {
-	SchemaVersion           uint32   `json:"schemaVersion"`
-	Enabled                 *bool    `json:"enabled,omitempty"`
-	Name                    string   `json:"name,omitempty"`
-	TriggerBlocks           []string `json:"triggerBlocks,omitempty"`
-	RequireTriggerBlock     *bool    `json:"requireTriggerBlock,omitempty"`
-	TargetBlockHash         string   `json:"targetBlockHash,omitempty"`
-	TargetDAA               *uint64  `json:"targetDaa,omitempty"`
-	CutoffDAA               *uint64  `json:"cutoffDaa,omitempty"`
-	MarkRemovedDisqualified *bool    `json:"markRemovedDisqualified,omitempty"`
-	CleanupRemovedBlockData *bool    `json:"cleanupRemovedBlockData,omitempty"`
-	DryRun                  bool     `json:"dryRun,omitempty"`
+	SchemaVersion            uint32   `json:"schemaVersion"`
+	Enabled                  *bool    `json:"enabled,omitempty"`
+	Name                     string   `json:"name,omitempty"`
+	TriggerBlocks            []string `json:"triggerBlocks,omitempty"`
+	RequireTriggerBlock      *bool    `json:"requireTriggerBlock,omitempty"`
+	TargetBlockHash          string   `json:"targetBlockHash,omitempty"`
+	TargetDAA                *uint64  `json:"targetDaa,omitempty"`
+	CutoffDAA                *uint64  `json:"cutoffDaa,omitempty"`
+	MarkRemovedDisqualified  *bool    `json:"markRemovedDisqualified,omitempty"`
+	CleanupRemovedBlockData  *bool    `json:"cleanupRemovedBlockData,omitempty"`
+	CleanupAtomicAboveTarget *bool    `json:"cleanupAtomicAboveTarget,omitempty"`
+	ScanBodyDescendants      *bool    `json:"scanBodyDescendants,omitempty"`
+	DryRun                   bool     `json:"dryRun,omitempty"`
 }
 
 func loadStartupRepairPlan(path string) (*startupRepairPlan, error) {
@@ -84,6 +86,14 @@ func (plan *startupRepairPlan) cleanupRemovedBlockData() bool {
 	return plan.CleanupRemovedBlockData == nil || *plan.CleanupRemovedBlockData
 }
 
+func (plan *startupRepairPlan) cleanupAtomicAboveTarget() bool {
+	return plan.CleanupAtomicAboveTarget == nil || *plan.CleanupAtomicAboveTarget
+}
+
+func (plan *startupRepairPlan) scanBodyDescendants() bool {
+	return plan.ScanBodyDescendants != nil && *plan.ScanBodyDescendants
+}
+
 func (plan *startupRepairPlan) targetDAA() *uint64 {
 	if plan.TargetDAA != nil {
 		return plan.TargetDAA
@@ -139,7 +149,12 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 	if err != nil {
 		return err
 	}
-	if len(removed) == 0 {
+	virtualDAA, err := s.daaBlocksStore.DAAScore(s.databaseContext, readStagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+	virtualNeedsRepair := virtualDAA > targetDAA
+	if len(removed) == 0 && !virtualNeedsRepair {
 		log.Infof("Startup DB repair plan %q no-op: selected tip is already at or before target %s (daa=%d)",
 			plan.label(), targetHash, targetDAA)
 		return nil
@@ -149,16 +164,27 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 	if triggerMatched {
 		triggerText = triggerHash.String()
 	}
-	log.Warnf("Startup DB repair plan %q: rewinding selected chain from %s (daa=%d) to %s (daa=%d), removing %d selected-chain block(s), trigger=%s",
-		plan.label(), currentTip, currentTipHeader.DAAScore(), targetHash, targetDAA, len(removed), triggerText)
-
-	staleDescendants, err := s.startupRepairBodyDescendantsAboveTarget(readStagingArea, targetHash, targetDAA, removed)
-	if err != nil {
-		return err
+	if len(removed) > 0 {
+		log.Warnf("Startup DB repair plan %q: rewinding selected chain from %s (daa=%d) to %s (daa=%d), removing %d selected-chain block(s), trigger=%s",
+			plan.label(), currentTip, currentTipHeader.DAAScore(), targetHash, targetDAA, len(removed), triggerText)
+	} else {
+		log.Warnf("Startup DB repair plan %q: selected chain is already capped at %s (daa=%d), but virtual DAA is %d; repairing virtual state, trigger=%s",
+			plan.label(), targetHash, targetDAA, virtualDAA, triggerText)
 	}
-	if len(staleDescendants) > 0 {
-		log.Warnf("Startup DB repair plan %q: also removing %d local body descendant/side-branch block(s) above DAA %d",
-			plan.label(), len(staleDescendants), targetDAA)
+
+	var staleDescendants []*externalapi.DomainHash
+	if plan.scanBodyDescendants() {
+		staleDescendants, err = s.startupRepairBodyDescendantsAboveTarget(readStagingArea, targetHash, targetDAA, removed)
+		if err != nil {
+			return err
+		}
+		if len(staleDescendants) > 0 {
+			log.Warnf("Startup DB repair plan %q: also removing %d local body descendant/side-branch block(s) above DAA %d",
+				plan.label(), len(staleDescendants), targetDAA)
+		}
+	} else {
+		log.Infof("Startup DB repair plan %q: body-descendant scan disabled; repairing selected chain and virtual state only",
+			plan.label())
 	}
 
 	if plan.DryRun {
@@ -173,22 +199,32 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 	}
 	s.headersSelectedTipStore.Stage(rewindStagingArea, targetHash)
 	s.consensusStateStore.StageTips(rewindStagingArea, []*externalapi.DomainHash{targetHash})
-	if plan.markRemovedDisqualified() {
-		for _, blockHash := range removed {
-			s.blockStatusStore.Stage(rewindStagingArea, blockHash, externalapi.StatusDisqualifiedFromChain)
-		}
-		for _, blockHash := range staleDescendants {
-			s.blockStatusStore.Stage(rewindStagingArea, blockHash, externalapi.StatusDisqualifiedFromChain)
-		}
-	}
 	err = staging.CommitAllChanges(s.databaseContext, rewindStagingArea)
 	if err != nil {
 		return err
 	}
+	log.Infof("Startup DB repair plan %q: selected chain/tips staged at %s (daa=%d); rebuilding virtual state",
+		plan.label(), targetHash, targetDAA)
 
-	_, _, err = s.resolveVirtualChunkNoLock(0)
+	err = s.stageStartupRepairVirtualState(targetHash)
 	if err != nil {
 		return err
+	}
+	log.Infof("Startup DB repair plan %q: virtual UTXO/Atomic state rebuilt at %s (daa=%d)",
+		plan.label(), targetHash, targetDAA)
+
+	if plan.markRemovedDisqualified() {
+		statusStagingArea := model.NewStagingArea()
+		for _, blockHash := range removed {
+			s.blockStatusStore.Stage(statusStagingArea, blockHash, externalapi.StatusDisqualifiedFromChain)
+		}
+		for _, blockHash := range staleDescendants {
+			s.blockStatusStore.Stage(statusStagingArea, blockHash, externalapi.StatusDisqualifiedFromChain)
+		}
+		err = staging.CommitAllChanges(s.databaseContext, statusStagingArea)
+		if err != nil {
+			return err
+		}
 	}
 
 	if plan.cleanupRemovedBlockData() {
@@ -208,9 +244,117 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 		}
 	}
 
+	if plan.cleanupAtomicAboveTarget() {
+		atomicCleanupStagingArea := model.NewStagingArea()
+		deletedAboveTarget, deletedOrphans, err := s.atomicStateStore.DeleteEntriesAboveDAA(
+			s.databaseContext, atomicCleanupStagingArea, s.blockHeaderStore, targetDAA)
+		if err != nil {
+			return err
+		}
+		err = staging.CommitAllChanges(s.databaseContext, atomicCleanupStagingArea)
+		if err != nil {
+			return err
+		}
+		log.Warnf("Startup DB repair plan %q: cleaned Atomic state snapshots above DAA %d: deleted_above_target=%d deleted_orphans=%d",
+			plan.label(), targetDAA, deletedAboveTarget, deletedOrphans)
+	}
+
 	log.Warnf("Startup DB repair plan %q completed: selected chain and virtual state are now capped at %s (daa=%d)",
 		plan.label(), targetHash, targetDAA)
 	return nil
+}
+
+func (s *consensus) stageStartupRepairVirtualState(targetHash *externalapi.DomainHash) error {
+	virtualStagingArea := model.NewStagingArea()
+
+	s.consensusStateStore.StageTips(virtualStagingArea, []*externalapi.DomainHash{targetHash})
+
+	restoredPathBlocks, err := s.stageStartupRepairDiffPathForRestore(virtualStagingArea, targetHash)
+	if err != nil {
+		return err
+	}
+	if restoredPathBlocks > 0 {
+		log.Warnf("Startup DB repair: temporarily restored %d disqualified UTXO diff-path block(s) so the target state can be rebuilt",
+			restoredPathBlocks)
+	}
+
+	err = s.dagTopologyManagers[0].SetParents(virtualStagingArea, model.VirtualBlockHash, []*externalapi.DomainHash{targetHash})
+	if err != nil {
+		return err
+	}
+
+	err = s.ghostdagManagers[0].GHOSTDAG(virtualStagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+
+	_, err = s.difficultyManager.StageDAADataAndReturnRequiredDifficulty(virtualStagingArea, model.VirtualBlockHash, false)
+	if err != nil {
+		return err
+	}
+
+	virtualUTXODiff, virtualAcceptanceData, virtualMultiset, virtualAtomicState, err :=
+		s.consensusStateManager.CalculatePastUTXOAndAcceptanceDataAndAtomicState(virtualStagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return err
+	}
+
+	s.acceptanceDataStore.Stage(virtualStagingArea, model.VirtualBlockHash, virtualAcceptanceData)
+	s.multisetStore.Stage(virtualStagingArea, model.VirtualBlockHash, virtualMultiset)
+	s.atomicStateStore.Stage(virtualStagingArea, model.VirtualBlockHash, virtualAtomicState)
+	s.consensusStateStore.StageVirtualUTXODiff(virtualStagingArea, virtualUTXODiff)
+
+	targetUTXODiff, err := s.utxoDiffStore.UTXODiff(s.databaseContext, virtualStagingArea, targetHash)
+	if err != nil {
+		return err
+	}
+	targetToVirtualDiff, err := virtualUTXODiff.DiffFrom(targetUTXODiff)
+	if err != nil {
+		return err
+	}
+	s.utxoDiffStore.Stage(virtualStagingArea, targetHash, targetToVirtualDiff, model.VirtualBlockHash)
+
+	return staging.CommitAllChanges(s.databaseContext, virtualStagingArea)
+}
+
+func (s *consensus) stageStartupRepairDiffPathForRestore(
+	stagingArea *model.StagingArea,
+	targetHash *externalapi.DomainHash) (int, error) {
+
+	restored := 0
+	visited := make(map[externalapi.DomainHash]struct{})
+	nextBlockHash := targetHash
+	for {
+		if _, ok := visited[*nextBlockHash]; ok {
+			return restored, errors.Errorf("cycle in UTXO diff path while repairing from %s at %s", targetHash, nextBlockHash)
+		}
+		visited[*nextBlockHash] = struct{}{}
+
+		status, err := s.blockStatusStore.Get(s.databaseContext, stagingArea, nextBlockHash)
+		if err != nil {
+			return restored, err
+		}
+		if status == externalapi.StatusDisqualifiedFromChain {
+			s.blockStatusStore.Stage(stagingArea, nextBlockHash, externalapi.StatusUTXOValid)
+			restored++
+		}
+
+		exists, err := s.utxoDiffStore.HasUTXODiffChild(s.databaseContext, stagingArea, nextBlockHash)
+		if err != nil {
+			return restored, err
+		}
+		if !exists {
+			return restored, nil
+		}
+
+		nextBlockHash, err = s.utxoDiffStore.UTXODiffChild(s.databaseContext, stagingArea, nextBlockHash)
+		if err != nil {
+			return restored, err
+		}
+		if nextBlockHash == nil || nextBlockHash.Equal(model.VirtualBlockHash) {
+			return restored, nil
+		}
+	}
 }
 
 func (s *consensus) startupRepairBodyDescendantsAboveTarget(
