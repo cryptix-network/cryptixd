@@ -151,6 +151,7 @@ func TestGetBlockTemplateMixedReadyMempoolBuildsFreshCommitment(t *testing.T) {
 			if err != nil {
 				t.Fatalf("create native transaction parent: %v", err)
 			}
+			tx.Mass = 1_000
 			readyTxs = append(readyTxs, tx)
 		}
 		for i := 0; i < 2; i++ {
@@ -285,6 +286,147 @@ func TestGetBlockTemplateMixedMempoolOverParallelTipsIsConsensusValid(t *testing
 		submittedBlock := cloneBlockWithoutUTXOEntries(blockTemplate.Block)
 		if err := tc.ValidateAndInsertBlock(submittedBlock, true); err != nil {
 			t.Fatalf("parallel-tip mixed mempool template was consensus-invalid: %v", err)
+		}
+	})
+}
+
+func TestGetBlockTemplateLargeMixedMempoolRespectsBlockMassLimit(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+		consensusConfig.Params.MaxBlockMass = 1_000
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestGetBlockTemplateLargeMixedMempoolRespectsBlockMassLimit",
+			func(config *mempool.Config) {
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		readyTxs := make([]*externalapi.DomainTransaction, 0, 40)
+		for i := 0; i < 8; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 100_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create native transaction parent: %v", err)
+			}
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 8; i < 16; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 100_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create messenger transaction parent: %v", err)
+			}
+			payload := make([]byte, consensusConfig.Params.PayloadMaxLengthStandard)
+			for j := range payload {
+				payload[j] = 0x6d
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = payload
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 16; i < 40; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 100_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create CAT transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = createCATCreateAssetWithMintPayloadWithTicker(uint64(i-15), byte('A'+(i%26)), byte('a'+(i%26)))
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+
+		for _, tx := range readyTxs {
+			if _, err := miningManager.ValidateAndInsertTransaction(tx, false, true); err != nil {
+				t.Fatalf("ValidateAndInsertTransaction %s: %v", consensushashing.TransactionID(tx), err)
+			}
+		}
+
+		coinbase, err := generateNewCoinbase(consensusConfig.Params.Prefix, opTrue)
+		if err != nil {
+			t.Fatalf("Generate coinbase: %v", err)
+		}
+		block, _, err := miningManager.GetBlockTemplate(coinbase)
+		if err != nil {
+			t.Fatalf("GetBlockTemplate: %v", err)
+		}
+
+		selectedNonCoinbase := len(block.Transactions) - 1
+		if selectedNonCoinbase <= 0 {
+			t.Fatalf("large mempool template should select at least one transaction")
+		}
+		if selectedNonCoinbase >= len(readyTxs) {
+			t.Fatalf("template must leave a tail when mempool is larger than one block: selected=%d total=%d", selectedNonCoinbase, len(readyTxs))
+		}
+		assertTemplateSortedBySubnetwork(t, block.Transactions)
+		assertTemplateNonCoinbaseMassAtMost(t, block.Transactions, consensusConfig.Params.MaxBlockMass)
+	})
+}
+
+func TestGetBlockTemplateSameOwnerCATChainOverBlockCapacityKeepsTail(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+		consensusConfig.Params.MaxBlockMass = 1_000
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestGetBlockTemplateSameOwnerCATChainOverBlockCapacityKeepsTail",
+			func(config *mempool.Config) {
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		catQueue := make([]*externalapi.DomainTransaction, 0, 40)
+		for i := 0; i < 40; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 100_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create CAT transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = createCATCreateAssetWithMintPayloadWithTicker(uint64(i)+1, byte('A'+(i%26)), byte('a'+(i%26)))
+			tx.Mass = 1_000
+			catQueue = append(catQueue, tx)
+		}
+
+		for _, tx := range catQueue {
+			if _, err := miningManager.ValidateAndInsertTransaction(tx, false, true); err != nil {
+				t.Fatalf("ValidateAndInsertTransaction %s: %v", consensushashing.TransactionID(tx), err)
+			}
+		}
+
+		coinbase, err := generateNewCoinbase(consensusConfig.Params.Prefix, opTrue)
+		if err != nil {
+			t.Fatalf("Generate coinbase: %v", err)
+		}
+		block, _, err := miningManager.GetBlockTemplate(coinbase)
+		if err != nil {
+			t.Fatalf("GetBlockTemplate: %v", err)
+		}
+
+		selected := block.Transactions[1:]
+		if len(selected) == 0 {
+			t.Fatalf("same-owner CAT queue should produce a non-empty template")
+		}
+		if len(selected) >= len(catQueue) {
+			t.Fatalf("one block must not absorb a long same-owner CAT queue: selected=%d total=%d", len(selected), len(catQueue))
+		}
+		assertTemplateNonCoinbaseMassAtMost(t, block.Transactions, consensusConfig.Params.MaxBlockMass)
+
+		if _, err := miningManager.HandleNewBlockTransactions(block.Transactions); err != nil {
+			t.Fatalf("HandleNewBlockTransactions: %v", err)
+		}
+		remaining, _ := miningManager.AllTransactions(true, false)
+		if len(remaining) == 0 {
+			t.Fatalf("same-owner CAT tail should remain for later blocks")
+		}
+		for _, selectedTx := range selected {
+			if contains(selectedTx, remaining) {
+				t.Fatalf("accepted CAT transaction %s should be removed from mempool", consensushashing.TransactionID(selectedTx))
+			}
 		}
 	})
 }
@@ -1794,6 +1936,30 @@ func assertMixedTemplateShape(
 	}
 }
 
+func assertTemplateSortedBySubnetwork(t *testing.T, transactions []*externalapi.DomainTransaction) {
+	t.Helper()
+	if len(transactions) == 0 || len(transactions[0].Inputs) != 0 {
+		t.Fatalf("first template transaction must be coinbase")
+	}
+	for i := 2; i < len(transactions); i++ {
+		if subnetworks.Less(transactions[i].SubnetworkID, transactions[i-1].SubnetworkID) {
+			t.Fatalf("template transactions must be sorted by subnetwork: %s before %s",
+				transactions[i-1].SubnetworkID, transactions[i].SubnetworkID)
+		}
+	}
+}
+
+func assertTemplateNonCoinbaseMassAtMost(t *testing.T, transactions []*externalapi.DomainTransaction, maxBlockMass uint64) {
+	t.Helper()
+	var mass uint64
+	for _, tx := range transactions[1:] {
+		mass += tx.Mass
+	}
+	if mass > maxBlockMass {
+		t.Fatalf("template non-coinbase mass %d exceeds block limit %d", mass, maxBlockMass)
+	}
+}
+
 func createTransactionWithUTXOEntry(t *testing.T, i int, daaScore uint64) *externalapi.DomainTransaction {
 	prevOutTxID := externalapi.DomainTransactionID{}
 	prevOutPoint := externalapi.DomainOutpoint{TransactionID: prevOutTxID, Index: uint32(i)}
@@ -1829,11 +1995,15 @@ func createTransactionWithUTXOEntry(t *testing.T, i int, daaScore uint64) *exter
 	return &tx
 }
 
-func createCATTransactionWithUTXOEntry(t *testing.T, i int, payload []byte) *externalapi.DomainTransaction {
+func createPayloadTransactionWithUTXOEntry(t *testing.T, i int, payload []byte) *externalapi.DomainTransaction {
 	tx := createTransactionWithUTXOEntry(t, i, 0)
 	tx.SubnetworkID = subnetworks.SubnetworkIDPayload
 	tx.Payload = append([]byte(nil), payload...)
 	return tx
+}
+
+func createCATTransactionWithUTXOEntry(t *testing.T, i int, payload []byte) *externalapi.DomainTransaction {
+	return createPayloadTransactionWithUTXOEntry(t, i, payload)
 }
 
 func createCATTransferPayload(assetID [externalapi.DomainHashSize]byte, nonce uint64) []byte {
@@ -1846,6 +2016,10 @@ func createCATTransferPayload(assetID [externalapi.DomainHashSize]byte, nonce ui
 }
 
 func createCATCreateAssetPayload(nonce uint64) []byte {
+	return createCATCreateAssetPayloadWithTicker(nonce, 'A', 'A')
+}
+
+func createCATCreateAssetPayloadWithTicker(nonce uint64, symbol byte, name byte) []byte {
 	payload := createCATPayloadHeader(0, nonce)
 	payload = append(payload, 1, 0, 0)
 	payload = appendCATUint128(payload, 0)
@@ -1854,11 +2028,15 @@ func createCATCreateAssetPayload(nonce uint64) []byte {
 	payload = append(payload, mintAuthorityOwnerID[:]...)
 	payload = append(payload, 1, 1)
 	payload = appendUint16LE(payload, 0)
-	payload = append(payload, 'A', 'A')
+	payload = append(payload, symbol, name)
 	return payload
 }
 
 func createCATCreateAssetWithMintPayload(nonce uint64) []byte {
+	return createCATCreateAssetWithMintPayloadWithTicker(nonce, 'M', 'M')
+}
+
+func createCATCreateAssetWithMintPayloadWithTicker(nonce uint64, symbol byte, name byte) []byte {
 	payload := createCATPayloadHeader(4, nonce)
 	payload = append(payload, 1, 0, 1)
 	payload = appendCATUint128(payload, 10_000)
@@ -1867,7 +2045,7 @@ func createCATCreateAssetWithMintPayload(nonce uint64) []byte {
 	payload = append(payload, mintAuthorityOwnerID[:]...)
 	payload = append(payload, 1, 1)
 	payload = appendUint16LE(payload, 0)
-	payload = append(payload, 'M', 'M')
+	payload = append(payload, symbol, name)
 	payload = appendCATUint128(payload, 1)
 	var initialMintToOwnerID [externalapi.DomainHashSize]byte
 	initialMintToOwnerID[0] = 0x66

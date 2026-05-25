@@ -9,6 +9,7 @@ import (
 	consensusexternalapi "github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/processes/coinbasemanager"
 	"github.com/cryptix-network/cryptixd/domain/consensus/ruleerrors"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/atomicstate"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
@@ -206,6 +207,7 @@ func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
 	sort.Slice(candidateTxs, func(i, j int) bool {
 		return subnetworks.Less(candidateTxs[i].SubnetworkID, candidateTxs[j].SubnetworkID)
 	})
+	candidateTxs = keepCATNonceFrontier(candidateTxs)
 
 	log.Debugf("Considering %d transactions for inclusion to new block",
 		len(candidateTxs))
@@ -236,6 +238,81 @@ func (btb *blockTemplateBuilder) buildBlockTemplateOnce(
 		len(blockTemplate.Block.Transactions), blockTxs.totalFees, blockTxs.totalMass, difficulty.CompactToBig(blockTemplate.Block.Header.Bits()))
 
 	return blockTemplate, nil, nil
+}
+
+func keepCATNonceFrontier(candidateTxs []*candidateTx) []*candidateTx {
+	frontierByKey := make(map[string]*candidateTx)
+	result := make([]*candidateTx, 0, len(candidateTxs))
+	for _, candidate := range candidateTxs {
+		key, nonce, ok := catNonceFrontierKey(candidate.DomainTransaction)
+		if !ok {
+			result = append(result, candidate)
+			continue
+		}
+		current := frontierByKey[key]
+		if current == nil {
+			frontierByKey[key] = candidate
+			continue
+		}
+		_, currentNonce, _ := catNonceFrontierKey(current.DomainTransaction)
+		if nonce < currentNonce {
+			frontierByKey[key] = candidate
+		}
+	}
+	for _, candidate := range candidateTxs {
+		key, _, ok := catNonceFrontierKey(candidate.DomainTransaction)
+		if !ok {
+			continue
+		}
+		if frontierByKey[key] == candidate {
+			result = append(result, candidate)
+		}
+	}
+	return result
+}
+
+func catNonceFrontierKey(tx *consensusexternalapi.DomainTransaction) (string, uint64, bool) {
+	if tx == nil || !subnetworks.IsPayload(tx.SubnetworkID) || len(tx.Payload) == 0 {
+		return "", 0, false
+	}
+	parsed, err := atomicstate.ParsePayload(tx.Payload)
+	if err != nil || parsed == nil {
+		return "", 0, false
+	}
+	authInputIndex := int(parsed.AuthInputIndex)
+	if authInputIndex >= len(tx.Inputs) || tx.Inputs[authInputIndex] == nil || tx.Inputs[authInputIndex].UTXOEntry == nil {
+		return "", 0, false
+	}
+	ownerID, ok := atomicstate.OwnerIDFromScript(tx.Inputs[authInputIndex].UTXOEntry.ScriptPublicKey())
+	if !ok {
+		return "", 0, false
+	}
+	nonceKey, ok := catNonceKey(parsed, ownerID)
+	if !ok {
+		return "", 0, false
+	}
+	return fmt.Sprintf("%x:%d:%x", nonceKey.OwnerID, nonceKey.ScopeKind, nonceKey.ScopeID), parsed.Nonce, true
+}
+
+func catNonceKey(parsed *atomicstate.ParsedPayload, ownerID [consensusexternalapi.DomainHashSize]byte) (atomicstate.NonceKey, bool) {
+	switch op := parsed.Op.(type) {
+	case atomicstate.CreateAssetOp, atomicstate.CreateAssetWithMintOp, atomicstate.CreateLiquidityAssetOp:
+		return atomicstate.OwnerNonceKey(ownerID), true
+	case atomicstate.TransferOp:
+		return atomicstate.AssetNonceKey(ownerID, op.AssetID), true
+	case atomicstate.MintOp:
+		return atomicstate.AssetNonceKey(ownerID, op.AssetID), true
+	case atomicstate.BurnOp:
+		return atomicstate.AssetNonceKey(ownerID, op.AssetID), true
+	case atomicstate.BuyLiquidityExactInOp:
+		return atomicstate.AssetNonceKey(ownerID, op.AssetID), true
+	case atomicstate.SellLiquidityExactInOp:
+		return atomicstate.AssetNonceKey(ownerID, op.AssetID), true
+	case atomicstate.ClaimLiquidityFeesOp:
+		return atomicstate.AssetNonceKey(ownerID, op.AssetID), true
+	default:
+		return atomicstate.NonceKey{}, false
+	}
 }
 
 func splitTemplateInvalidTransactions(

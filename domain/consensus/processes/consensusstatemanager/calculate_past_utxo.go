@@ -125,6 +125,14 @@ func (csm *consensusStateManager) restorePastUTXO(
 	var utxoDiffs []externalapi.UTXODiff
 	nextBlockHash := blockHash
 	for {
+		status, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, nextBlockHash)
+		if err != nil {
+			return nil, err
+		}
+		if status == externalapi.StatusDisqualifiedFromChain {
+			return nil, errors.Errorf("cannot restore past UTXO for %s through disqualified diff-path block %s", blockHash, nextBlockHash)
+		}
+
 		log.Debugf("Collecting UTXO diff for block %s", nextBlockHash)
 		utxoDiff, err := csm.utxoDiffStore.UTXODiff(csm.databaseContext, stagingArea, nextBlockHash)
 		if err != nil {

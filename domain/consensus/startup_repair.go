@@ -152,6 +152,15 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 	log.Warnf("Startup DB repair plan %q: rewinding selected chain from %s (daa=%d) to %s (daa=%d), removing %d selected-chain block(s), trigger=%s",
 		plan.label(), currentTip, currentTipHeader.DAAScore(), targetHash, targetDAA, len(removed), triggerText)
 
+	staleDescendants, err := s.startupRepairBodyDescendantsAboveTarget(readStagingArea, targetHash, targetDAA, removed)
+	if err != nil {
+		return err
+	}
+	if len(staleDescendants) > 0 {
+		log.Warnf("Startup DB repair plan %q: also removing %d local body descendant/side-branch block(s) above DAA %d",
+			plan.label(), len(staleDescendants), targetDAA)
+	}
+
 	if plan.DryRun {
 		log.Warnf("Startup DB repair plan %q dry-run: no database changes were written", plan.label())
 		return nil
@@ -168,6 +177,9 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 		for _, blockHash := range removed {
 			s.blockStatusStore.Stage(rewindStagingArea, blockHash, externalapi.StatusDisqualifiedFromChain)
 		}
+		for _, blockHash := range staleDescendants {
+			s.blockStatusStore.Stage(rewindStagingArea, blockHash, externalapi.StatusDisqualifiedFromChain)
+		}
 	}
 	err = staging.CommitAllChanges(s.databaseContext, rewindStagingArea)
 	if err != nil {
@@ -181,7 +193,8 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 
 	if plan.cleanupRemovedBlockData() {
 		cleanupStagingArea := model.NewStagingArea()
-		for _, blockHash := range removed {
+		blocksToCleanup := append(append([]*externalapi.DomainHash{}, removed...), staleDescendants...)
+		for _, blockHash := range blocksToCleanup {
 			s.blockStore.Delete(cleanupStagingArea, blockHash)
 			s.acceptanceDataStore.Delete(cleanupStagingArea, blockHash)
 			s.atomicStateStore.Delete(cleanupStagingArea, blockHash)
@@ -198,6 +211,70 @@ func (s *consensus) applyStartupRepairPlanAtStartup() error {
 	log.Warnf("Startup DB repair plan %q completed: selected chain and virtual state are now capped at %s (daa=%d)",
 		plan.label(), targetHash, targetDAA)
 	return nil
+}
+
+func (s *consensus) startupRepairBodyDescendantsAboveTarget(
+	stagingArea *model.StagingArea,
+	targetHash *externalapi.DomainHash,
+	targetDAA uint64,
+	selectedChainRemoved []*externalapi.DomainHash) ([]*externalapi.DomainHash, error) {
+
+	removedSet := make(map[externalapi.DomainHash]struct{}, len(selectedChainRemoved))
+	for _, hash := range selectedChainRemoved {
+		removedSet[*hash] = struct{}{}
+	}
+
+	dagTopologyManager := s.dagTopologyManagers[0]
+	queue, err := dagTopologyManager.Children(stagingArea, targetHash)
+	if err != nil {
+		return nil, err
+	}
+	visited := make(map[externalapi.DomainHash]struct{}, len(queue))
+	stale := make([]*externalapi.DomainHash, 0)
+
+	for len(queue) > 0 {
+		current := queue[0]
+		queue = queue[1:]
+		if _, ok := visited[*current]; ok {
+			continue
+		}
+		visited[*current] = struct{}{}
+
+		children, err := dagTopologyManager.Children(stagingArea, current)
+		if err != nil {
+			return nil, err
+		}
+		queue = append(queue, children...)
+
+		if _, ok := removedSet[*current]; ok {
+			continue
+		}
+
+		exists, err := s.blockStatusStore.Exists(s.databaseContext, stagingArea, current)
+		if err != nil {
+			return nil, err
+		}
+		if !exists {
+			continue
+		}
+		status, err := s.blockStatusStore.Get(s.databaseContext, stagingArea, current)
+		if err != nil {
+			return nil, err
+		}
+		if status == externalapi.StatusHeaderOnly || status == externalapi.StatusDisqualifiedFromChain || status == externalapi.StatusInvalid {
+			continue
+		}
+
+		header, err := s.blockHeaderStore.BlockHeader(s.databaseContext, stagingArea, current)
+		if err != nil {
+			return nil, err
+		}
+		if header.DAAScore() > targetDAA {
+			stale = append(stale, current)
+		}
+	}
+
+	return stale, nil
 }
 
 func (s *consensus) startupRepairTriggerMatched(

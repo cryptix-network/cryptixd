@@ -181,7 +181,7 @@ func (csm *consensusStateManager) getUnverifiedChainBlocks(stagingArea *model.St
 					return nil, err
 				}
 				if !hasValidDiffPath {
-					log.Warnf("Block %s is marked UTXO-valid but its UTXO diff path to the virtual root is incomplete; revalidating it to repair local diff state", currentHash)
+					log.Debugf("Block %s is marked UTXO-valid but its UTXO diff path to the virtual root is incomplete; revalidating it to repair local diff state", currentHash)
 					unverifiedBlocks = append(unverifiedBlocks, currentHash)
 
 					currentBlockGHOSTDAGData, err := csm.ghostdagDataStore.Get(csm.databaseContext, stagingArea, currentHash, false)
@@ -268,6 +268,14 @@ func (csm *consensusStateManager) hasUTXODiffPathToVirtualRoot(
 			return false, err
 		}
 		if currentHash == nil {
+			return false, nil
+		}
+		currentStatus, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, currentHash)
+		if err != nil {
+			return false, err
+		}
+		if currentStatus == externalapi.StatusDisqualifiedFromChain {
+			log.Debugf("UTXO diff path for block %s crosses disqualified block %s; forcing revalidation", blockHash, currentHash)
 			return false, nil
 		}
 	}
