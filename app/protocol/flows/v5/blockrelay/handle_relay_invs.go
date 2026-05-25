@@ -88,13 +88,9 @@ func (flow *handleRelayInvsFlow) start() error {
 			return err
 		}
 		if blockInfo.Exists && blockInfo.BlockStatus != externalapi.StatusHeaderOnly {
-			unsafe, reason, err := isUnsafeIBDBlock(flow.Domain().Consensus(), inv.Hash, blockInfo)
-			if err != nil {
-				return err
-			}
-			if unsafe {
-				return protocolerrors.Errorf(true, "sent inv of an unsafe block %s: %s",
-					inv.Hash, reason)
+			if blockInfo.BlockStatus == externalapi.StatusInvalid {
+				return protocolerrors.Errorf(true, "sent inv of an invalid block %s",
+					inv.Hash)
 			}
 			shouldResolve, virtualDAAScore, targetDAAScore, err := flow.shouldTriggerIBDForExistingBlock(inv.Hash)
 			if err != nil {

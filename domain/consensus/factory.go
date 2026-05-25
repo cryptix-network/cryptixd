@@ -73,6 +73,8 @@ type Config struct {
 	IsArchival bool
 	// EnableSanityCheckPruningUTXOSet checks the full pruning point utxo set against the commitment at every pruning movement
 	EnableSanityCheckPruningUTXOSet bool
+	// StartupRepairPlanPath is an optional JSON repair plan applied once during consensus startup.
+	StartupRepairPlanPath string
 
 	SkipAddingGenesis bool
 }
@@ -505,6 +507,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		genesisBlock:                config.GenesisBlock,
 		genesisHash:                 config.GenesisHash,
 		payloadHfActivationDAAScore: config.PayloadHfActivationDAAScore,
+		startupRepairPlanPath:       config.StartupRepairPlanPath,
 
 		expectedDAAWindowDurationInMilliseconds: config.TargetTimePerBlock.Milliseconds() *
 			int64(config.DifficultyAdjustmentWindowSize),

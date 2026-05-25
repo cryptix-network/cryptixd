@@ -24,6 +24,7 @@ type consensus struct {
 	genesisBlock                *externalapi.DomainBlock
 	genesisHash                 *externalapi.DomainHash
 	payloadHfActivationDAAScore uint64
+	startupRepairPlanPath       string
 
 	expectedDAAWindowDurationInMilliseconds int64
 
@@ -156,6 +157,11 @@ func (s *consensus) Init(skipAddingGenesis bool) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	err = s.applyStartupRepairPlanAtStartup()
+	if err != nil {
+		return err
 	}
 
 	return nil

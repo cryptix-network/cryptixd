@@ -130,6 +130,7 @@ type Flags struct {
 	RelayNonStd                         bool          `long:"relaynonstd" description:"Relay non-standard transactions regardless of the default settings for the active network."`
 	RejectNonStd                        bool          `long:"rejectnonstd" description:"Reject non-standard transactions regardless of the default settings for the active network."`
 	ResetDatabase                       bool          `long:"reset-db" description:"Reset database before starting node. It's needed when switching between subnetworks."`
+	StartupRepairPlan                   string        `long:"startup-repair-plan" description:"Apply the given JSON startup database repair plan before networking starts"`
 	MaxUTXOCacheSize                    uint64        `long:"maxutxocachesize" description:"Max size of loaded UTXO into ram from the disk in bytes"`
 	UTXOIndex                           bool          `long:"utxoindex" description:"Enable the UTXO index"`
 	IsArchivalNode                      bool          `long:"archival" description:"Run as an archival node: don't delete old block data when moving the pruning point (Warning: heavy disk usage)'"`
@@ -357,6 +358,9 @@ func LoadConfig() (*Config, error) {
 		cfg.LogDir = filepath.Join(cfg.AppDir, defaultLogDirname)
 	}
 	cfg.LogDir = cleanAndExpandPath(cfg.LogDir)
+	if cfg.StartupRepairPlan != "" {
+		cfg.StartupRepairPlan = cleanAndExpandPath(cfg.StartupRepairPlan)
+	}
 
 	// Special show command to list supported subsystems and exit.
 	if cfg.LogLevel == "show" {

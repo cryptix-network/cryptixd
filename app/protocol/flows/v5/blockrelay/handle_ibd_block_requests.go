@@ -26,24 +26,6 @@ func HandleIBDBlockRequests(context HandleIBDBlockRequestsContext, incomingRoute
 		msgRequestIBDBlocks := message.(*appmessage.MsgRequestIBDBlocks)
 		log.Debugf("Got request for %d ibd blocks", len(msgRequestIBDBlocks.Hashes))
 		for i, hash := range msgRequestIBDBlocks.Hashes {
-			blockInfo, err := context.Domain().Consensus().GetBlockInfo(hash)
-			if err != nil {
-				return errors.Wrapf(err, "unable to inspect requested IBD block hash %s", hash)
-			}
-			unsafe, reason, err := isUnsafeIBDBlock(context.Domain().Consensus(), hash, blockInfo)
-			if err != nil {
-				return err
-			}
-			if unsafe {
-				return protocolerrors.Errorf(false, "refusing to serve unsafe IBD block %s: %s",
-					hash, reason)
-			}
-			// UTXOPendingVerification is intentionally served here. IBD body requests
-			// can include merge-set/anticone blocks returned by GetMissingBlockBodyHashes;
-			// those blocks are not necessarily selected-chain blocks on the source yet.
-			// Known invalid/disqualified blocks and verified commitment mismatches are
-			// still blocked by isUnsafeIBDBlock above.
-
 			// Fetch the block from the database.
 			block, found, err := context.Domain().Consensus().GetBlock(hash)
 			if err != nil {

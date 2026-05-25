@@ -214,6 +214,81 @@ func TestGetBlockTemplateMixedReadyMempoolBuildsFreshCommitment(t *testing.T) {
 	})
 }
 
+func TestGetBlockTemplateMixedMempoolOverParallelTipsIsConsensusValid(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestGetBlockTemplateMixedMempoolOverParallelTipsIsConsensusValid",
+			nil,
+		)
+
+		readyTxs := make([]*externalapi.DomainTransaction, 0, 5)
+		for i := 0; i < 2; i++ {
+			tx, err := createReadyTransactionFromConsensusFunding(tc)
+			if err != nil {
+				t.Fatalf("create native transaction parent: %v", err)
+			}
+			readyTxs = append(readyTxs, tx)
+		}
+		messengerTx, err := createReadyTransactionFromConsensusFunding(tc)
+		if err != nil {
+			t.Fatalf("create messenger transaction parent: %v", err)
+		}
+		messengerTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		messengerTx.Payload = []byte("MSG:parallel-template")
+		readyTxs = append(readyTxs, messengerTx)
+
+		tokenCreateTx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 10_000)
+		if err != nil {
+			t.Fatalf("create token transaction parent: %v", err)
+		}
+		tokenCreateTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		tokenCreateTx.Payload = createCATCreateAssetWithMintPayload(1)
+		readyTxs = append(readyTxs, tokenCreateTx)
+
+		for _, tx := range readyTxs {
+			if _, err := miningManager.ValidateAndInsertTransaction(tx, false, true); err != nil {
+				t.Fatalf("ValidateAndInsertTransaction %s: %v", consensushashing.TransactionID(tx), err)
+			}
+		}
+
+		tips, err := tc.Tips()
+		if err != nil {
+			t.Fatalf("Tips before fork: %v", err)
+		}
+		if len(tips) != 1 {
+			t.Fatalf("expected one tip before fork, got %d", len(tips))
+		}
+		if _, _, err := tc.AddBlock(tips, nil, nil); err != nil {
+			t.Fatalf("AddBlock fork A: %v", err)
+		}
+		if _, _, err := tc.AddBlock(tips, nil, nil); err != nil {
+			t.Fatalf("AddBlock fork B: %v", err)
+		}
+
+		blockTemplate, err := miningManager.GetBlockTemplateBuilder().BuildBlockTemplate(&externalapi.DomainCoinbaseData{
+			ScriptPublicKey: &externalapi.ScriptPublicKey{Script: nil, Version: 0},
+			ExtraData:       nil,
+		})
+		if err != nil {
+			t.Fatalf("BuildBlockTemplate: %v", err)
+		}
+		if len(blockTemplate.Block.Header.DirectParents()) < 2 {
+			t.Fatalf("expected a template over parallel tips, got parents=%v", blockTemplate.Block.Header.DirectParents())
+		}
+		assertMixedTemplateShape(t, blockTemplate.Block.Transactions, 2, 2)
+
+		submittedBlock := cloneBlockWithoutUTXOEntries(blockTemplate.Block)
+		if err := tc.ValidateAndInsertBlock(submittedBlock, true); err != nil {
+			t.Fatalf("parallel-tip mixed mempool template was consensus-invalid: %v", err)
+		}
+	})
+}
+
 func cloneBlockWithoutUTXOEntries(block *externalapi.DomainBlock) *externalapi.DomainBlock {
 	clone := block.Clone()
 	for _, tx := range clone.Transactions {

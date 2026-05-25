@@ -109,7 +109,7 @@ func (daas *daaBlocksStore) Delete(stagingArea *model.StagingArea, blockHash *ex
 	if _, ok := stagingShard.daaScoreToAdd[*blockHash]; ok {
 		delete(stagingShard.daaScoreToAdd, *blockHash)
 	} else {
-		stagingShard.daaAddedBlocksToDelete[*blockHash] = struct{}{}
+		stagingShard.daaScoreToDelete[*blockHash] = struct{}{}
 	}
 
 	if _, ok := stagingShard.daaAddedBlocksToAdd[*blockHash]; ok {

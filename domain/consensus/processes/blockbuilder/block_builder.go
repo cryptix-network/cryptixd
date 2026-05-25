@@ -42,6 +42,23 @@ type blockBuilder struct {
 	atomicStateGrowthLimits     atomicstate.StateGrowthLimits
 }
 
+var templateCandidateBlockHash = externalapi.NewDomainHashFromByteArray(&[externalapi.DomainHashSize]byte{
+	2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+})
+
+type templateCandidateContext struct {
+	blockHash      *externalapi.DomainHash
+	parents        []externalapi.BlockLevelParents
+	bits           uint32
+	daaScore       uint64
+	blueWork       *big.Int
+	blueScore      uint64
+	acceptanceData externalapi.AcceptanceData
+	multiset       model.Multiset
+	atomicState    *atomicstate.State
+	pruningPoint   *externalapi.DomainHash
+}
+
 // New creates a new instance of a BlockBuilder
 func New(
 	databaseContext model.DBManager,
@@ -108,22 +125,23 @@ func (bb *blockBuilder) BuildBlock(coinbaseData *externalapi.DomainCoinbaseData,
 func (bb *blockBuilder) buildBlock(stagingArea *model.StagingArea, coinbaseData *externalapi.DomainCoinbaseData,
 	transactions []*externalapi.DomainTransaction) (block *externalapi.DomainBlock, coinbaseHasRedReward bool, err error) {
 
-	err = bb.validateTransactions(stagingArea, transactions)
+	templateContext, err := bb.prepareTemplateCandidateContext(stagingArea)
 	if err != nil {
 		return nil, false, err
 	}
 
-	newBlockPruningPoint, err := bb.newBlockPruningPoint(stagingArea, model.VirtualBlockHash)
+	err = bb.validateTransactions(stagingArea, transactions, templateContext.daaScore, templateContext.atomicState)
 	if err != nil {
 		return nil, false, err
 	}
-	coinbase, coinbaseHasRedReward, err := bb.newBlockCoinbaseTransaction(stagingArea, coinbaseData)
+
+	coinbase, coinbaseHasRedReward, err := bb.coinbaseManager.ExpectedCoinbaseTransaction(stagingArea, templateContext.blockHash, coinbaseData)
 	if err != nil {
 		return nil, false, err
 	}
 	transactionsWithCoinbase := append([]*externalapi.DomainTransaction{coinbase}, transactions...)
 
-	header, err := bb.buildHeader(stagingArea, transactionsWithCoinbase, newBlockPruningPoint)
+	header, err := bb.buildHeaderFromTemplateContext(stagingArea, templateContext, transactionsWithCoinbase)
 	if err != nil {
 		return nil, false, err
 	}
@@ -134,17 +152,71 @@ func (bb *blockBuilder) buildBlock(stagingArea *model.StagingArea, coinbaseData 
 	}, coinbaseHasRedReward, nil
 }
 
-func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
-	transactions []*externalapi.DomainTransaction) error {
+func (bb *blockBuilder) prepareTemplateCandidateContext(stagingArea *model.StagingArea) (*templateCandidateContext, error) {
+	virtualBlockRelations, err := bb.blockRelationStore.BlockRelation(bb.databaseContext, stagingArea, model.VirtualBlockHash)
+	if err != nil {
+		return nil, err
+	}
 
-	virtualAtomicState, err := bb.atomicStateStore.Get(bb.databaseContext, stagingArea, model.VirtualBlockHash)
+	bb.blockRelationStore.StageBlockRelation(stagingArea, templateCandidateBlockHash, &model.BlockRelations{
+		Parents: virtualBlockRelations.Parents,
+	})
+
+	err = bb.ghostdagManager.GHOSTDAG(stagingArea, templateCandidateBlockHash)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	newBlockDAAScore, err := bb.newBlockDAAScore(stagingArea)
+
+	bits, err := bb.difficultyManager.StageDAADataAndReturnRequiredDifficulty(stagingArea, templateCandidateBlockHash, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	daaScore, err := bb.daaBlocksStore.DAAScore(bb.databaseContext, stagingArea, templateCandidateBlockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	parents, err := bb.blockParentBuilder.BuildParents(stagingArea, daaScore, virtualBlockRelations.Parents)
+	if err != nil {
+		return nil, err
+	}
+
+	_, acceptanceData, multiset, atomicState, err :=
+		bb.consensusStateManager.CalculatePastUTXOAndAcceptanceDataAndAtomicState(stagingArea, templateCandidateBlockHash)
+	if err != nil {
+		return nil, err
+	}
+	bb.acceptanceDataStore.Stage(stagingArea, templateCandidateBlockHash, acceptanceData)
+
+	ghostdagData, err := bb.ghostdagDataStore.Get(bb.databaseContext, stagingArea, templateCandidateBlockHash, false)
+	if err != nil {
+		return nil, err
+	}
+
+	pruningPoint, err := bb.newBlockPruningPoint(stagingArea, templateCandidateBlockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	return &templateCandidateContext{
+		blockHash:      templateCandidateBlockHash,
+		parents:        parents,
+		bits:           bits,
+		daaScore:       daaScore,
+		blueWork:       ghostdagData.BlueWork(),
+		blueScore:      ghostdagData.BlueScore(),
+		acceptanceData: acceptanceData,
+		multiset:       multiset,
+		atomicState:    atomicState,
+		pruningPoint:   pruningPoint,
+	}, nil
+}
+
+func (bb *blockBuilder) validateTransactions(stagingArea *model.StagingArea,
+	transactions []*externalapi.DomainTransaction, newBlockDAAScore uint64, baseAtomicState *atomicstate.State) error {
+
+	virtualAtomicState := baseAtomicState.Clone()
 
 	invalidTransactions := make([]ruleerrors.InvalidTransaction, 0)
 	atomicGrowth := &atomicstate.BlockStateGrowth{}
@@ -320,6 +392,40 @@ func (bb *blockBuilder) buildHeader(stagingArea *model.StagingArea, transactions
 	), nil
 }
 
+func (bb *blockBuilder) buildHeaderFromTemplateContext(stagingArea *model.StagingArea, templateContext *templateCandidateContext,
+	transactions []*externalapi.DomainTransaction) (externalapi.BlockHeader, error) {
+
+	timeInMilliseconds, err := bb.newBlockTimeForHash(stagingArea, templateContext.blockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	hashMerkleRoot := bb.newBlockHashMerkleRoot(transactions)
+	acceptedIDMerkleRoot, err := bb.calculateAcceptedIDMerkleRoot(templateContext.acceptanceData)
+	if err != nil {
+		return nil, err
+	}
+	utxoCommitment := templateContext.atomicState.HeaderCommitment(
+		templateContext.multiset.Hash(),
+		templateContext.daaScore >= bb.payloadHfActivationDAAScore,
+	)
+
+	return blockheader.NewImmutableBlockHeader(
+		constants.BlockVersion,
+		templateContext.parents,
+		hashMerkleRoot,
+		acceptedIDMerkleRoot,
+		utxoCommitment,
+		timeInMilliseconds,
+		templateContext.bits,
+		0,
+		templateContext.daaScore,
+		templateContext.blueScore,
+		templateContext.blueWork,
+		templateContext.pruningPoint,
+	), nil
+}
+
 func (bb *blockBuilder) newBlockParents(stagingArea *model.StagingArea, daaScore uint64) ([]externalapi.BlockLevelParents, error) {
 	virtualBlockRelations, err := bb.blockRelationStore.BlockRelation(bb.databaseContext, stagingArea, model.VirtualBlockHash)
 	if err != nil {
@@ -329,6 +435,10 @@ func (bb *blockBuilder) newBlockParents(stagingArea *model.StagingArea, daaScore
 }
 
 func (bb *blockBuilder) newBlockTime(stagingArea *model.StagingArea) (int64, error) {
+	return bb.newBlockTimeForHash(stagingArea, model.VirtualBlockHash)
+}
+
+func (bb *blockBuilder) newBlockTimeForHash(stagingArea *model.StagingArea, blockHash *externalapi.DomainHash) (int64, error) {
 	// The timestamp for the block must not be before the median timestamp
 	// of the last several blocks. Thus, choose the maximum between the
 	// current time and one second after the past median time. The current
@@ -336,7 +446,7 @@ func (bb *blockBuilder) newBlockTime(stagingArea *model.StagingArea) (int64, err
 	// block timestamp does not supported a precision greater than one
 	// millisecond.
 	newTimestamp := mstime.Now().UnixMilliseconds()
-	minTimestamp, err := bb.minBlockTime(stagingArea, model.VirtualBlockHash)
+	minTimestamp, err := bb.minBlockTime(stagingArea, blockHash)
 	if err != nil {
 		return 0, err
 	}

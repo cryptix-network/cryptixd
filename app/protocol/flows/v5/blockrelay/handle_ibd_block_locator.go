@@ -5,7 +5,6 @@ import (
 	"github.com/cryptix-network/cryptixd/app/protocol/peer"
 	"github.com/cryptix-network/cryptixd/app/protocol/protocolerrors"
 	"github.com/cryptix-network/cryptixd/domain"
-	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/infrastructure/network/netadapter/router"
 )
 
@@ -38,14 +37,6 @@ func HandleIBDBlockLocator(context HandleIBDBlockLocatorContext, incomingRoute *
 			return protocolerrors.Errorf(true, "received IBDBlockLocator "+
 				"with an unknown targetHash %s", targetHash)
 		}
-		unsafe, reason, err := isUnsafeIBDBlock(context.Domain().Consensus(), targetHash, blockInfo)
-		if err != nil {
-			return err
-		}
-		if unsafe {
-			return protocolerrors.Errorf(true, "received IBDBlockLocator with unsafe targetHash %s: %s",
-				targetHash, reason)
-		}
 
 		foundHighestHashInTheSelectedParentChainOfTargetHash := false
 		for _, blockLocatorHash := range ibdBlockLocatorMessage.BlockLocatorHashes {
@@ -56,13 +47,6 @@ func HandleIBDBlockLocator(context HandleIBDBlockLocatorContext, incomingRoute *
 
 			// The IBD block locator is checking only existing blocks with bodies.
 			if !blockInfo.HasBody() {
-				continue
-			}
-			unsafe, _, err := isUnsafeIBDBlock(context.Domain().Consensus(), blockLocatorHash, blockInfo)
-			if err != nil {
-				return err
-			}
-			if unsafe {
 				continue
 			}
 
@@ -98,61 +82,4 @@ func HandleIBDBlockLocator(context HandleIBDBlockLocatorContext, incomingRoute *
 			}
 		}
 	}
-}
-
-func isUnsafeIBDStatus(status externalapi.BlockStatus) bool {
-	return status == externalapi.StatusInvalid || status == externalapi.StatusDisqualifiedFromChain
-}
-
-func isUnsafeIBDBlock(consensus externalapi.Consensus, blockHash *externalapi.DomainHash, blockInfo *externalapi.BlockInfo) (bool, string, error) {
-	if blockInfo == nil {
-		var err error
-		blockInfo, err = consensus.GetBlockInfo(blockHash)
-		if err != nil {
-			return false, "", err
-		}
-	}
-	if !blockInfo.Exists {
-		return true, "missing block info", nil
-	}
-	if isUnsafeIBDStatus(blockInfo.BlockStatus) {
-		return true, "status=" + blockInfo.BlockStatus.String(), nil
-	}
-	if blockInfo.BlockStatus != externalapi.StatusUTXOValid {
-		return false, "", nil
-	}
-
-	ok, reason, err := consensus.IsStoredBlockUTXOCommitmentValid(blockHash)
-	if err != nil {
-		return false, "", err
-	}
-	if !ok {
-		return true, reason, nil
-	}
-	return false, "", nil
-}
-
-func isSafeIBDSourceBlock(consensus externalapi.Consensus, blockHash *externalapi.DomainHash, blockInfo *externalapi.BlockInfo) (bool, string, error) {
-	if blockInfo == nil {
-		var err error
-		blockInfo, err = consensus.GetBlockInfo(blockHash)
-		if err != nil {
-			return false, "", err
-		}
-	}
-	if !blockInfo.Exists {
-		return false, "missing block info", nil
-	}
-	if blockInfo.BlockStatus != externalapi.StatusUTXOValid {
-		return false, "status=" + blockInfo.BlockStatus.String() + " is not UTXOValid", nil
-	}
-
-	ok, reason, err := consensus.IsStoredBlockUTXOCommitmentValid(blockHash)
-	if err != nil {
-		return false, "", err
-	}
-	if !ok {
-		return false, reason, nil
-	}
-	return true, "", nil
 }

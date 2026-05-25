@@ -49,6 +49,15 @@ func (hscss *headersSelectedChainStagingShard) Commit(dbTx model.DBTransaction) 
 	}
 
 	highestIndex := uint64(0)
+	if len(hscss.addedByHash) == 0 && len(hscss.removedByIndex) != 0 {
+		oldHighestIndex, exists, err := hscss.store.highestChainBlockIndex(dbTx)
+		if err != nil {
+			return err
+		}
+		if exists && uint64(len(hscss.removedByIndex)) <= oldHighestIndex+1 {
+			highestIndex = oldHighestIndex - uint64(len(hscss.removedByIndex))
+		}
+	}
 	for hash, index := range hscss.addedByHash {
 		hashCopy := hash
 		err := dbTx.Put(hscss.store.hashAsKey(&hashCopy), hscss.store.serializeIndex(index))

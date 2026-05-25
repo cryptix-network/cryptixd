@@ -83,6 +83,7 @@ func NewComponentManager(cfg *config.Config, db infrastructuredatabase.Database,
 		Params:                          *cfg.ActiveNetParams,
 		IsArchival:                      cfg.IsArchivalNode,
 		EnableSanityCheckPruningUTXOSet: cfg.EnableSanityCheckPruningUTXOSet,
+		StartupRepairPlanPath:           cfg.StartupRepairPlan,
 	}
 	mempoolConfig := mempool.DefaultConfig(&consensusConfig.Params)
 	mempoolConfig.MaximumOrphanTransactionCount = cfg.MaxOrphanTxs
