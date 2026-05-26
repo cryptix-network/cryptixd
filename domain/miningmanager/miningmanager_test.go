@@ -15,8 +15,10 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/miningmanager/mempool"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus"
+	consensusmodel "github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/testapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/blockheader"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/consensushashing"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/subnetworks"
@@ -439,6 +441,116 @@ func cloneBlockWithoutUTXOEntries(block *externalapi.DomainBlock) *externalapi.D
 		}
 	}
 	return clone
+}
+
+func TestInvalidChildAfterMixedAtomicBlockDoesNotPoisonNextTemplate(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestInvalidChildAfterMixedAtomicBlockDoesNotPoisonNextTemplate",
+			nil,
+		)
+
+		readyTxs := make([]*externalapi.DomainTransaction, 0, 7)
+		for i := 0; i < 4; i++ {
+			tx, err := createReadyTransactionFromConsensusFunding(tc)
+			if err != nil {
+				t.Fatalf("create native transaction parent: %v", err)
+			}
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 0; i < 2; i++ {
+			tx, err := createReadyTransactionFromConsensusFunding(tc)
+			if err != nil {
+				t.Fatalf("create messenger transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = []byte("MSG:mixed-before-invalid-child")
+			readyTxs = append(readyTxs, tx)
+		}
+		tokenCreateTx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 10_000)
+		if err != nil {
+			t.Fatalf("create token transaction parent: %v", err)
+		}
+		tokenCreateTx.SubnetworkID = subnetworks.SubnetworkIDPayload
+		tokenCreateTx.Payload = createCATCreateAssetWithMintPayload(1)
+		readyTxs = append(readyTxs, tokenCreateTx)
+
+		for _, tx := range readyTxs {
+			if _, err := miningManager.ValidateAndInsertTransaction(tx, false, true); err != nil {
+				t.Fatalf("ValidateAndInsertTransaction %s: %v", consensushashing.TransactionID(tx), err)
+			}
+		}
+
+		coinbase, err := generateNewCoinbase(consensusConfig.Params.Prefix, opTrue)
+		if err != nil {
+			t.Fatalf("Generate coinbase: %v", err)
+		}
+		mixedTemplate, _, err := miningManager.GetBlockTemplate(coinbase)
+		if err != nil {
+			t.Fatalf("GetBlockTemplate mixed: %v", err)
+		}
+		assertMixedTemplateShape(t, mixedTemplate.Transactions, 4, 3)
+
+		mixedBlock := cloneBlockWithoutUTXOEntries(mixedTemplate)
+		if err := tc.ValidateAndInsertBlock(mixedBlock, true); err != nil {
+			t.Fatalf("mixed template should be consensus-valid: %v", err)
+		}
+		mixedHash := consensushashing.BlockHash(mixedBlock)
+		if _, err := miningManager.HandleNewBlockTransactions(mixedBlock.Transactions); err != nil {
+			t.Fatalf("HandleNewBlockTransactions: %v", err)
+		}
+
+		invalidChildTemplate, err := tc.BuildBlockTemplate(coinbase, nil)
+		if err != nil {
+			t.Fatalf("BuildBlockTemplate invalid child base: %v", err)
+		}
+		header := invalidChildTemplate.Block.Header
+		badCommitment := externalapi.NewDomainHashFromByteArray(&[externalapi.DomainHashSize]byte{0x42})
+		invalidChildTemplate.Block.Header = blockheader.NewImmutableBlockHeader(
+			header.Version(),
+			header.Parents(),
+			header.HashMerkleRoot(),
+			header.AcceptedIDMerkleRoot(),
+			badCommitment,
+			header.TimeInMilliseconds(),
+			header.Bits(),
+			header.Nonce(),
+			header.DAAScore(),
+			header.BlueScore(),
+			header.BlueWork(),
+			header.PruningPoint(),
+		)
+		invalidChild := cloneBlockWithoutUTXOEntries(invalidChildTemplate.Block)
+		invalidChildHash := consensushashing.BlockHash(invalidChild)
+		if err := tc.ValidateAndInsertBlock(invalidChild, true); err != nil {
+			t.Fatalf("ValidateAndInsertBlock invalid child should disqualify without aborting insert: %v", err)
+		}
+		status, err := tc.BlockStatusStore().Get(tc.DatabaseContext(), consensusmodel.NewStagingArea(), invalidChildHash)
+		if err != nil {
+			t.Fatalf("BlockStatusStore.Get invalid child: %v", err)
+		}
+		if status != externalapi.StatusDisqualifiedFromChain {
+			t.Fatalf("invalid child status = %s, want %s", status, externalapi.StatusDisqualifiedFromChain)
+		}
+
+		nextTemplate, err := tc.BuildBlockTemplate(coinbase, nil)
+		if err != nil {
+			t.Fatalf("BuildBlockTemplate after invalid child: %v", err)
+		}
+		if !nextTemplate.Block.Header.DirectParents()[0].Equal(mixedHash) {
+			t.Fatalf("next template parent = %s, want last valid mixed block %s",
+				nextTemplate.Block.Header.DirectParents()[0], mixedHash)
+		}
+		if err := tc.ValidateAndInsertBlock(cloneBlockWithoutUTXOEntries(nextTemplate.Block), true); err != nil {
+			t.Fatalf("empty template after invalid child should remain consensus-valid: %v", err)
+		}
+	})
 }
 
 func newTestMiningManager(t *testing.T, consensusConfig *consensus.Config, name string) miningmanager.MiningManager {

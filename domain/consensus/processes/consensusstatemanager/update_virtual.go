@@ -3,6 +3,7 @@ package consensusstatemanager
 import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/model"
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
+	"github.com/cryptix-network/cryptixd/domain/consensus/utils/utxo"
 	"github.com/cryptix-network/cryptixd/infrastructure/logger"
 )
 
@@ -16,12 +17,17 @@ func (csm *consensusStateManager) updateVirtual(stagingArea *model.StagingArea, 
 
 	log.Debugf("Saving a reference to the GHOSTDAG data of the old virtual")
 	var oldVirtualSelectedParent *externalapi.DomainHash
+	var oldVirtualParents []*externalapi.DomainHash
 	if !newBlockHash.Equal(csm.genesisHash) {
 		oldVirtualGHOSTDAGData, err := csm.ghostdagDataStore.Get(csm.databaseContext, stagingArea, model.VirtualBlockHash, false)
 		if err != nil {
 			return nil, nil, err
 		}
 		oldVirtualSelectedParent = oldVirtualGHOSTDAGData.SelectedParent()
+		oldVirtualParents, err = csm.dagTopologyManager.Parents(stagingArea, model.VirtualBlockHash)
+		if err != nil {
+			return nil, nil, err
+		}
 	}
 
 	log.Debugf("Picking virtual parents from tips len: %d", len(tips))
@@ -30,6 +36,18 @@ func (csm *consensusStateManager) updateVirtual(stagingArea *model.StagingArea, 
 		return nil, nil, err
 	}
 	log.Debugf("Picked virtual parents: %s", virtualParents)
+
+	if !newBlockHash.Equal(csm.genesisHash) && externalapi.HashesEqual(oldVirtualParents, virtualParents) {
+		newBlockStatus, err := csm.blockStatusStore.Get(csm.databaseContext, stagingArea, newBlockHash)
+		if err != nil {
+			return nil, nil, err
+		}
+		if newBlockStatus == externalapi.StatusDisqualifiedFromChain {
+			log.Debugf("Disqualified block %s leaves virtual parents unchanged; skipping virtual UTXO/Atomic rebuild",
+				newBlockHash)
+			return &externalapi.SelectedChainPath{}, utxo.NewUTXODiff(), nil
+		}
+	}
 
 	virtualUTXODiff, err := csm.updateVirtualWithParents(stagingArea, virtualParents)
 	if err != nil {
