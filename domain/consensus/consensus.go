@@ -68,6 +68,7 @@ type consensus struct {
 	atomicTokenMetadataCache     map[[externalapi.DomainHashSize]byte]atomicstate.AssetPermanentMetadata
 	atomicTokenMetadataMissCache map[[externalapi.DomainHashSize]byte]string
 	atomicTokenAnchorCountCache  map[[externalapi.DomainHashSize]byte]map[[externalapi.DomainHashSize]byte]uint64
+	atomicTokenReplayCache       *atomicTokenReplayCache
 
 	consensusEventsChan chan externalapi.ConsensusEvent
 	virtualNotUpdated   bool
@@ -776,14 +777,7 @@ func (s *consensus) GetAtomicTokenStateHash(blockHash *externalapi.DomainHash) (
 	defer s.lock.Unlock()
 
 	stagingArea := model.NewStagingArea()
-	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, blockHash)
-	if err != nil {
-		if database.IsNotFoundError(err) {
-			return [externalapi.DomainHashSize]byte{}, false, nil
-		}
-		return [externalapi.DomainHashSize]byte{}, false, err
-	}
-	stateHash, ok, _, err := s.atomicTokenStateHashWithRecoveredMetadata(stagingArea, blockHash, atomicState)
+	stateHash, ok, _, err := s.atomicTokenIndexHashByReplay(stagingArea, blockHash)
 	return stateHash, ok, err
 }
 
@@ -792,14 +786,28 @@ func (s *consensus) GetAtomicTokenStateHashAvailability(blockHash *externalapi.D
 	defer s.lock.Unlock()
 
 	stagingArea := model.NewStagingArea()
-	atomicState, err := s.atomicStateStore.Get(s.databaseContext, stagingArea, blockHash)
-	if err != nil {
-		if database.IsNotFoundError(err) {
-			return false, "consensus Atomic state is not retained for this block", nil
+	_, ok, reason, err := s.atomicTokenIndexHashByReplay(stagingArea, blockHash)
+	return ok, reason, err
+}
+
+func (s *consensus) GetAtomicTokenStateDebugReport(blockHash *externalapi.DomainHash, maxEntries int) (string, bool, error) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	if s.atomicTokenReplayCache == nil ||
+		s.atomicTokenReplayCache.state == nil ||
+		!s.atomicTokenReplayCache.blockHash.Equal(blockHash) {
+		stagingArea := model.NewStagingArea()
+		if _, ok, reason, err := s.atomicTokenIndexHashByReplay(stagingArea, blockHash); err != nil || !ok {
+			return reason, false, err
 		}
-		return false, "", err
 	}
-	return s.atomicTokenStateHashAvailabilityWithRecoveredMetadata(stagingArea, blockHash, atomicState)
+	if s.atomicTokenReplayCache == nil ||
+		s.atomicTokenReplayCache.state == nil ||
+		!s.atomicTokenReplayCache.blockHash.Equal(blockHash) {
+		return "Atomic token replay cache is unavailable for debug report", false, nil
+	}
+	return s.atomicTokenReplayCache.state.TokenIndexDebugReport(nil, maxEntries), true, nil
 }
 
 func (s *consensus) GetVirtualUTXOs(expectedVirtualParents []*externalapi.DomainHash,

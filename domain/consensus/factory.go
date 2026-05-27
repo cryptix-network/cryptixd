@@ -552,6 +552,7 @@ func (f *factory) NewConsensus(config *Config, db infrastructuredatabase.Databas
 		atomicTokenMetadataCache:     make(map[[externalapi.DomainHashSize]byte]atomicstate.AssetPermanentMetadata),
 		atomicTokenMetadataMissCache: make(map[[externalapi.DomainHashSize]byte]string),
 		atomicTokenAnchorCountCache:  make(map[[externalapi.DomainHashSize]byte]map[[externalapi.DomainHashSize]byte]uint64),
+		atomicTokenReplayCache:       &atomicTokenReplayCache{},
 
 		consensusEventsChan: consensusEventsChan,
 		virtualNotUpdated:   true,

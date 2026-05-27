@@ -80,6 +80,7 @@ func (flow *atomicStateAuditFlow) start() error {
 	flow.logPolicyOnce()
 
 	timer := time.NewTimer(atomicP2PAuditInitialDelay)
+	timer := time.NewTimer(flow.initialAuditDelay(auditInterval))
 	defer timer.Stop()
 
 	for {
@@ -93,6 +94,7 @@ func (flow *atomicStateAuditFlow) start() error {
 				}
 			}
 			timer.Reset(atomicP2PAuditInterval)
+			timer.Reset(auditInterval)
 		}
 	}
 }
@@ -104,9 +106,9 @@ func (flow *atomicStateAuditFlow) logPolicyOnce() {
 
 	cfg := flow.Config()
 	switch {
+		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit disabled: --disable-atomic-health-audit")
 	case cfg.DisableDNSSeed && cfg.AtomicBootstrapAllowPeerFallback:
 		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit enabled: peer-only P2P fallback, min_sources=%d, interval=%s, RPC not required",
-			flow.minSources(), atomicP2PAuditInterval)
 	case cfg.DisableDNSSeed:
 		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit disabled: --nodnsseed was used without --atomic-bootstrap-allow-peer-fallback")
 	default:
@@ -120,6 +122,9 @@ func (flow *atomicStateAuditFlow) auditEnabled() bool {
 	return !cfg.DisableDNSSeed || cfg.AtomicBootstrapAllowPeerFallback
 }
 
+	}
+	if flow.AtomicStateAuditContext != nil {
+		if cfg := flow.Config(); cfg != nil {
 func (flow *atomicStateAuditFlow) runAudit() error {
 	activePeers := flow.Peers()
 	minSources := flow.minSources()
@@ -164,7 +169,6 @@ func (flow *atomicStateAuditFlow) runAudit() error {
 		return nil
 	}
 	if !response.HasState {
-		log.Infof("[atomic-bootstrap:p2p] healthy-state audit skipped at DAA-rendezvous block %s (daa=%d): peer %s has no Atomic state for this anchor yet",
 			anchor.blockHash, anchor.daaScore, flow.peer)
 		return nil
 	}
@@ -183,7 +187,37 @@ func (flow *atomicStateAuditFlow) runAudit() error {
 
 	log.Infof("[atomic-bootstrap:p2p] healthy-state audit passed at DAA-rendezvous block %s (daa=%d) with peer %s: state hash %s",
 		anchor.blockHash, anchor.daaScore, flow.peer, hex.EncodeToString(localHash))
+
+	}
+	if len(tokenResponse.StateHash) != externalapi.DomainHashSize {
+		return nil
+	}
+
+	localTokenHash, hasLocalTokenState, err := flow.Domain().Consensus().GetAtomicTokenStateHash(anchor.blockHash)
+	if err != nil {
+		return err
+		_, reason, availabilityErr := flow.Domain().Consensus().GetAtomicTokenStateHashAvailability(anchor.blockHash)
+		if availabilityErr != nil {
+			return availabilityErr
+		}
+			anchor.blockHash, anchor.daaScore, flow.peer, hex.EncodeToString(localTokenHash[:]), hex.EncodeToString(tokenResponse.StateHash))
+		flow.logLocalAtomicTokenDebug(anchor)
+		return nil
+	}
+
+	log.Infof("[atomic-bootstrap:p2p] token-state audit passed at DAA-rendezvous block %s (daa=%d) with peer %s: Atomic token checkpoint hash %s",
+		anchor.blockHash, anchor.daaScore, flow.peer, hex.EncodeToString(localTokenHash[:]))
 	return nil
+}
+
+func (flow *atomicStateAuditFlow) logLocalAtomicTokenDebug(anchor *atomicAuditAnchor) {
+	reporter, ok := flow.Domain().Consensus().(atomicTokenDebugReporter)
+	if !ok {
+		return
+	}
+	report, hasReport, err := reporter.GetAtomicTokenStateDebugReport(anchor.blockHash, 16)
+	log.Infof("[atomic-bootstrap:p2p] local Go Atomic token debug at DAA-rendezvous block %s:\n%s",
+		anchor.blockHash, report)
 }
 
 func (flow *atomicStateAuditFlow) currentAnchor() (*atomicAuditAnchor, string, error) {
@@ -199,62 +233,29 @@ func (flow *atomicStateAuditFlow) currentAnchor() (*atomicAuditAnchor, string, e
 	if err != nil {
 		return nil, "", err
 	}
-	finalityHash, err := consensus.GetVirtualFinalityPoint()
-	if err != nil {
-		return nil, "", err
-	}
-
-	targetDAA := uint64(0)
-	finalityHeader, err := consensus.GetBlockHeader(finalityHash)
-	if err != nil {
-		return nil, "", err
-	}
 	sinkHeader, err := consensus.GetBlockHeader(sinkHash)
 	if err != nil {
 		return nil, "", err
 	}
-	finalityDepth := flow.Config().ActiveNetParams.FinalityDepth()
-	if sinkHeader.BlueScore() < finalityHeader.BlueScore() {
-		return nil, fmt.Sprintf("virtual finality point is ahead of the selected sink: sink_blue_score=%d finality_blue_score=%d",
-			sinkHeader.BlueScore(), finalityHeader.BlueScore()), nil
-	}
-	finalityDistance := sinkHeader.BlueScore() - finalityHeader.BlueScore()
-	if finalityDistance < finalityDepth {
-		return nil, fmt.Sprintf("virtual finality point is not finality-safe yet: blue_score_distance=%d/%d",
-			finalityDistance, finalityDepth), nil
-	}
-	if finalityHeader.DAAScore() > atomicP2PAuditDAALag {
-		targetDAA = finalityHeader.DAAScore() - atomicP2PAuditDAALag
+
+	targetDAA := sinkHeader.DAAScore()
+	if targetDAA > atomicP2PAuditDAALag {
+		targetDAA -= atomicP2PAuditDAALag
 	}
 
-	isFinalityOnSelectedChain, err := consensus.IsInSelectedParentChainOf(finalityHash, sinkHash)
-	if err != nil {
-		return nil, "", err
-	}
-	if !isFinalityOnSelectedChain {
-		return nil, "virtual finality point is not on the selected chain yet", nil
-	}
-
-	currentHash := finalityHash
+	currentHash := sinkHash
 	for i := 0; i < atomicP2PAuditMaxWalk; i++ {
 		header, err := consensus.GetBlockHeader(currentHash)
 		if err != nil {
 			return nil, "", err
 		}
 		if header.DAAScore() <= targetDAA {
-			stateHash, hasState, err := consensus.GetAtomicTokenStateHash(currentHash)
+			stateHash, hasState, err := consensus.GetAtomicStateHash(currentHash)
 			if err != nil {
 				return nil, "", err
 			}
 			if !hasState {
-				_, reason, availabilityErr := consensus.GetAtomicTokenStateHashAvailability(currentHash)
-				if availabilityErr != nil {
-					return nil, "", availabilityErr
-				}
-				if reason == "" {
-					reason = "unknown reason"
-				}
-				return nil, "local Atomic token checkpoint is unavailable for the finality-stable DAA-rendezvous anchor: " + reason, nil
+				return nil, "local consensus Atomic state is unavailable for the retained DAA-rendezvous anchor: consensus Atomic state is not retained for this block", nil
 			}
 			return &atomicAuditAnchor{
 				blockHash: currentHash,
@@ -273,7 +274,7 @@ func (flow *atomicStateAuditFlow) currentAnchor() (*atomicAuditAnchor, string, e
 		currentHash = blockInfo.SelectedParent
 	}
 
-	return nil, "could not resolve a retained selected-chain block at the configured DAA lag", nil
+	return nil, "could not resolve a retained selected-chain token checkpoint at the configured DAA lag", nil
 }
 
 func shouldLogAtomicP2PAuditDeferred() bool {
@@ -287,6 +288,39 @@ func shouldLogAtomicP2PAuditDeferred() bool {
 		if atomic.CompareAndSwapInt64(&atomicP2PAuditDeferredLogUnixNano, lastUnixNano, nowUnixNano) {
 			return true
 		}
+	}
+}
+
+func (flow *atomicStateAuditFlow) requestConsensusAtomicStateHash(anchor *atomicAuditAnchor) (*appmessage.MsgConsensusAtomicStateHash, error) {
+	requestID := flow.allocateRequestID()
+	request := appmessage.NewMsgRequestConsensusAtomicStateHash(anchor.blockHash, anchor.daaScore)
+	request.SetRequestID(requestID)
+
+	if err := flow.outgoingRoute.Enqueue(request); err != nil {
+		return nil, err
+	}
+
+	deadline := time.Now().Add(atomicP2PAuditTimeout)
+	for {
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			return nil, errors.WithStack(router.ErrTimeout)
+		}
+
+		message, err := flow.incomingRoute.DequeueWithTimeout(remaining)
+		if err != nil {
+			return nil, err
+		}
+		response, ok := message.(*appmessage.MsgConsensusAtomicStateHash)
+		if !ok {
+			return nil, errors.Errorf("unexpected Atomic audit response message: %s", message.Command())
+		}
+		if response.ResponseID() != requestID {
+			log.Debugf("[atomic-bootstrap:p2p] ignoring stale Atomic audit response from %s with response_id=%d, expected=%d",
+				flow.peer, response.ResponseID(), requestID)
+			continue
+		}
+		return response, nil
 	}
 }
 
@@ -312,10 +346,10 @@ func (flow *atomicStateAuditFlow) requestAtomicTokenStateHash(anchor *atomicAudi
 		}
 		response, ok := message.(*appmessage.MsgAtomicTokenStateHash)
 		if !ok {
-			return nil, errors.Errorf("unexpected Atomic audit response message: %s", message.Command())
+			return nil, errors.Errorf("unexpected Atomic token audit response message: %s", message.Command())
 		}
 		if response.ResponseID() != requestID {
-			log.Debugf("[atomic-bootstrap:p2p] ignoring stale Atomic audit response from %s with response_id=%d, expected=%d",
+			log.Debugf("[atomic-bootstrap:p2p] ignoring stale Atomic token audit response from %s with response_id=%d, expected=%d",
 				flow.peer, response.ResponseID(), requestID)
 			continue
 		}

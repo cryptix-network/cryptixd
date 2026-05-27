@@ -18,77 +18,10 @@ var atomicTokenMetadataCacheBucket = database.MakeBucket([]byte("atomic-token-me
 func (s *consensus) atomicTokenStateHashWithRecoveredMetadata(stagingArea *model.StagingArea,
 	blockHash *externalapi.DomainHash, state *atomicstate.State) ([externalapi.DomainHashSize]byte, bool, string, error) {
 
-	state, err := s.atomicStateWithRecoveredAnchorCounts(stagingArea, blockHash, state)
-	if err != nil {
-		return [externalapi.DomainHashSize]byte{}, false, "", err
-	}
-
-	if stateHash, ok := state.TokenIndexHash(); ok {
+	if stateHash, ok := state.P2PTokenAuditHash(); ok {
 		return stateHash, true, "", nil
 	}
-
-	neededAssetIDs := atomicstate.AssetsRequiringPermanentMetadata(state)
-	if len(neededAssetIDs) == 0 {
-		return [externalapi.DomainHashSize]byte{}, false, state.TokenIndexHashUnavailableReason(), nil
-	}
-
-	metadata := make(map[[externalapi.DomainHashSize]byte]atomicstate.AssetPermanentMetadata, len(neededAssetIDs))
-	missing := make(map[[externalapi.DomainHashSize]byte]struct{}, len(neededAssetIDs))
-	if s.atomicTokenMetadataCache == nil {
-		s.atomicTokenMetadataCache = make(map[[externalapi.DomainHashSize]byte]atomicstate.AssetPermanentMetadata)
-	}
-	if s.atomicTokenMetadataMissCache == nil {
-		s.atomicTokenMetadataMissCache = make(map[[externalapi.DomainHashSize]byte]string)
-	}
-	for _, assetID := range neededAssetIDs {
-		if cached, ok := s.atomicTokenMetadataCache[assetID]; ok {
-			metadata[assetID] = cached
-			continue
-		}
-		cached, ok, err := s.loadAtomicTokenMetadataCache(assetID)
-		if err != nil {
-			return [externalapi.DomainHashSize]byte{}, false, "", err
-		}
-		if ok {
-			s.atomicTokenMetadataCache[assetID] = cached
-			metadata[assetID] = cached
-			continue
-		}
-		if reason, ok := s.atomicTokenMetadataMissCache[assetID]; ok {
-			return [externalapi.DomainHashSize]byte{}, false, reason, nil
-		}
-		missing[assetID] = struct{}{}
-	}
-
-	if len(missing) != 0 {
-		recovered, reason, err := s.recoverAtomicTokenMetadataFromRetainedAcceptanceData(stagingArea, blockHash, missing)
-		if err != nil {
-			return [externalapi.DomainHashSize]byte{}, false, "", err
-		}
-		for assetID, value := range recovered {
-			s.atomicTokenMetadataCache[assetID] = value
-			metadata[assetID] = value
-			if err := s.persistAtomicTokenMetadataCache(assetID, value); err != nil {
-				return [externalapi.DomainHashSize]byte{}, false, "", err
-			}
-			delete(missing, assetID)
-		}
-		if len(missing) != 0 {
-			if reason == "" {
-				reason = "creation transaction metadata is not available in retained block data"
-			}
-			for assetID := range missing {
-				s.atomicTokenMetadataMissCache[assetID] = reason
-			}
-			return [externalapi.DomainHashSize]byte{}, false, reason, nil
-		}
-	}
-
-	stateHash, ok := state.TokenIndexHashWithAssetMetadata(metadata)
-	if !ok {
-		return [externalapi.DomainHashSize]byte{}, false, state.TokenIndexHashUnavailableReasonWithAssetMetadata(metadata), nil
-	}
-	return stateHash, true, "", nil
+	return [externalapi.DomainHashSize]byte{}, false, state.P2PTokenAuditHashUnavailableReason(), nil
 }
 
 func (s *consensus) loadAtomicTokenMetadataCache(assetID [externalapi.DomainHashSize]byte) (
@@ -144,9 +77,8 @@ func (s *consensus) atomicStateWithRecoveredAnchorCounts(stagingArea *model.Stag
 		if anchorCountsEqual(state.AnchorCounts, cached) {
 			return state, nil
 		}
-		recovered := state.Clone()
-		recovered.AnchorCounts = cloneAnchorCounts(cached)
-		return recovered, nil
+		state.AnchorCounts = cloneAnchorCounts(cached)
+		return state, nil
 	}
 
 	iterator, err := s.consensusStateManager.RestorePastUTXOSetIterator(stagingArea, blockHash)
@@ -154,31 +86,16 @@ func (s *consensus) atomicStateWithRecoveredAnchorCounts(stagingArea *model.Stag
 		log.Warnf("[atomic-bootstrap:p2p] Atomic token anchor-count recovery unavailable for audit anchor %s: %s", blockHash, err)
 		return state, nil
 	}
-	reconstructed := make(map[[externalapi.DomainHashSize]byte]uint64)
-	for ok := iterator.First(); ok; ok = iterator.Next() {
-		_, utxoEntry, getErr := iterator.Get()
-		if getErr != nil {
-			closeErr := iterator.Close()
-			if closeErr != nil {
-				return nil, closeErr
-			}
-			return nil, getErr
+	reconstructed, err := atomicAnchorCountsFromUTXOIterator(iterator)
+	closeErr := iterator.Close()
+	if err != nil {
+		if closeErr != nil {
+			return nil, closeErr
 		}
-		ownerID, ok := atomicstate.OwnerIDFromScript(utxoEntry.ScriptPublicKey())
-		if !ok {
-			continue
-		}
-		if reconstructed[ownerID] == ^uint64(0) {
-			closeErr := iterator.Close()
-			if closeErr != nil {
-				return nil, closeErr
-			}
-			return nil, fmt.Errorf("Atomic anchor count overflow for owner `%x` at audit anchor %s", ownerID, blockHash)
-		}
-		reconstructed[ownerID]++
-	}
-	if err := iterator.Close(); err != nil {
 		return nil, err
+	}
+	if closeErr != nil {
+		return nil, closeErr
 	}
 
 	s.atomicTokenAnchorCountCache[blockKey] = cloneAnchorCounts(reconstructed)
@@ -186,11 +103,33 @@ func (s *consensus) atomicStateWithRecoveredAnchorCounts(stagingArea *model.Stag
 		return state, nil
 	}
 
-	recovered := state.Clone()
-	recovered.AnchorCounts = reconstructed
-	log.Debugf("[atomic-bootstrap:p2p] recovered Atomic token anchor counts from retained UTXO set for audit anchor %s: stored_anchor_owners=%d recovered_anchor_owners=%d",
-		blockHash, len(state.AnchorCounts), len(recovered.AnchorCounts))
-	return recovered, nil
+	replayAnchorOwners := len(state.AnchorCounts)
+	state.AnchorCounts = reconstructed
+	log.Infof("[atomic-bootstrap:p2p] recovered Atomic token anchor counts from UTXO set for audit anchor %s: replay_anchor_owners=%d recovered_anchor_owners=%d",
+		blockHash, replayAnchorOwners, len(state.AnchorCounts))
+	return state, nil
+}
+
+func atomicAnchorCountsFromUTXOIterator(iterator externalapi.ReadOnlyUTXOSetIterator) (map[[externalapi.DomainHashSize]byte]uint64, error) {
+	reconstructed := make(map[[externalapi.DomainHashSize]byte]uint64)
+	for ok := iterator.First(); ok; ok = iterator.Next() {
+		_, utxoEntry, getErr := iterator.Get()
+		if getErr != nil {
+			return nil, getErr
+		}
+		if utxoEntry.IsCoinbase() {
+			continue
+		}
+		ownerID, ok := atomicstate.OwnerIDFromScript(utxoEntry.ScriptPublicKey())
+		if !ok {
+			continue
+		}
+		if reconstructed[ownerID] == ^uint64(0) {
+			return nil, fmt.Errorf("Atomic anchor count overflow for owner `%x`", ownerID)
+		}
+		reconstructed[ownerID]++
+	}
+	return reconstructed, nil
 }
 
 func cloneAnchorCounts(source map[[externalapi.DomainHashSize]byte]uint64) map[[externalapi.DomainHashSize]byte]uint64 {
@@ -262,8 +201,14 @@ func (s *consensus) recoverAtomicTokenMetadataFromRetainedAcceptanceData(staging
 				if transactionAcceptanceData == nil || !transactionAcceptanceData.IsAccepted || transactionAcceptanceData.Transaction == nil {
 					continue
 				}
+				tx := transactionAcceptanceData.Transaction.Clone()
+				for i := range tx.Inputs {
+					if i < len(transactionAcceptanceData.TransactionInputUTXOEntries) {
+						tx.Inputs[i].UTXOEntry = transactionAcceptanceData.TransactionInputUTXOEntries[i]
+					}
+				}
 				assetID, metadata, ok, err := atomicstate.AssetPermanentMetadataFromCreationTransaction(
-					transactionAcceptanceData.Transaction,
+					tx,
 					creationContext,
 				)
 				if err != nil {

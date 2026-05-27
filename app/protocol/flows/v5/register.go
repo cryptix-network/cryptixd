@@ -151,6 +151,7 @@ func registerBlockRelayFlows(m protocolManager, router *routerpkg.Router, isStop
 
 		m.RegisterFlow("AuditAtomicState", router,
 			[]appmessage.MessageCommand{
+				appmessage.CmdConsensusAtomicStateHash,
 				appmessage.CmdAtomicTokenStateHash,
 			}, isStopping, errChan,
 			func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {

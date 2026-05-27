@@ -112,6 +112,8 @@ type Flags struct {
 	AtomicBootstrapPeers                []string      `long:"atomic-bootstrap-peer" description:"Optional Atomic bootstrap RPC peer source. Accepted for CLI compatibility; P2P Atomic audit does not require RPC."`
 	AtomicBootstrapAllowPeerFallback    bool          `long:"atomic-bootstrap-allow-peer-fallback" description:"Allow peer-only Atomic P2P bootstrap/audit when DNS seed bootstrap is disabled"`
 	AtomicBootstrapPeerQuorumMinSources uint          `long:"atomic-bootstrap-peer-quorum-min-sources" description:"Minimum independent peer/non-seed sources required for Atomic P2P bootstrap/audit"`
+	DisableAtomicHealthAudit            bool          `long:"disable-atomic-health-audit" description:"Disable the periodic Atomic P2P healthy-state/token audit while keeping normal Atomic indexing and P2P sync enabled"`
+	AtomicHealthAuditIntervalMinutes    uint          `long:"atomic-health-audit-interval-minutes" description:"Interval in minutes for the periodic Atomic P2P healthy-state/token audit"`
 	ExternalIPs                         []string      `long:"externalip" description:"Add an ip to the list of local addresses we claim to listen on to peers"`
 	Proxy                               string        `long:"proxy" description:"Connect via SOCKS5 proxy (eg. 127.0.0.1:9050)"`
 	ProxyUser                           string        `long:"proxyuser" description:"Username for proxy server"`
@@ -207,6 +209,7 @@ func defaultFlags() *Flags {
 		ServiceOptions:                      &ServiceOptions{},
 		ProtocolVersion:                     defaultProtocolVersion,
 		AtomicBootstrapPeerQuorumMinSources: 2,
+		AtomicHealthAuditIntervalMinutes:    3,
 	}
 }
 
@@ -458,16 +461,21 @@ func LoadConfig() (*Config, error) {
 	if cfg.AtomicBootstrapPeerQuorumMinSources == 0 {
 		cfg.AtomicBootstrapPeerQuorumMinSources = 1
 	}
+	if cfg.AtomicHealthAuditIntervalMinutes == 0 {
+		return nil, errors.New("--atomic-health-audit-interval-minutes must be greater than 0")
+	}
 
 	switch {
+	case cfg.DisableAtomicHealthAudit:
+		log.Infof("Cryptix Atomic P2P audit: periodic health audit DISABLED by --disable-atomic-health-audit")
 	case cfg.DisableDNSSeed && cfg.AtomicBootstrapAllowPeerFallback:
-		log.Infof("Cryptix Atomic P2P audit: peer-only fallback ENABLED; minimum independent peer sources = %d",
-			cfg.AtomicBootstrapPeerQuorumMinSources)
+		log.Infof("Cryptix Atomic P2P audit: peer-only fallback ENABLED; minimum independent peer sources = %d, interval = %d minute(s)",
+			cfg.AtomicBootstrapPeerQuorumMinSources, cfg.AtomicHealthAuditIntervalMinutes)
 	case cfg.DisableDNSSeed:
 		log.Infof("Cryptix Atomic P2P audit: disabled because --nodnsseed is set without --atomic-bootstrap-allow-peer-fallback")
 	default:
-		log.Infof("Cryptix Atomic P2P audit: seed-connected peer quorum mode; minimum independent peer sources = %d",
-			cfg.AtomicBootstrapPeerQuorumMinSources)
+		log.Infof("Cryptix Atomic P2P audit: seed-connected peer quorum mode; minimum independent peer sources = %d, interval = %d minute(s)",
+			cfg.AtomicBootstrapPeerQuorumMinSources, cfg.AtomicHealthAuditIntervalMinutes)
 	}
 	if len(cfg.AtomicBootstrapPeers) > 0 {
 		log.Infof("Cryptix Atomic optional RPC bootstrap peers configured: %d; P2P audit remains available without RPC",

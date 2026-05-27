@@ -12,11 +12,12 @@ import (
 )
 
 const (
-	atomicTokenRootBuckets    = 4096
-	atomicTokenLeafDomain     = "CRYPTIX_ATOMIC_V2_LEAF"
-	atomicTokenBucketDomain   = "CRYPTIX_ATOMIC_V2_BUCKETED_ROOT"
-	atomicTokenBucketIndexKey = "CRYPTIX_ATOMIC_V2_BUCKET_INDEX"
-	atomicTokenAssetRootV5    = "CAT_ASSET_ROOT_V5"
+	atomicTokenRootBuckets         = 4096
+	atomicTokenLeafDomain          = "CRYPTIX_ATOMIC_V2_LEAF"
+	atomicTokenBucketDomain        = "CRYPTIX_ATOMIC_V2_BUCKETED_ROOT"
+	atomicTokenBucketIndexKey      = "CRYPTIX_ATOMIC_V2_BUCKET_INDEX"
+	atomicTokenAssetRootV5         = "CAT_ASSET_ROOT_V5"
+	atomicTokenP2PAuditAssetRootV1 = "CAT_ASSET_P2P_AUDIT_ROOT_V1"
 
 	atomicTokenLogicalAsset       = byte(0x01)
 	atomicTokenLogicalBalance     = byte(0x02)
@@ -67,6 +68,20 @@ func (s *State) TokenIndexHashWithAssetMetadata(metadata map[[externalapi.Domain
 	if s.TokenIndexHashUnavailableReasonWithAssetMetadata(metadata) != "" {
 		return [externalapi.DomainHashSize]byte{}, false
 	}
+	return s.tokenIndexHashWithAssetValue(metadata, tokenRootValueForAsset, true), true
+}
+
+func (s *State) P2PTokenAuditHash() ([externalapi.DomainHashSize]byte, bool) {
+	if s.P2PTokenAuditHashUnavailableReason() != "" {
+		return [externalapi.DomainHashSize]byte{}, false
+	}
+	return s.tokenIndexHashWithAssetValue(nil, tokenRootValueForP2PAuditAsset, false), true
+}
+
+func (s *State) tokenIndexHashWithAssetValue(
+	metadata map[[externalapi.DomainHashSize]byte]AssetPermanentMetadata,
+	assetValue func([externalapi.DomainHashSize]byte, AssetState) []byte,
+	includeAnchorCounts bool) [externalapi.DomainHashSize]byte {
 
 	var buckets [atomicTokenRootBuckets][externalapi.DomainHashSize]byte
 
@@ -77,7 +92,7 @@ func (s *State) TokenIndexHashWithAssetMetadata(metadata map[[externalapi.Domain
 	sort.Slice(assetIDs, func(i, j int) bool { return compareBytes32(assetIDs[i], assetIDs[j]) < 0 })
 	for _, assetID := range assetIDs {
 		asset := assetWithPermanentMetadata(s.Assets[assetID], metadata[assetID])
-		applyTokenRootLeaf(&buckets, logicalTokenAssetKey(assetID), tokenRootValueForAsset(assetID, asset))
+		applyTokenRootLeaf(&buckets, logicalTokenAssetKey(assetID), assetValue(assetID, asset))
 	}
 
 	balanceKeys := make([]BalanceKey, 0, len(s.Balances))
@@ -111,24 +126,36 @@ func (s *State) TokenIndexHashWithAssetMetadata(metadata map[[externalapi.Domain
 		applyTokenRootLeaf(&buckets, logicalTokenNonceKey(key), tokenRootValueForUint64(nonce))
 	}
 
-	anchorOwners := make([][externalapi.DomainHashSize]byte, 0, len(s.AnchorCounts))
-	for ownerID := range s.AnchorCounts {
-		anchorOwners = append(anchorOwners, ownerID)
-	}
-	sort.Slice(anchorOwners, func(i, j int) bool { return compareBytes32(anchorOwners[i], anchorOwners[j]) < 0 })
-	for _, ownerID := range anchorOwners {
-		count := s.AnchorCounts[ownerID]
-		if count == 0 {
-			continue
+	if includeAnchorCounts {
+		anchorOwners := make([][externalapi.DomainHashSize]byte, 0, len(s.AnchorCounts))
+		for ownerID := range s.AnchorCounts {
+			anchorOwners = append(anchorOwners, ownerID)
 		}
-		applyTokenRootLeaf(&buckets, logicalTokenAnchorCountKey(ownerID), tokenRootValueForUint64(count))
+		sort.Slice(anchorOwners, func(i, j int) bool { return compareBytes32(anchorOwners[i], anchorOwners[j]) < 0 })
+		for _, ownerID := range anchorOwners {
+			count := s.AnchorCounts[ownerID]
+			if count == 0 {
+				continue
+			}
+			applyTokenRootLeaf(&buckets, logicalTokenAnchorCountKey(ownerID), tokenRootValueForUint64(count))
+		}
 	}
 
-	return tokenRootFromBuckets(&buckets), true
+	return tokenRootFromBuckets(&buckets)
 }
 
 func (s *State) TokenIndexHashUnavailableReason() string {
 	return s.TokenIndexHashUnavailableReasonWithAssetMetadata(nil)
+}
+
+func (s *State) P2PTokenAuditHashUnavailableReason() string {
+	if s == nil {
+		return "state is nil"
+	}
+	if s.rootHashOverride != nil {
+		return "state is root-only"
+	}
+	return ""
 }
 
 func (s *State) TokenIndexHashUnavailableReasonWithAssetMetadata(metadata map[[externalapi.DomainHashSize]byte]AssetPermanentMetadata) string {
@@ -537,6 +564,56 @@ func tokenRootValueForAsset(assetID [externalapi.DomainHashSize]byte, asset Asse
 		out = append(out, 0)
 	}
 	return out
+}
+
+func tokenRootValueForP2PAuditAsset(assetID [externalapi.DomainHashSize]byte, asset AssetState) []byte {
+	out := make([]byte, 0, 192+len(asset.PlatformTag))
+	out = append(out, atomicTokenP2PAuditAssetRootV1...)
+	out = append(out, assetID[:]...)
+	out = append(out, byte(asset.AssetClass))
+	out = append(out, asset.TokenVersion)
+	out = append(out, asset.MintAuthorityOwnerID[:]...)
+	out = append(out, byte(asset.SupplyMode))
+	out = append(out, tokenRootValueForUint128(asset.MaxSupply)...)
+	out = append(out, tokenRootValueForUint128(asset.TotalSupply)...)
+	pushTokenRootBytes(&out, asset.PlatformTag)
+	if asset.Liquidity == nil {
+		out = append(out, 0)
+		return out
+	}
+	out = append(out, 1)
+	appendTokenRootLiquidity(&out, asset.Liquidity)
+	return out
+}
+
+func appendTokenRootLiquidity(out *[]byte, pool *LiquidityPoolState) {
+	*out = append(*out, tokenRootValueForUint64(pool.PoolNonce)...)
+	*out = append(*out, pool.CurveVersion)
+	*out = append(*out, pool.CurveMode)
+	*out = append(*out, tokenRootValueForUint64(pool.IndividualVirtualCPayReservesSompi)...)
+	*out = append(*out, tokenRootValueForUint16(pool.IndividualVirtualTokenMultiplierBPS)...)
+	*out = append(*out, tokenRootValueForUint64(pool.RealCPayReservesSompi)...)
+	*out = append(*out, tokenRootValueForUint128(pool.RealTokenReserves)...)
+	*out = append(*out, tokenRootValueForUint64(pool.VirtualCPayReserves)...)
+	*out = append(*out, tokenRootValueForUint128(pool.VirtualTokenReserves)...)
+	*out = append(*out, tokenRootValueForUint64(pool.UnclaimedFeeTotalSompi)...)
+	*out = append(*out, tokenRootValueForUint16(pool.FeeBPS)...)
+	*out = append(*out, tokenRootValueForUint64(uint64(len(pool.FeeRecipients)))...)
+	for _, recipient := range pool.FeeRecipients {
+		*out = append(*out, recipient.OwnerID[:]...)
+		*out = append(*out, recipient.AddressVersion)
+		pushTokenRootBytes(out, recipient.AddressPayload)
+		*out = append(*out, tokenRootValueForUint64(recipient.UnclaimedSompi)...)
+	}
+	*out = append(*out, pool.VaultOutpoint.TransactionID.ByteSlice()...)
+	*out = append(*out, tokenRootValueForUint32(pool.VaultOutpoint.Index)...)
+	*out = append(*out, tokenRootValueForUint64(pool.VaultValueSompi)...)
+	*out = append(*out, tokenRootValueForUint64(pool.UnlockTargetSompi)...)
+	if pool.Unlocked {
+		*out = append(*out, 1)
+	} else {
+		*out = append(*out, 0)
+	}
 }
 
 func tokenRootValueForUint16(value uint16) []byte {
