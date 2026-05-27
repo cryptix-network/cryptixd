@@ -3,7 +3,6 @@ package blockrelay
 import (
 	"bytes"
 	"encoding/hex"
-	"fmt"
 	"hash/fnv"
 	"sort"
 	"sync/atomic"
@@ -20,7 +19,7 @@ import (
 
 const (
 	atomicP2PAuditInitialDelay = 10 * time.Second
-	atomicP2PAuditInterval     = 60 * time.Second
+	atomicP2PAuditMinInterval  = time.Minute
 	atomicP2PAuditTimeout      = 15 * time.Second
 	atomicP2PAuditDeferredLog  = 5 * time.Minute
 	atomicP2PAuditDAALag       = uint64(60)
@@ -55,6 +54,10 @@ type atomicAuditAnchor struct {
 	stateHash [externalapi.DomainHashSize]byte
 }
 
+type atomicTokenDebugReporter interface {
+	GetAtomicTokenStateDebugReport(blockHash *externalapi.DomainHash, maxEntries int) (string, bool, error)
+}
+
 type scoredAuditPeer struct {
 	peer  *peerpkg.Peer
 	score uint64
@@ -79,7 +82,7 @@ func AuditAtomicState(context AtomicStateAuditContext, incomingRoute *router.Rou
 func (flow *atomicStateAuditFlow) start() error {
 	flow.logPolicyOnce()
 
-	timer := time.NewTimer(atomicP2PAuditInitialDelay)
+	auditInterval := flow.auditInterval()
 	timer := time.NewTimer(flow.initialAuditDelay(auditInterval))
 	defer timer.Stop()
 
@@ -93,7 +96,6 @@ func (flow *atomicStateAuditFlow) start() error {
 					return err
 				}
 			}
-			timer.Reset(atomicP2PAuditInterval)
 			timer.Reset(auditInterval)
 		}
 	}
@@ -106,25 +108,76 @@ func (flow *atomicStateAuditFlow) logPolicyOnce() {
 
 	cfg := flow.Config()
 	switch {
+	case cfg.DisableAtomicHealthAudit:
 		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit disabled: --disable-atomic-health-audit")
 	case cfg.DisableDNSSeed && cfg.AtomicBootstrapAllowPeerFallback:
 		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit enabled: peer-only P2P fallback, min_sources=%d, interval=%s, RPC not required",
+			flow.minSources(), flow.auditInterval())
 	case cfg.DisableDNSSeed:
 		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit disabled: --nodnsseed was used without --atomic-bootstrap-allow-peer-fallback")
 	default:
 		log.Infof("[atomic-bootstrap:p2p] Go Atomic audit enabled: seed-connected peer mode, min_sources=%d, interval=%s, RPC not required",
-			flow.minSources(), atomicP2PAuditInterval)
+			flow.minSources(), flow.auditInterval())
 	}
 }
 
 func (flow *atomicStateAuditFlow) auditEnabled() bool {
-	cfg := flow.Config()
+	return atomicP2PAuditEnabled(flow.Config())
+}
+
+func atomicP2PAuditEnabled(cfg *config.Config) bool {
+	if cfg.DisableAtomicHealthAudit {
+		return false
+	}
 	return !cfg.DisableDNSSeed || cfg.AtomicBootstrapAllowPeerFallback
 }
 
+func (flow *atomicStateAuditFlow) auditInterval() time.Duration {
+	return atomicP2PAuditIntervalFromConfig(flow.Config())
+}
+
+func atomicP2PAuditIntervalFromConfig(cfg *config.Config) time.Duration {
+	minutes := cfg.AtomicHealthAuditIntervalMinutes
+	if minutes == 0 {
+		minutes = 3
+	}
+	interval := time.Duration(minutes) * time.Minute
+	if interval < atomicP2PAuditMinInterval {
+		return atomicP2PAuditMinInterval
+	}
+	return interval
+}
+
+func (flow *atomicStateAuditFlow) initialAuditDelay(interval time.Duration) time.Duration {
+	if interval <= 0 {
+		interval = atomicP2PAuditMinInterval
+	}
+
+	maxJitter := interval / 2
+	if maxJitter > time.Minute {
+		maxJitter = time.Minute
+	}
+	if maxJitter <= 0 {
+		return atomicP2PAuditInitialDelay
+	}
+
+	hasher := fnv.New64a()
+	if flow.peer != nil {
+		_, _ = hasher.Write([]byte(flow.peer.ID().String()))
+		_, _ = hasher.Write([]byte(flow.peer.Address()))
 	}
 	if flow.AtomicStateAuditContext != nil {
 		if cfg := flow.Config(); cfg != nil {
+			_, _ = hasher.Write([]byte(cfg.AppDir))
+		}
+	}
+	delay := atomicP2PAuditInitialDelay + time.Duration(hasher.Sum64()%uint64(maxJitter))
+	if delay >= interval {
+		return time.Duration(hasher.Sum64() % uint64(interval))
+	}
+	return delay
+}
+
 func (flow *atomicStateAuditFlow) runAudit() error {
 	activePeers := flow.Peers()
 	minSources := flow.minSources()
@@ -153,7 +206,7 @@ func (flow *atomicStateAuditFlow) runAudit() error {
 		return nil
 	}
 
-	response, err := flow.requestAtomicTokenStateHash(anchor)
+	response, err := flow.requestConsensusAtomicStateHash(anchor)
 	if errors.Is(err, router.ErrTimeout) {
 		log.Infof("[atomic-bootstrap:p2p] healthy-state audit skipped at DAA-rendezvous block %s (daa=%d): peer %s did not respond within %s",
 			anchor.blockHash, anchor.daaScore, flow.peer, atomicP2PAuditTimeout)
@@ -169,6 +222,7 @@ func (flow *atomicStateAuditFlow) runAudit() error {
 		return nil
 	}
 	if !response.HasState {
+		log.Infof("[atomic-bootstrap:p2p] healthy-state audit skipped at DAA-rendezvous block %s (daa=%d): peer %s has no consensus Atomic state for this anchor yet",
 			anchor.blockHash, anchor.daaScore, flow.peer)
 		return nil
 	}
@@ -180,26 +234,58 @@ func (flow *atomicStateAuditFlow) runAudit() error {
 
 	localHash := anchor.stateHash[:]
 	if !bytes.Equal(localHash, response.StateHash) {
-		log.Warnf("[atomic-bootstrap:p2p] healthy-state audit mismatch at DAA-rendezvous block %s (daa=%d) with peer %s: local state hash %s differs from peer state hash %s",
+		log.Infof("[atomic-bootstrap:p2p] healthy-state audit inconclusive at DAA-rendezvous block %s (daa=%d) with peer %s: local consensus Atomic state hash %s differs from peer consensus Atomic state hash %s; local consensus remains authoritative and no repair is applied from a single peer response",
 			anchor.blockHash, anchor.daaScore, flow.peer, hex.EncodeToString(localHash), hex.EncodeToString(response.StateHash))
 		return nil
 	}
 
-	log.Infof("[atomic-bootstrap:p2p] healthy-state audit passed at DAA-rendezvous block %s (daa=%d) with peer %s: state hash %s",
+	log.Infof("[atomic-bootstrap:p2p] healthy-state audit passed at DAA-rendezvous block %s (daa=%d) with peer %s: consensus Atomic state hash %s",
 		anchor.blockHash, anchor.daaScore, flow.peer, hex.EncodeToString(localHash))
 
+	tokenResponse, err := flow.requestAtomicTokenStateHash(anchor)
+	if errors.Is(err, router.ErrTimeout) {
+		log.Infof("[atomic-bootstrap:p2p] token-state audit skipped at DAA-rendezvous block %s (daa=%d): peer %s did not respond within %s",
+			anchor.blockHash, anchor.daaScore, flow.peer, atomicP2PAuditTimeout)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+
+	if !tokenResponse.BlockHash.Equal(anchor.blockHash) || tokenResponse.AnchorDAAScore != anchor.daaScore {
+		log.Infof("[atomic-bootstrap:p2p] token-state audit skipped: peer %s answered for different anchor block=%s daa=%d",
+			flow.peer, tokenResponse.BlockHash, tokenResponse.AnchorDAAScore)
+		return nil
+	}
+	if !tokenResponse.HasState {
+		log.Infof("[atomic-bootstrap:p2p] token-state audit skipped at DAA-rendezvous block %s (daa=%d): peer %s has no Atomic token checkpoint for this anchor yet",
+			anchor.blockHash, anchor.daaScore, flow.peer)
+		return nil
 	}
 	if len(tokenResponse.StateHash) != externalapi.DomainHashSize {
+		log.Warnf("[atomic-bootstrap:p2p] token-state audit rejected peer %s at DAA-rendezvous block %s (daa=%d): invalid state hash size %d",
+			flow.peer, anchor.blockHash, anchor.daaScore, len(tokenResponse.StateHash))
 		return nil
 	}
 
 	localTokenHash, hasLocalTokenState, err := flow.Domain().Consensus().GetAtomicTokenStateHash(anchor.blockHash)
 	if err != nil {
 		return err
+	}
+	if !hasLocalTokenState {
 		_, reason, availabilityErr := flow.Domain().Consensus().GetAtomicTokenStateHashAvailability(anchor.blockHash)
 		if availabilityErr != nil {
 			return availabilityErr
 		}
+		if reason == "" {
+			reason = "unknown reason"
+		}
+		log.Infof("[atomic-bootstrap:p2p] token-state audit skipped at DAA-rendezvous block %s (daa=%d): local Atomic token checkpoint is unavailable for this anchor: %s",
+			anchor.blockHash, anchor.daaScore, reason)
+		return nil
+	}
+	if !bytes.Equal(localTokenHash[:], tokenResponse.StateHash) {
+		log.Infof("[atomic-bootstrap:p2p] token-state audit inconclusive at DAA-rendezvous block %s (daa=%d) with peer %s: local Atomic token checkpoint hash %s differs from peer Atomic token checkpoint hash %s; local state remains authoritative and no repair is applied from a single peer response",
 			anchor.blockHash, anchor.daaScore, flow.peer, hex.EncodeToString(localTokenHash[:]), hex.EncodeToString(tokenResponse.StateHash))
 		flow.logLocalAtomicTokenDebug(anchor)
 		return nil
@@ -216,6 +302,16 @@ func (flow *atomicStateAuditFlow) logLocalAtomicTokenDebug(anchor *atomicAuditAn
 		return
 	}
 	report, hasReport, err := reporter.GetAtomicTokenStateDebugReport(anchor.blockHash, 16)
+	if err != nil {
+		log.Infof("[atomic-bootstrap:p2p] local Go Atomic token debug at DAA-rendezvous block %s unavailable: %s",
+			anchor.blockHash, err)
+		return
+	}
+	if !hasReport {
+		log.Infof("[atomic-bootstrap:p2p] local Go Atomic token debug at DAA-rendezvous block %s unavailable: %s",
+			anchor.blockHash, report)
+		return
+	}
 	log.Infof("[atomic-bootstrap:p2p] local Go Atomic token debug at DAA-rendezvous block %s:\n%s",
 		anchor.blockHash, report)
 }
