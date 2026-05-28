@@ -433,6 +433,152 @@ func TestGetBlockTemplateSameOwnerCATChainOverBlockCapacityKeepsTail(t *testing.
 	})
 }
 
+func TestGetBlockTemplateDrainsLargeMixedAtomicMempoolWithFreshCommitments(t *testing.T) {
+	testutils.ForAllNets(t, true, func(t *testing.T, consensusConfig *consensus.Config) {
+		consensusConfig.BlockCoinbaseMaturity = 0
+		consensusConfig.PayloadHfActivationDAAScore = 0
+		consensusConfig.Params.MaxBlockMass = 4_500
+
+		miningManager, tc := newTestMiningManagerWithConfig(
+			t,
+			consensusConfig,
+			"TestGetBlockTemplateDrainsLargeMixedAtomicMempoolWithFreshCommitments",
+			func(config *mempool.Config) {
+				config.MinimumRelayTransactionFee = 0
+			},
+		)
+
+		readyTxs := make([]*externalapi.DomainTransaction, 0, 56)
+		for i := 0; i < 12; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 100_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create native transaction parent: %v", err)
+			}
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 0; i < 12; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 120_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create messenger transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = []byte("MSG:go-mixed-mempool-stress")
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 0; i < 16; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 140_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create CAT create transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = createCATCreateAssetWithMintPayloadWithTicker(uint64(i)+1, byte('A'+(i%26)), byte('a'+(i%26)))
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+		for i := 0; i < 16; i++ {
+			tx, err := createReadyTransactionFromConsensusFundingWithFee(tc, 180_000+uint64(i))
+			if err != nil {
+				t.Fatalf("create overflow CAT create transaction parent: %v", err)
+			}
+			tx.SubnetworkID = subnetworks.SubnetworkIDPayload
+			tx.Payload = createCATCreateAssetWithMintPayloadWithTicker(uint64(i)+17, byte('Q'+(i%10)), byte('q'+(i%10)))
+			tx.Mass = 1_000
+			readyTxs = append(readyTxs, tx)
+		}
+
+		for _, tx := range readyTxs {
+			if _, err := miningManager.ValidateAndInsertTransaction(tx, false, true); err != nil {
+				t.Fatalf("ValidateAndInsertTransaction %s: %v", consensushashing.TransactionID(tx), err)
+			}
+		}
+
+		selectedTotal := 0
+		for round := 0; round < 80; round++ {
+			remaining, _ := miningManager.AllTransactions(true, false)
+			if len(remaining) == 0 {
+				break
+			}
+
+			coinbase, err := generateNewCoinbase(consensusConfig.Params.Prefix, opTrue)
+			if err != nil {
+				t.Fatalf("Generate coinbase: %v", err)
+			}
+			block, _, err := miningManager.GetBlockTemplate(coinbase)
+			if err != nil {
+				t.Fatalf("GetBlockTemplate round %d: %v", round, err)
+			}
+			selected := block.Transactions[1:]
+			if len(selected) == 0 {
+				t.Fatalf("round %d produced an empty template with %d mempool transactions remaining", round, len(remaining))
+			}
+			assertTemplateNonCoinbaseMassAtMost(t, block.Transactions, consensusConfig.Params.MaxBlockMass)
+
+			expectedTemplate, err := tc.BuildBlockTemplate(coinbase, selected)
+			if err != nil {
+				t.Fatalf("BuildBlockTemplate fresh reference round %d: %v", round, err)
+			}
+			if !block.Header.UTXOCommitment().Equal(expectedTemplate.Block.Header.UTXOCommitment()) {
+				t.Fatalf("round %d returned stale UTXO/Atomic commitment: got %s want %s",
+					round, block.Header.UTXOCommitment(), expectedTemplate.Block.Header.UTXOCommitment())
+			}
+
+			submittedBlock := cloneBlockWithoutUTXOEntries(block)
+			if err := tc.ValidateAndInsertBlock(submittedBlock, true); err != nil {
+				t.Fatalf("mixed stress template round %d was consensus-invalid: %v", round, err)
+			}
+			submittedHash := consensushashing.BlockHash(submittedBlock)
+			validCommitment, reason, err := tc.IsStoredBlockUTXOCommitmentValid(submittedHash)
+			if err != nil {
+				t.Fatalf("IsStoredBlockUTXOCommitmentValid round %d: %v", round, err)
+			}
+			if !validCommitment {
+				t.Fatalf("stored UTXO/Atomic commitment invalid after round %d: %s", round, reason)
+			}
+			if _, ok, err := tc.GetAtomicTokenStateHash(submittedHash); err != nil {
+				t.Fatalf("GetAtomicTokenStateHash round %d: %v", round, err)
+			} else if !ok {
+				t.Fatalf("Atomic token state hash unavailable after accepted mixed block round %d", round)
+			}
+			if _, err := miningManager.HandleNewBlockTransactions(submittedBlock.Transactions); err != nil {
+				t.Fatalf("HandleNewBlockTransactions round %d: %v", round, err)
+			}
+			selectedTotal += len(selected)
+		}
+
+		remaining, _ := miningManager.AllTransactions(true, false)
+		if len(remaining) != 0 {
+			t.Fatalf("mixed stress mempool did not drain: remaining=%d selected=%d total=%d", len(remaining), selectedTotal, len(readyTxs))
+		}
+		if selectedTotal != len(readyTxs) {
+			t.Fatalf("selected transaction count mismatch: selected=%d total=%d", selectedTotal, len(readyTxs))
+		}
+
+		virtualSelectedParent, err := tc.GetVirtualSelectedParent()
+		if err != nil {
+			t.Fatalf("GetVirtualSelectedParent: %v", err)
+		}
+		firstHash, ok, err := tc.GetAtomicTokenStateHash(virtualSelectedParent)
+		if err != nil {
+			t.Fatalf("GetAtomicTokenStateHash final first read: %v", err)
+		}
+		if !ok {
+			t.Fatalf("final Atomic token state hash unavailable")
+		}
+		secondHash, ok, err := tc.GetAtomicTokenStateHash(virtualSelectedParent)
+		if err != nil {
+			t.Fatalf("GetAtomicTokenStateHash final second read: %v", err)
+		}
+		if !ok {
+			t.Fatalf("final Atomic token state hash unavailable on second read")
+		}
+		if firstHash != secondHash {
+			t.Fatalf("final Atomic token state hash is nondeterministic: first=%x second=%x", firstHash, secondHash)
+		}
+	})
+}
+
 func cloneBlockWithoutUTXOEntries(block *externalapi.DomainBlock) *externalapi.DomainBlock {
 	clone := block.Clone()
 	for _, tx := range clone.Transactions {
