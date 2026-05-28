@@ -2,6 +2,7 @@ package atomicstate
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"github.com/cryptix-network/cryptixd/domain/consensus/model/externalapi"
@@ -148,6 +149,147 @@ func TestTokenIndexHashMatchesRustComplexAuditVector(t *testing.T) {
 	const wantAudit = "d61e226e9ea824488ff7462e334115a9e5293b4576d58813056dfcc1159f9f92"
 	if gotAudit != wantAudit {
 		t.Fatalf("Go complex P2P token audit root differs from Rust vector: got %s, want %s", gotAudit, wantAudit)
+	}
+}
+
+func TestTokenStressInteropVectorMatchesRustHashes(t *testing.T) {
+	ownerMain := tokenIndexSeqBytes32(0x11)
+	ownerReceiver := tokenIndexSeqBytes32(0x31)
+	ownerCreatorB := tokenIndexSeqBytes32(0x51)
+	liquidityCreator := tokenIndexSeqBytes32(0x71)
+	mintAuthority := tokenIndexSeqBytes32(0x91)
+	feePayloadA := tokenIndexRepeatedBytes(0x0A, 32)
+	feePayloadB := tokenIndexRepeatedBytes(0x0B, 32)
+	feeOwnerA, ok := OwnerIDFromAddressComponents(0, feePayloadA)
+	if !ok {
+		t.Fatal("valid fee owner A")
+	}
+	feeOwnerB, ok := OwnerIDFromAddressComponents(0, feePayloadB)
+	if !ok {
+		t.Fatal("valid fee owner B")
+	}
+
+	state := NewState()
+	for i := byte(0); i < 20; i++ {
+		assetID := tokenIndexSeqBytes32(0x40 + i*2)
+		initialSupply := uint64(1_000) + uint64(i)*13
+		minted := uint64(0)
+		burned := uint64(0)
+		transferred := uint64(0)
+		if i < 12 {
+			minted = 500 + uint64(i)
+			burned = 20 + uint64(i)
+			transferred = 30 + uint64(i)
+		}
+		totalSupply := initialSupply + minted - burned
+		ownerBalance := totalSupply - transferred
+		creator := ownerMain
+		if i%3 == 0 {
+			creator = ownerCreatorB
+		}
+
+		state.Assets[assetID] = AssetState{
+			CreatorOwnerID:       creator,
+			AssetClass:           AssetClassStandard,
+			TokenVersion:         currentStateTokenVersion,
+			MintAuthorityOwnerID: mintAuthority,
+			Decimals:             i % 9,
+			SupplyMode:           SupplyModeCapped,
+			MaxSupply:            Uint128FromUint64(1_000_000 + uint64(i)*1_000),
+			TotalSupply:          Uint128FromUint64(totalSupply),
+			Name:                 []byte(fmt.Sprintf("Stress Token %02d", i)),
+			Symbol:               []byte(fmt.Sprintf("ST%02d", i)),
+			Metadata:             []byte(fmt.Sprintf("stress-metadata-%02d", i)),
+			PlatformTag:          []byte("stress-vector-v1"),
+			CreatedBlockHash:     tokenIndexBytes32Ptr(tokenIndexSeqBytes32(0x90 + i)),
+			CreatedDAAScore:      tokenIndexUint64Ptr(200_000 + uint64(i)),
+			CreatedAt:            tokenIndexUint64Ptr(1_779_900_000_000 + uint64(i)),
+		}
+		state.Balances[BalanceKey{AssetID: assetID, OwnerID: ownerMain}] = Uint128FromUint64(ownerBalance)
+		if transferred > 0 {
+			state.Balances[BalanceKey{AssetID: assetID, OwnerID: ownerReceiver}] = Uint128FromUint64(transferred)
+		}
+		nextNonce := uint64(2)
+		if i < 12 {
+			nextNonce = 5
+		}
+		state.NextNonces[AssetNonceKey(ownerMain, assetID)] = nextNonce
+	}
+
+	liquidityAssetID := tokenIndexSeqBytes32(0xE0)
+	liquidityTotal := uint64(221_320)
+	liquidityRemaining := uint64(778_680)
+	unclaimedFeeTotal := uint64(12_345_678)
+	realCPay := uint64(53_415_169_749_573)
+	vaultTxIDBytes := tokenIndexSeqBytes32(0x22)
+	vaultTxID := externalapi.NewDomainTransactionIDFromByteArray(&vaultTxIDBytes)
+	state.Assets[liquidityAssetID] = AssetState{
+		CreatorOwnerID:       liquidityCreator,
+		AssetClass:           AssetClassLiquidity,
+		TokenVersion:         currentStateTokenVersion,
+		MintAuthorityOwnerID: [externalapi.DomainHashSize]byte{},
+		Decimals:             0,
+		SupplyMode:           SupplyModeCapped,
+		MaxSupply:            Uint128FromUint64(liquidityTotal + liquidityRemaining),
+		TotalSupply:          Uint128FromUint64(liquidityTotal),
+		Name:                 []byte("Stress Liquidity Token"),
+		Symbol:               []byte("SLP"),
+		Metadata:             []byte("liquidity-stress-vector"),
+		PlatformTag:          []byte("stress-vector-v1"),
+		CreatedBlockHash:     tokenIndexBytes32Ptr(tokenIndexSeqBytes32(0xA8)),
+		CreatedDAAScore:      tokenIndexUint64Ptr(200_777),
+		CreatedAt:            tokenIndexUint64Ptr(1_779_900_777_000),
+		Liquidity: &LiquidityPoolState{
+			PoolNonce:                           187,
+			CurveVersion:                        currentStateLiquidityCurveVersion,
+			CurveMode:                           1,
+			IndividualVirtualCPayReservesSompi:  0,
+			IndividualVirtualTokenMultiplierBPS: 0,
+			RealCPayReservesSompi:               realCPay,
+			RealTokenReserves:                   Uint128FromUint64(liquidityRemaining),
+			VirtualCPayReserves:                 253_415_069_749_573,
+			VirtualTokenReserves:                Uint128FromUint64(828_680),
+			UnclaimedFeeTotalSompi:              unclaimedFeeTotal,
+			FeeBPS:                              25,
+			FeeRecipients: []LiquidityFeeRecipientState{
+				{OwnerID: feeOwnerA, AddressVersion: 0, AddressPayload: feePayloadA, UnclaimedSompi: 5_000_000},
+				{OwnerID: feeOwnerB, AddressVersion: 0, AddressPayload: feePayloadB, UnclaimedSompi: 7_345_678},
+			},
+			VaultOutpoint:     externalapi.DomainOutpoint{TransactionID: *vaultTxID, Index: 7},
+			VaultValueSompi:   realCPay + unclaimedFeeTotal,
+			UnlockTargetSompi: 900_000_000_000,
+			Unlocked:          true,
+		},
+	}
+	state.Balances[BalanceKey{AssetID: liquidityAssetID, OwnerID: ownerMain}] = Uint128FromUint64(liquidityTotal)
+	state.NextNonces[OwnerNonceKey(ownerMain)] = 23
+	state.NextNonces[AssetNonceKey(ownerMain, liquidityAssetID)] = 6
+	state.AnchorCounts[ownerMain] = 97
+	state.AnchorCounts[ownerReceiver] = 44
+	state.AnchorCounts[ownerCreatorB] = 13
+	state.AnchorCounts[liquidityCreator] = 8
+	state.AnchorCounts[feeOwnerA] = 5
+	state.AnchorCounts[feeOwnerB] = 7
+	state.AnchorCounts[tokenIndexSeqBytes32(0xC0)] = 19
+	state.AnchorCounts[tokenIndexSeqBytes32(0xD0)] = 23
+	state.AnchorCounts[tokenIndexSeqBytes32(0xF0)] = 29
+	state.RebuildLiquidityVaultOutpointIndex()
+
+	canonicalHash := state.CanonicalHash()
+	gotCanonical := hex.EncodeToString(canonicalHash[:])
+	const wantCanonical = "9c4cfb9daca1ec54a69f478e4088223a6132229db4423bc5239e0027c98b9905"
+	if gotCanonical != wantCanonical {
+		t.Fatalf("Go stress canonical Atomic hash differs from Rust vector: got %s, want %s", gotCanonical, wantCanonical)
+	}
+
+	auditRoot, ok := state.P2PTokenAuditHash()
+	if !ok {
+		t.Fatalf("stress P2P token audit root unavailable: %s", state.P2PTokenAuditHashUnavailableReason())
+	}
+	gotAudit := hex.EncodeToString(auditRoot[:])
+	const wantAudit = "ee4a1f9d29209eead50a53a81a116c59f0f0c178e14d09b3de32fee8524a6332"
+	if gotAudit != wantAudit {
+		t.Fatalf("Go stress P2P token audit root differs from Rust vector: got %s, want %s", gotAudit, wantAudit)
 	}
 }
 
@@ -318,4 +460,20 @@ func tokenIndexSeqBytes32(start byte) [externalapi.DomainHashSize]byte {
 		out[i] = start + byte(i)
 	}
 	return out
+}
+
+func tokenIndexRepeatedBytes(value byte, length int) []byte {
+	out := make([]byte, length)
+	for i := range out {
+		out[i] = value
+	}
+	return out
+}
+
+func tokenIndexBytes32Ptr(value [externalapi.DomainHashSize]byte) *[externalapi.DomainHashSize]byte {
+	return &value
+}
+
+func tokenIndexUint64Ptr(value uint64) *uint64 {
+	return &value
 }
