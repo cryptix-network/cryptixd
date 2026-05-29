@@ -141,7 +141,7 @@ func HandlePruningPointAndItsAnticoneRequests(context PruningPointAndItsAnticone
 			}
 
 			if len(atomicStateBytes) != 0 {
-				err = sendTrustedAtomicStateChunks(incomingRoute, outgoingRoute, atomicStateHash, atomicStateBytes)
+				err = sendTrustedAtomicStateChunks(incomingRoute, outgoingRoute, atomicStateHash, atomicStateBytes, responseID)
 				if err != nil {
 					return err
 				}
@@ -210,13 +210,21 @@ func pruningPointAtomicStateForTrustedData(context PruningPointAndItsAnticoneReq
 	if err != nil {
 		return nil, [externalapi.DomainHashSize]byte{}, false, err
 	}
-	atomicStateHash := atomicstate.HashCanonicalBytes(atomicStateBytes)
+	atomicState, err := atomicstate.FromCanonicalBytes(atomicStateBytes)
+	if err != nil {
+		return nil, [externalapi.DomainHashSize]byte{}, false, err
+	}
+	if atomicState.IsRootOnly() {
+		return nil, [externalapi.DomainHashSize]byte{}, false,
+			protocolerrors.Errorf(false, "post-payload-HF pruning point %s has only an Atomic root; full Atomic state bytes are required", pruningPoint)
+	}
+	atomicStateHash := atomicState.CanonicalHash()
 
 	return atomicStateBytes, atomicStateHash, true, nil
 }
 
 func sendTrustedAtomicStateChunks(incomingRoute *router.Route, outgoingRoute *router.Route,
-	stateHash [externalapi.DomainHashSize]byte, stateBytes []byte) error {
+	stateHash [externalapi.DomainHashSize]byte, stateBytes []byte, responseID uint32) error {
 
 	totalBytes := uint64(len(stateBytes))
 	totalChunks := trustedAtomicStateChunkCount(totalBytes)
@@ -226,13 +234,16 @@ func sendTrustedAtomicStateChunks(incomingRoute *router.Route, outgoingRoute *ro
 			chunkEnd = len(stateBytes)
 		}
 
-		err := outgoingRoute.Enqueue(appmessage.NewMsgTrustedAtomicStateChunk(
+		chunkMessage := appmessage.NewMsgTrustedAtomicStateChunk(
 			stateHash[:],
 			chunkIndex,
 			totalChunks,
 			totalBytes,
 			stateBytes[offset:chunkEnd],
-		))
+		)
+		chunkMessage.SetResponseID(responseID)
+
+		err := outgoingRoute.Enqueue(chunkMessage)
 		if err != nil {
 			return err
 		}

@@ -64,6 +64,10 @@ func (csm *consensusStateManager) importPruningPointUTXOSet(stagingArea *model.S
 			return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet,
 				"post-payload-HF pruning point %s has invalid Atomic consensus state", newPruningPoint)
 		}
+		if importedPruningPointAtomicState.IsRootOnly() {
+			return errors.Wrapf(ruleerrors.ErrBadPruningPointUTXOSet,
+				"post-payload-HF pruning point %s has only an Atomic root; full Atomic consensus state is required", newPruningPoint)
+		}
 	} else {
 		importedPruningPointUTXOIterator, err := csm.pruningStore.ImportedPruningPointUTXOIterator(csm.databaseContext)
 		if err != nil {

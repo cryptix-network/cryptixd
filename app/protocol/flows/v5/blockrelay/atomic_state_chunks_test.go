@@ -45,3 +45,29 @@ func TestDrainTrustedAtomicStateChunksRejectsInvalidMetadata(t *testing.T) {
 		t.Fatalf("drainTrustedAtomicStateChunks accepted invalid metadata")
 	}
 }
+
+func TestSendTrustedAtomicStateChunksSetsResponseID(t *testing.T) {
+	incomingRoute := router.NewRoute("incoming")
+	outgoingRoute := router.NewRoute("outgoing")
+
+	stateHash := [externalapi.DomainHashSize]byte{1, 2, 3}
+	stateBytes := []byte("materialized atomic state")
+	const responseID = uint32(42)
+
+	err := sendTrustedAtomicStateChunks(incomingRoute, outgoingRoute, stateHash, stateBytes, responseID)
+	if err != nil {
+		t.Fatalf("sendTrustedAtomicStateChunks: %+v", err)
+	}
+
+	message, err := outgoingRoute.DequeueWithTimeout(10 * time.Millisecond)
+	if err != nil {
+		t.Fatalf("DequeueWithTimeout: %+v", err)
+	}
+	chunk, ok := message.(*appmessage.MsgTrustedAtomicStateChunk)
+	if !ok {
+		t.Fatalf("expected MsgTrustedAtomicStateChunk, got %T", message)
+	}
+	if chunk.ResponseID() != responseID {
+		t.Fatalf("response ID mismatch: expected %d, got %d", responseID, chunk.ResponseID())
+	}
+}

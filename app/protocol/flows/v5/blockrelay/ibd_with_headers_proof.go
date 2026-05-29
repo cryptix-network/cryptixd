@@ -322,11 +322,9 @@ func (flow *handleIBDFlow) receivePruningPointTrustedAtomicState(consensus exter
 	if len(msgTrustedData.AtomicConsensusState) == 0 &&
 		msgTrustedData.AtomicConsensusStateByteLength == 0 &&
 		msgTrustedData.AtomicConsensusStateChunkCount == 0 {
-		if err := consensus.AppendImportedPruningPointAtomicStateHash(stateHash); err != nil {
-			return protocolerrors.Wrapf(true, err, "invalid pruning point Atomic root")
-		}
-		log.Debugf("Imported pruning point Atomic trusted root for %s from %s", proofPruningPoint, flow.peer)
-		return nil
+		return protocolerrors.Errorf(true,
+			"post-payload-HF trusted data for pruning point %s carries only an Atomic root; full Atomic state bytes are required",
+			proofPruningPoint)
 	}
 
 	var stateBytes []byte
@@ -366,12 +364,19 @@ func trustedAtomicStateHashFromBytes(hashBytes []byte) ([externalapi.DomainHashS
 }
 
 func importTrustedAtomicState(consensus externalapi.Consensus, stateBytes []byte, expectedStateHash [externalapi.DomainHashSize]byte) error {
-	stateHash := atomicstate.HashCanonicalBytes(stateBytes)
+	state, err := atomicstate.FromCanonicalBytes(stateBytes)
+	if err != nil {
+		return protocolerrors.Wrapf(true, err, "invalid pruning point Atomic state")
+	}
+	if state.IsRootOnly() {
+		return protocolerrors.Errorf(true, "post-payload-HF pruning point Atomic state must be materialized, got root-only state")
+	}
+	stateHash := state.CanonicalHash()
 	if stateHash != expectedStateHash {
 		return protocolerrors.Errorf(true, "pruning point Atomic state hash mismatch")
 	}
 
-	err := consensus.AppendImportedPruningPointAtomicState(stateBytes)
+	err = consensus.AppendImportedPruningPointAtomicState(stateBytes)
 	if err != nil {
 		return protocolerrors.Wrapf(true, err, "invalid pruning point Atomic state")
 	}

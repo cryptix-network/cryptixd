@@ -672,6 +672,9 @@ func (s *consensus) GetPruningPointAtomicState(expectedPruningPointHash *externa
 	if err != nil {
 		return nil, err
 	}
+	if atomicState.IsRootOnly() {
+		return nil, errors.Errorf("pruning point %s has only an Atomic root; full Atomic state bytes are required", pruningPointHash)
+	}
 	return atomicState.CanonicalBytes(), nil
 }
 

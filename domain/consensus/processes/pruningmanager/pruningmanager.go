@@ -999,6 +999,9 @@ func (pm *pruningManager) AppendImportedPruningPointAtomicState(stateBytes []byt
 	if !bytes.Equal(state.CanonicalBytes(), stateBytes) {
 		return errors.Errorf("imported pruning point Atomic state is not canonically encoded")
 	}
+	if state.IsRootOnly() {
+		return errors.Errorf("imported pruning point Atomic state must be materialized; got root-only state")
+	}
 
 	dbTx, err := pm.databaseContext.Begin()
 	if err != nil {
