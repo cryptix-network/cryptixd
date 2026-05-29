@@ -65,6 +65,13 @@ func TestDefaultAntiFraudSeedEnabled(t *testing.T) {
 	}
 }
 
+func TestDefaultUTXOIndexEnabled(t *testing.T) {
+	cfg := DefaultConfig()
+	if !cfg.UTXOIndex {
+		t.Fatalf("expected UTXO index to be enabled by default")
+	}
+}
+
 // TestConstants makes sure that all constants hard-coded into the help text were not modified.
 func TestConstants(t *testing.T) {
 	zero := externalapi.DomainSubnetworkID{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}

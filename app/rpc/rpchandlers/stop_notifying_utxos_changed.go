@@ -10,7 +10,7 @@ import (
 func HandleStopNotifyingUTXOsChanged(context *rpccontext.Context, router *router.Router, request appmessage.Message) (appmessage.Message, error) {
 	if !context.Config.UTXOIndex {
 		errorMessage := appmessage.NewStopNotifyingUTXOsChangedResponseMessage()
-		errorMessage.Error = appmessage.RPCErrorf("Method unavailable when cryptixd is run without --utxoindex")
+		errorMessage.Error = appmessage.RPCErrorf("Method unavailable when the UTXO index is disabled")
 		return errorMessage, nil
 	}
 

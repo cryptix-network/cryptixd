@@ -11,7 +11,7 @@ import (
 func HandleGetBalancesByAddresses(context *rpccontext.Context, _ *router.Router, request appmessage.Message) (appmessage.Message, error) {
 	if !context.Config.UTXOIndex {
 		errorMessage := &appmessage.GetBalancesByAddressesResponseMessage{}
-		errorMessage.Error = appmessage.RPCErrorf("Method unavailable when cryptixd is run without --utxoindex")
+		errorMessage.Error = appmessage.RPCErrorf("Method unavailable when the UTXO index is disabled")
 		return errorMessage, nil
 	}
 

@@ -134,7 +134,8 @@ type Flags struct {
 	ResetDatabase                       bool          `long:"reset-db" description:"Reset database before starting node. It's needed when switching between subnetworks."`
 	StartupRepairPlan                   string        `long:"startup-repair-plan" description:"Apply the given JSON startup database repair plan before networking starts"`
 	MaxUTXOCacheSize                    uint64        `long:"maxutxocachesize" description:"Max size of loaded UTXO into ram from the disk in bytes"`
-	UTXOIndex                           bool          `long:"utxoindex" description:"Enable the UTXO index"`
+	UTXOIndex                           bool          `long:"utxoindex" description:"Enable the UTXO index (default)"`
+	NoUTXOIndex                         bool          `long:"no-utxoindex" description:"Disable the UTXO index"`
 	IsArchivalNode                      bool          `long:"archival" description:"Run as an archival node: don't delete old block data when moving the pruning point (Warning: heavy disk usage)'"`
 	AllowSubmitBlockWhenNotSynced       bool          `long:"allow-submit-block-when-not-synced" hidden:"true" description:"Allow the node to accept blocks from RPC while not synced (this flag is mainly used for testing)"`
 	EnableSanityCheckPruningUTXOSet     bool          `long:"enable-sanity-check-pruning-utxo" hidden:"true" description:"When moving the pruning point - check that the utxo set matches the utxo commitment"`
@@ -177,6 +178,23 @@ func cleanAndExpandPath(path string) string {
 	return filepath.Clean(os.ExpandEnv(path))
 }
 
+func commandLineBoolFlagValue(name string) (bool, bool) {
+	longFlag := "--" + name
+	for _, arg := range os.Args[1:] {
+		if arg == longFlag {
+			return true, true
+		}
+		if strings.HasPrefix(arg, longFlag+"=") {
+			value, err := strconv.ParseBool(strings.TrimPrefix(arg, longFlag+"="))
+			if err != nil {
+				return true, true
+			}
+			return value, true
+		}
+	}
+	return false, false
+}
+
 // newConfigParser returns a new command line flags parser.
 func newConfigParser(cfgFlags *Flags, options flags.Options) *flags.Parser {
 	parser := flags.NewParser(cfgFlags, options)
@@ -208,6 +226,7 @@ func defaultFlags() *Flags {
 		MaxUTXOCacheSize:                    defaultMaxUTXOCacheSize,
 		ServiceOptions:                      &ServiceOptions{},
 		ProtocolVersion:                     defaultProtocolVersion,
+		UTXOIndex:                           true,
 		AtomicBootstrapPeerQuorumMinSources: 2,
 		AtomicHealthAuditIntervalMinutes:    3,
 	}
@@ -299,6 +318,23 @@ func LoadConfig() (*Config, error) {
 	// No-seed aliases always have priority over seed enable flags.
 	if cfg.DisableExternalBanlist || cfg.DisableBanserver || cfg.AntiFraudNoSeed {
 		cfg.EnableExternalBanlist = false
+	}
+	utxoIndexCommandLineValue, utxoIndexFromCommandLine := commandLineBoolFlagValue("utxoindex")
+	noUTXOIndexCommandLineValue, noUTXOIndexFromCommandLine := commandLineBoolFlagValue("no-utxoindex")
+	if utxoIndexFromCommandLine && noUTXOIndexFromCommandLine {
+		str := "%s: utxoindex and no-utxoindex cannot be used together -- choose only one"
+		err := errors.Errorf(str, funcName)
+		fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, usageMessage)
+		return nil, err
+	}
+	switch {
+	case noUTXOIndexFromCommandLine:
+		cfg.UTXOIndex = !noUTXOIndexCommandLineValue
+	case utxoIndexFromCommandLine:
+		cfg.UTXOIndex = utxoIndexCommandLineValue
+	case cfg.NoUTXOIndex:
+		cfg.UTXOIndex = false
 	}
 
 	// Create the home directory if it doesn't already exist.
