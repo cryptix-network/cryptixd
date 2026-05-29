@@ -32,7 +32,7 @@ func (mp *mempool) validateAndInsertTransaction(transaction *externalapi.DomainT
 
 	if len(missingOutpoints) > 0 {
 		if isCATTransaction(transaction) {
-			log.Infof("CAT transaction deferred by mempool as orphan: tx=%s %s missing_outpoints=%d first_missing=%s allow_orphan=%t tx_pool=%d orphan_pool=%d",
+			log.Debugf("CAT transaction deferred by mempool as orphan: tx=%s %s missing_outpoints=%d first_missing=%s allow_orphan=%t tx_pool=%d orphan_pool=%d",
 				consensushashing.TransactionID(transaction),
 				atomicMempoolDebugSummary(transaction),
 				len(missingOutpoints),
@@ -62,7 +62,7 @@ func (mp *mempool) validateAndInsertTransaction(transaction *externalapi.DomainT
 			return nil, err
 		}
 		if isCATTransaction(transaction) {
-			log.Infof("CAT transaction stored in orphan pool: tx=%s orphan_pool=%d",
+			log.Debugf("CAT transaction stored in orphan pool: tx=%s orphan_pool=%d",
 				consensushashing.TransactionID(transaction),
 				mp.orphansPool.orphanTransactionCount(),
 			)
