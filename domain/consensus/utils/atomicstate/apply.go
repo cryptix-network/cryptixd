@@ -724,6 +724,7 @@ func applyBuyLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [extern
 		return fmt.Errorf("buy is only valid for liquidity assets")
 	}
 	pool := *asset.Liquidity
+	pool.FeeRecipients = cloneLiquidityFeeRecipients(pool.FeeRecipients)
 	if pool.PoolNonce != op.ExpectedPoolNonce {
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
 	}
@@ -814,6 +815,7 @@ func applySellLiquidityExactIn(tx *externalapi.DomainTransaction, ownerID [exter
 		return fmt.Errorf("sell is only valid for liquidity assets")
 	}
 	pool := *asset.Liquidity
+	pool.FeeRecipients = cloneLiquidityFeeRecipients(pool.FeeRecipients)
 	if pool.PoolNonce != op.ExpectedPoolNonce {
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
 	}
@@ -907,6 +909,7 @@ func applyClaimLiquidityFees(tx *externalapi.DomainTransaction, ownerID [externa
 		return fmt.Errorf("claim is only valid for liquidity assets")
 	}
 	pool := *asset.Liquidity
+	pool.FeeRecipients = cloneLiquidityFeeRecipients(pool.FeeRecipients)
 	if pool.PoolNonce != op.ExpectedPoolNonce {
 		return fmt.Errorf("stale liquidity nonce for asset `%x`: expected `%d`, got `%d`", op.AssetID, pool.PoolNonce, op.ExpectedPoolNonce)
 	}
@@ -992,10 +995,6 @@ func (context CreationContext) createdAt() *uint64 {
 }
 
 func insertAssetState(state *State, assetID [externalapi.DomainHashSize]byte, asset AssetState) error {
-	if previousAsset, ok := state.Assets[assetID]; ok && previousAsset.Liquidity != nil {
-		delete(state.LiquidityVaultOutpoints, previousAsset.Liquidity.VaultOutpoint)
-	}
-	state.Assets[assetID] = asset.clone()
 	if asset.AssetClass == AssetClassLiquidity {
 		if asset.Liquidity == nil {
 			return fmt.Errorf("liquidity state missing for asset `%x`", assetID)
@@ -1003,9 +1002,26 @@ func insertAssetState(state *State, assetID [externalapi.DomainHashSize]byte, as
 		if previousAssetID, ok := state.LiquidityVaultOutpoints[asset.Liquidity.VaultOutpoint]; ok && previousAssetID != assetID {
 			return fmt.Errorf("multiple liquidity assets share vault outpoint `%s`", asset.Liquidity.VaultOutpoint)
 		}
+	}
+	if previousAsset, ok := state.Assets[assetID]; ok && previousAsset.Liquidity != nil {
+		delete(state.LiquidityVaultOutpoints, previousAsset.Liquidity.VaultOutpoint)
+	}
+	state.Assets[assetID] = asset.clone()
+	if asset.AssetClass == AssetClassLiquidity {
 		state.LiquidityVaultOutpoints[asset.Liquidity.VaultOutpoint] = assetID
 	}
 	return nil
+}
+
+func cloneLiquidityFeeRecipients(recipients []LiquidityFeeRecipientState) []LiquidityFeeRecipientState {
+	if len(recipients) == 0 {
+		return nil
+	}
+	cloned := make([]LiquidityFeeRecipientState, len(recipients))
+	for i, recipient := range recipients {
+		cloned[i] = recipient.clone()
+	}
+	return cloned
 }
 
 func collectSpentLiquidityVaultInputs(tx *externalapi.DomainTransaction, state *State) ([]externalapi.DomainOutpoint, error) {

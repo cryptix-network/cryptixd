@@ -41,6 +41,9 @@ func fillInputs(transaction *externalapi.DomainTransaction, parentsInPool model.
 		if !ok {
 			continue
 		}
+		if input.PreviousOutpoint.Index >= uint32(len(parent.Transaction().Outputs)) {
+			continue
+		}
 		relevantOutput := parent.Transaction().Outputs[input.PreviousOutpoint.Index]
 		input.UTXOEntry = utxo.NewUTXOEntry(relevantOutput.Value, relevantOutput.ScriptPublicKey,
 			false, constants.UnacceptedDAAScore)

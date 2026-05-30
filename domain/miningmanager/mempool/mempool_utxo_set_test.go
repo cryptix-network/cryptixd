@@ -84,6 +84,55 @@ func TestMempoolUTXOSetAddChildRemovesSpentParentOutput(t *testing.T) {
 	}
 }
 
+func TestFillInputsSkipsOutOfBoundsMempoolParentOutput(t *testing.T) {
+	scriptPublicKey := &externalapi.ScriptPublicKey{Script: []byte{0x51}, Version: 0}
+	parentTransaction := &externalapi.DomainTransaction{
+		Version: constants.MaxTransactionVersion,
+		Inputs: []*externalapi.DomainTransactionInput{{
+			PreviousOutpoint: mempoolUTXOSetTestOutpoint(3, 0),
+			Sequence:         constants.MaxTxInSequenceNum,
+			UTXOEntry:        utxo.NewUTXOEntry(constants.SompiPerCryptix, scriptPublicKey, false, 1),
+		}},
+		Outputs: []*externalapi.DomainTransactionOutput{{
+			Value:           5_000,
+			ScriptPublicKey: scriptPublicKey,
+		}},
+		SubnetworkID: subnetworks.SubnetworkIDNative,
+		Fee:          1,
+		Mass:         1,
+	}
+	parent := mempoolmodel.NewMempoolTransaction(
+		parentTransaction,
+		mempoolmodel.IDToTransactionMap{},
+		false,
+		0,
+	)
+	parentID := *consensushashing.TransactionID(parentTransaction)
+	childTransaction := &externalapi.DomainTransaction{
+		Version: constants.MaxTransactionVersion,
+		Inputs: []*externalapi.DomainTransactionInput{{
+			PreviousOutpoint: externalapi.DomainOutpoint{
+				TransactionID: parentID,
+				Index:         uint32(len(parentTransaction.Outputs)),
+			},
+			Sequence: constants.MaxTxInSequenceNum,
+		}},
+		Outputs: []*externalapi.DomainTransactionOutput{{
+			Value:           4_000,
+			ScriptPublicKey: scriptPublicKey,
+		}},
+		SubnetworkID: subnetworks.SubnetworkIDNative,
+		Fee:          1,
+		Mass:         1,
+	}
+
+	fillInputs(childTransaction, mempoolmodel.IDToTransactionMap{parentID: parent})
+
+	if childTransaction.Inputs[0].UTXOEntry != nil {
+		t.Fatalf("out-of-bounds parent output must remain unpopulated")
+	}
+}
+
 func mempoolUTXOSetTestOutpoint(seed byte, index uint32) externalapi.DomainOutpoint {
 	var bytes [externalapi.DomainHashSize]byte
 	bytes[0] = seed

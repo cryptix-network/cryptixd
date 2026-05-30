@@ -295,7 +295,7 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 		return 0, nil, err
 	}
 
-	log.Tracef("Staging the calculated acceptance data of block %s", blockHash)
+	log.Tracef("Staging the calculated acceptance data of block %s for UTXO verification", blockHash)
 	csm.acceptanceDataStore.Stage(stagingArea, blockHash, acceptanceData)
 
 	block, err := csm.blockStore.Block(csm.databaseContext, stagingArea, blockHash)
@@ -318,6 +318,7 @@ func (csm *consensusStateManager) resolveSingleBlockStatus(stagingArea *model.St
 				payloadTransactionCount(block),
 				block.Header.UTXOCommitment(),
 				err)
+			csm.acceptanceDataStore.Delete(stagingArea, blockHash)
 			return externalapi.StatusDisqualifiedFromChain, nil, nil
 		}
 		return 0, nil, err

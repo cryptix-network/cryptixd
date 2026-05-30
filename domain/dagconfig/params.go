@@ -194,6 +194,13 @@ type Params struct {
 	// PayloadMaxLengthStandard is the relay/mempool policy cap for non-coinbase payload length.
 	PayloadMaxLengthStandard uint64
 
+	// Atomic state-growth consensus limits bound new persistent CAT state keys per block.
+	AtomicMaxNewAssetsPerBlock          uint64
+	AtomicMaxNewBalanceKeysPerBlock     uint64
+	AtomicMaxNewNonceKeysPerBlock       uint64
+	AtomicMaxNewPoolsPerBlock           uint64
+	AtomicMaxNewAnchorOwnerKeysPerBlock uint64
+
 	DisallowDirectBlocksOnTopOfGenesis bool
 
 	// MaxBlockLevel is the maximum possible block level.
@@ -286,9 +293,14 @@ var MainnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             9999999991,
+	PayloadHfActivationDAAScore:             1111,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
+	AtomicMaxNewAssetsPerBlock:              defaultAtomicMaxNewAssetsPerBlock,
+	AtomicMaxNewBalanceKeysPerBlock:         defaultAtomicMaxNewBalanceKeysPerBlock,
+	AtomicMaxNewNonceKeysPerBlock:           defaultAtomicMaxNewNonceKeysPerBlock,
+	AtomicMaxNewPoolsPerBlock:               defaultAtomicMaxNewPoolsPerBlock,
+	AtomicMaxNewAnchorOwnerKeysPerBlock:     defaultAtomicMaxNewAnchorOwnerKeysPerBlock,
 	DisallowDirectBlocksOnTopOfGenesis:      true,
 
 	// This is technically 255, but we clamped it at 256 - block level of mainnet genesis
@@ -365,9 +377,14 @@ var TestnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             9999999991,
+	PayloadHfActivationDAAScore:             1111,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
+	AtomicMaxNewAssetsPerBlock:              defaultAtomicMaxNewAssetsPerBlock,
+	AtomicMaxNewBalanceKeysPerBlock:         defaultAtomicMaxNewBalanceKeysPerBlock,
+	AtomicMaxNewNonceKeysPerBlock:           defaultAtomicMaxNewNonceKeysPerBlock,
+	AtomicMaxNewPoolsPerBlock:               defaultAtomicMaxNewPoolsPerBlock,
+	AtomicMaxNewAnchorOwnerKeysPerBlock:     defaultAtomicMaxNewAnchorOwnerKeysPerBlock,
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
@@ -435,9 +452,14 @@ var SimnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             9999999991,
+	PayloadHfActivationDAAScore:             1111,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
+	AtomicMaxNewAssetsPerBlock:              defaultAtomicMaxNewAssetsPerBlock,
+	AtomicMaxNewBalanceKeysPerBlock:         defaultAtomicMaxNewBalanceKeysPerBlock,
+	AtomicMaxNewNonceKeysPerBlock:           defaultAtomicMaxNewNonceKeysPerBlock,
+	AtomicMaxNewPoolsPerBlock:               defaultAtomicMaxNewPoolsPerBlock,
+	AtomicMaxNewAnchorOwnerKeysPerBlock:     defaultAtomicMaxNewAnchorOwnerKeysPerBlock,
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,
@@ -501,9 +523,14 @@ var DevnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             9999999991,
+	PayloadHfActivationDAAScore:             1111,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
+	AtomicMaxNewAssetsPerBlock:              defaultAtomicMaxNewAssetsPerBlock,
+	AtomicMaxNewBalanceKeysPerBlock:         defaultAtomicMaxNewBalanceKeysPerBlock,
+	AtomicMaxNewNonceKeysPerBlock:           defaultAtomicMaxNewNonceKeysPerBlock,
+	AtomicMaxNewPoolsPerBlock:               defaultAtomicMaxNewPoolsPerBlock,
+	AtomicMaxNewAnchorOwnerKeysPerBlock:     defaultAtomicMaxNewAnchorOwnerKeysPerBlock,
 
 	MaxBlockLevel: 250,
 	MergeDepth:    defaultMergeDepth,

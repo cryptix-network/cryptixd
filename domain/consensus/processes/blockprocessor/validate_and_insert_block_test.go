@@ -13,6 +13,7 @@ import (
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/constants"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/merkle"
 	"github.com/cryptix-network/cryptixd/domain/consensus/utils/testutils"
+	"github.com/cryptix-network/cryptixd/infrastructure/db/database"
 	"github.com/pkg/errors"
 )
 
@@ -85,6 +86,10 @@ func TestBlockStatus(t *testing.T) {
 		}
 
 		checkStatus(consensushashing.BlockHash(disqualifiedBlock), externalapi.StatusDisqualifiedFromChain)
+		_, err = tc.AcceptanceDataStore().Get(tc.DatabaseContext(), model.NewStagingArea(), consensushashing.BlockHash(disqualifiedBlock))
+		if err == nil || !database.IsNotFoundError(err) {
+			t.Fatalf("disqualified block must not persist acceptance data before UTXO/Atomic verification, got err: %+v", err)
+		}
 
 		invalidBlock, _, err := tc.BuildBlockWithParents([]*externalapi.DomainHash{tipHash}, nil, nil)
 		if err != nil {

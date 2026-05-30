@@ -344,12 +344,13 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 		}
 		log.Tracef("Validation passed for transaction %s in block %s", transactionID, blockHash)
 
+		transactionAtomicState := accumulatedAtomicState.Clone()
 		err = atomicstate.ValidateAndApplyTransactionWithGrowthAndCreationContext(
 			transaction,
 			blockDAAScore,
 			csm.payloadHfActivationDAAScore,
 			atomicCreationContext,
-			accumulatedAtomicState,
+			transactionAtomicState,
 			atomicGrowth,
 			csm.atomicStateGrowthLimits,
 		)
@@ -357,6 +358,7 @@ func (csm *consensusStateManager) maybeAcceptTransaction(stagingArea *model.Stag
 			log.Tracef("Atomic validation failed for transaction %s in block %s: %s", transactionID, blockHash, err)
 			return false, accumulatedMassBefore, nil
 		}
+		*accumulatedAtomicState = *transactionAtomicState
 		if !blockHash.Equal(model.VirtualBlockHash) &&
 			blockDAAScore >= csm.payloadHfActivationDAAScore &&
 			subnetworks.IsPayload(transaction.SubnetworkID) &&

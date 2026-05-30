@@ -159,7 +159,8 @@ func (btb *blockTemplateBuilder) selectTransactions(candidateTxs []*candidateTx)
 		markCandidateTxForDeletion(selectedTx)
 	}
 
-	sort.Slice(selectedTxs, func(i, j int) bool {
+	orderAtomicCandidateTransactions(selectedTxs)
+	sort.SliceStable(selectedTxs, func(i, j int) bool {
 		return subnetworks.Less(selectedTxs[i].SubnetworkID, selectedTxs[j].SubnetworkID)
 	})
 	for _, selectedTx := range selectedTxs {
