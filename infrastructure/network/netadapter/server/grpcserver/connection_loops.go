@@ -120,6 +120,10 @@ func (c *gRPCConnection) receiveLoop() error {
 			if errors.Is(err, routerpkg.ErrRouteCapacityReached) {
 				return err
 			}
+			if rejectMessage, ok := message.(*appmessage.MsgReject); ok {
+				log.Warnf("Received reject from %s while no reject route is active; disconnecting cleanly: %s", c, rejectMessage.Reason)
+				return nil
+			}
 			if c.onInvalidMessageHandler != nil {
 				c.onInvalidMessageHandler(err)
 			}

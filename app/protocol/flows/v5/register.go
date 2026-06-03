@@ -68,7 +68,7 @@ func registerBlockRelayFlows(m protocolManager, router *routerpkg.Router, isStop
 				return blockrelay.SendVirtualSelectedParentInv(m.Context(), outgoingRoute, peer)
 			}),
 
-		m.RegisterFlow("HandleRelayInvs", router, []appmessage.MessageCommand{
+		m.RegisterFlowWithCapacity("HandleRelayInvs", 4096, router, []appmessage.MessageCommand{
 			appmessage.CmdInvRelayBlock, appmessage.CmdBlock, appmessage.CmdBlockLocator,
 		},
 			isStopping, errChan, func(incomingRoute *routerpkg.Route, peer *peerpkg.Peer) error {
