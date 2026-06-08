@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+var errIBDPruningPointAlreadyCurrent = errors.New("proof pruning point is already the current pruning point")
+
 func (flow *handleIBDFlow) ibdWithHeadersProof(
 	syncerHeaderSelectedTipHash, relayBlockHash *externalapi.DomainHash, highBlockDAAScore uint64) error {
 	err := flow.Domain().InitStagingConsensusWithoutGenesis()
@@ -23,6 +25,15 @@ func (flow *handleIBDFlow) ibdWithHeadersProof(
 
 	err = flow.downloadHeadersAndPruningUTXOSet(syncerHeaderSelectedTipHash, relayBlockHash, highBlockDAAScore)
 	if err != nil {
+		if errors.Is(err, errIBDPruningPointAlreadyCurrent) {
+			log.Infof("IBD with pruning proof from %s reached the current pruning point. Deleting the staging consensus and resuming on the active consensus.", flow.peer)
+			deleteStagingConsensusErr := flow.Domain().DeleteStagingConsensus()
+			if deleteStagingConsensusErr != nil {
+				return deleteStagingConsensusErr
+			}
+			return err
+		}
+
 		if !flow.IsRecoverableError(err) {
 			return err
 		}
@@ -163,6 +174,14 @@ func (flow *handleIBDFlow) downloadHeadersAndPruningUTXOSet(
 	proofPruningPoint, proofPruningPointDAAScore, err := flow.syncAndValidatePruningPointProof()
 	if err != nil {
 		return err
+	}
+
+	currentPruningPoint, err := flow.Domain().Consensus().PruningPoint()
+	if err != nil {
+		return err
+	}
+	if currentPruningPoint.Equal(proofPruningPoint) {
+		return errIBDPruningPointAlreadyCurrent
 	}
 
 	err = flow.syncPruningPointsAndPruningPointAnticone(proofPruningPoint, proofPruningPointDAAScore)
@@ -612,7 +631,7 @@ func (flow *handleIBDFlow) validateAndInsertPruningPoints(proofPruningPoint *ext
 	}
 
 	if currentPruningPoint.Equal(proofPruningPoint) {
-		return protocolerrors.Errorf(true, "the proposed pruning point is the same as the current pruning point")
+		return errIBDPruningPointAlreadyCurrent
 	}
 
 	pruningPoints, err := flow.receivePruningPoints()

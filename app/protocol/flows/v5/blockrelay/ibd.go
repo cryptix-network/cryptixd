@@ -168,6 +168,17 @@ func (flow *handleIBDFlow) runIBDIfNotRunning(block *externalapi.DomainBlock) er
 	if shouldDownloadHeadersProof {
 		log.Infof("Starting IBD with headers proof")
 		err = flow.ibdWithHeadersProof(syncerHeaderSelectedTipHash, relayBlockHash, block.Header.DAAScore())
+		if errors.Is(err, errIBDPruningPointAlreadyCurrent) {
+			currentPruningPoint, pruningPointErr := flow.Domain().Consensus().PruningPoint()
+			if pruningPointErr != nil {
+				return pruningPointErr
+			}
+			log.Infof("IBD pruning proof from %s points at the current pruning point %s; continuing header/body sync on the active consensus",
+				flow.peer, currentPruningPoint)
+			err = flow.syncPruningPointFutureHeaders(
+				flow.Domain().Consensus(),
+				syncerHeaderSelectedTipHash, currentPruningPoint, relayBlockHash, block.Header.DAAScore())
+		}
 		if err != nil {
 			return err
 		}
