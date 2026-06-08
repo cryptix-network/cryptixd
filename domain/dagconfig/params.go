@@ -293,7 +293,7 @@ var MainnetParams = Params{
 	CoinbasePayloadScriptPublicKeyMaxLength: defaultCoinbasePayloadScriptPublicKeyMaxLength,
 	PruningProofM:                           defaultPruningProofM,
 	DeflationaryPhaseDaaScore:               defaultDeflationaryPhaseDaaScore,
-	PayloadHfActivationDAAScore:             1111,
+	PayloadHfActivationDAAScore:             33739200,
 	PayloadMaxLengthConsensus:               defaultPayloadMaxLengthConsensus,
 	PayloadMaxLengthStandard:                defaultPayloadMaxLengthStandard,
 	AtomicMaxNewAssetsPerBlock:              defaultAtomicMaxNewAssetsPerBlock,
